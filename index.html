@@ -5,6 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>listview</title>
+    <script>
+      // Set theme immediately to prevent flash
+      (function() {
+        var theme = localStorage.getItem('listview-theme');
+        if (!theme) {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', theme);
+      })();
+    </script>
+    <style>
+      /* Prevent flash by setting background before CSS loads */
+      html[data-theme="dark"] { background-color: #1d232a; }
+      html[data-theme="light"] { background-color: #ffffff; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

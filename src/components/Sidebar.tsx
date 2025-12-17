@@ -1,16 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMsal } from '@azure/msal-react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { graphScopes } from '../auth/msalConfig';
 
 function Sidebar() {
   const { instance, accounts } = useMsal();
-  const { setupStatus } = useSettings();
+  const { setupStatus, enabledLists } = useSettings();
   const { theme, setTheme } = useTheme();
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [listsExpanded, setListsExpanded] = useState(true);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -88,23 +89,28 @@ function Sidebar() {
     return name.substring(0, 2).toUpperCase() || '?';
   };
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => {
+    if (path === '/app') {
+      return location.pathname === '/app';
+    }
+    return location.pathname.startsWith(path);
+  };
 
   return (
     <aside className="w-64 bg-base-200 border-r border-base-300 flex flex-col h-screen fixed left-0 top-0">
       {/* Logo */}
       <div className="p-4 border-b border-base-300">
-        <a href="/app" className="text-xl font-bold tracking-tight">
+        <Link to="/app" className="text-xl font-bold tracking-tight">
           ListView
-        </a>
+        </Link>
       </div>
 
       {/* Navigation */}
       <nav className="flex-1 p-4">
         <ul className="menu gap-1">
           <li>
-            <a
-              href="/app"
+            <Link
+              to="/app"
               className={isActive('/app') ? 'active' : ''}
             >
               <svg
@@ -122,8 +128,86 @@ function Sidebar() {
                 />
               </svg>
               Home
-            </a>
+            </Link>
           </li>
+          {isReady && (
+            <li>
+              <Link
+                to="/app/data"
+                className={isActive('/app/data') ? 'active' : ''}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                  className="w-5 h-5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"
+                  />
+                </svg>
+                Data
+              </Link>
+            </li>
+          )}
+          {isReady && enabledLists.length > 0 && (
+            <li className="mt-4">
+              <button
+                onClick={() => setListsExpanded(!listsExpanded)}
+                className="flex items-center justify-between w-full"
+              >
+                <span className="flex items-center gap-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="w-5 h-5"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z"
+                    />
+                  </svg>
+                  Lists
+                </span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={1.5}
+                  stroke="currentColor"
+                  className={`w-4 h-4 transition-transform ${listsExpanded ? 'rotate-180' : ''}`}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+              {listsExpanded && (
+                <ul className="ml-4 mt-1">
+                  {enabledLists.map((list) => {
+                    const listPath = `/app/lists/${encodeURIComponent(list.siteId)}/${encodeURIComponent(list.listId)}`;
+                    return (
+                      <li key={`${list.siteId}:${list.listId}`}>
+                        <Link
+                          to={listPath}
+                          className={`text-sm ${location.pathname === listPath ? 'active' : ''}`}
+                          title={`${list.listName} (${list.siteName})`}
+                        >
+                          <span className="truncate">{list.listName}</span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </li>
+          )}
         </ul>
       </nav>
 
@@ -221,8 +305,8 @@ function Sidebar() {
 
               {/* Settings */}
               {isReady && (
-                <a
-                  href="/settings"
+                <Link
+                  to="/app/settings"
                   className="p-3 hover:bg-base-200 transition-colors flex items-center gap-2"
                 >
                   <svg
@@ -245,7 +329,7 @@ function Sidebar() {
                     />
                   </svg>
                   Settings
-                </a>
+                </Link>
               )}
 
               {/* Sign Out */}

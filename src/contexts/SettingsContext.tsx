@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useRef,
+  useMemo,
   type ReactNode,
 } from 'react';
 import { useMsal } from '@azure/msal-react';
@@ -23,6 +24,15 @@ import {
   type SharePointList,
 } from '../services/sharepoint';
 import { getSharePointHostname } from '../auth/graphClient';
+
+export interface EnabledList {
+  siteId: string;
+  siteName: string;
+  listId: string;
+  listName: string;
+}
+
+const ENABLED_LISTS_KEY = 'EnabledLists';
 
 const LOCAL_STORAGE_KEY = 'listview-settings-site-override';
 const HOSTNAME_STORAGE_KEY = 'listview-sharepoint-hostname';
@@ -56,6 +66,7 @@ interface SettingsContextValue extends SettingsState {
   clearSiteOverride: () => void;
   getSetting: (key: string) => string | undefined;
   updateSetting: (key: string, value: string) => Promise<void>;
+  enabledLists: EnabledList[];
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -335,6 +346,21 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [accounts.length, initialize]);
 
+  // Parse enabled lists from settings
+  const enabledLists = useMemo((): EnabledList[] => {
+    const json = state.settings[ENABLED_LISTS_KEY];
+    if (!json) return [];
+    try {
+      const parsed = JSON.parse(json);
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
+        return parsed as EnabledList[];
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }, [state.settings]);
+
   const contextValue: SettingsContextValue = {
     ...state,
     spClient: spClientRef.current,
@@ -344,6 +370,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     clearSiteOverride,
     getSetting: getSettingValue,
     updateSetting,
+    enabledLists,
   };
 
   return (
