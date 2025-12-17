@@ -7,6 +7,7 @@ export interface ViewDefinition {
   mode: 'union' | 'aggregate';    // Rollup mode
   sources: ViewSource[];          // Lists to pull from
   columns: ViewColumn[];          // Columns to display
+  groupBy?: string[];             // Column internal names to group by (aggregate mode)
   filters?: ViewFilter[];         // Optional filters
   sorting?: ViewSorting;          // Optional sorting
   createdAt?: string;
@@ -36,10 +37,13 @@ export interface ViewFilter {
   value: string;
 }
 
-export interface ViewSorting {
+export interface ViewSortRule {
   column: string;
   direction: 'asc' | 'desc';
 }
+
+// Support up to 2 sort levels
+export type ViewSorting = ViewSortRule[];
 
 // SharePoint list item representation
 export interface ViewItem {

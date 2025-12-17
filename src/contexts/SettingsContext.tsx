@@ -20,10 +20,17 @@ import {
   createSettingsList,
   getSettings,
   setSetting,
+  findViewsList,
+  createViewsList,
+  getViews,
+  createView,
+  updateView,
+  deleteView,
   type SharePointSite,
   type SharePointList,
 } from '../services/sharepoint';
 import { getSharePointHostname } from '../auth/graphClient';
+import type { ViewDefinition } from '../types/view';
 
 export interface EnabledList {
   siteId: string;
@@ -56,6 +63,8 @@ interface SettingsState {
   site: SharePointSite | null;
   settingsList: SharePointList | null;
   settings: Record<string, string>;
+  viewsList: SharePointList | null;
+  views: ViewDefinition[];
 }
 
 interface SettingsContextValue extends SettingsState {
@@ -67,6 +76,11 @@ interface SettingsContextValue extends SettingsState {
   getSetting: (key: string) => string | undefined;
   updateSetting: (key: string, value: string) => Promise<void>;
   enabledLists: EnabledList[];
+  // Views operations
+  createViewsList: () => Promise<boolean>;
+  loadViews: () => Promise<void>;
+  saveView: (view: ViewDefinition) => Promise<ViewDefinition>;
+  removeView: (id: string) => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -83,6 +97,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     site: null,
     settingsList: null,
     settings: {},
+    viewsList: null,
+    views: [],
   });
 
   const getAccount = useCallback(() => {
@@ -150,12 +166,21 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           site,
           settingsList: null,
           settings: {},
+          viewsList: null,
+          views: [],
         });
         return;
       }
 
       // Load existing settings
       const settings = await getSettings(sp);
+
+      // Check for views list and load views
+      const viewsList = await findViewsList(sp, siteUrl);
+      let views: ViewDefinition[] = [];
+      if (viewsList) {
+        views = await getViews(sp);
+      }
 
       setState({
         setupStatus: 'ready',
@@ -166,6 +191,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         site,
         settingsList,
         settings,
+        viewsList,
+        views,
       });
     } catch (error) {
       console.error('Failed to initialize settings:', error);
@@ -226,11 +253,20 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             site,
             settingsList: null,
             settings: {},
+            viewsList: null,
+            views: [],
           });
           return true; // Site found, but list needs to be created
         }
 
         const settings = await getSettings(sp);
+
+        // Check for views list and load views
+        const viewsList = await findViewsList(sp, siteUrl);
+        let views: ViewDefinition[] = [];
+        if (viewsList) {
+          views = await getViews(sp);
+        }
 
         setState({
           setupStatus: 'ready',
@@ -241,6 +277,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           site,
           settingsList,
           settings,
+          viewsList,
+          views,
         });
 
         return true;
@@ -339,6 +377,121 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  // Views operations
+  const createViewsListCallback = useCallback(async (): Promise<boolean> => {
+    if (!state.site || !state.hostname || !state.sitePath) {
+      return false;
+    }
+
+    const sp = spClientRef.current;
+    if (!sp) {
+      return false;
+    }
+
+    try {
+      const siteUrl = buildSiteUrl(state.hostname, state.sitePath);
+      const viewsList = await createViewsList(sp, siteUrl);
+
+      setState((prev) => ({
+        ...prev,
+        viewsList,
+        views: [],
+      }));
+
+      return true;
+    } catch (error) {
+      console.error('Failed to create views list:', error);
+      return false;
+    }
+  }, [state.site, state.hostname, state.sitePath]);
+
+  const loadViewsCallback = useCallback(async (): Promise<void> => {
+    const sp = spClientRef.current;
+    if (!sp || !state.viewsList) {
+      return;
+    }
+
+    try {
+      const views = await getViews(sp);
+      setState((prev) => ({ ...prev, views }));
+    } catch (error) {
+      console.error('Failed to load views:', error);
+    }
+  }, [state.viewsList]);
+
+  const saveViewCallback = useCallback(
+    async (view: ViewDefinition): Promise<ViewDefinition> => {
+      const sp = spClientRef.current;
+      if (!sp) {
+        throw new Error('SharePoint client not initialized');
+      }
+
+      if (!state.hostname || !state.sitePath) {
+        throw new Error('Site not configured');
+      }
+
+      const siteUrl = buildSiteUrl(state.hostname, state.sitePath);
+
+      // If no views list exists, create it first
+      if (!state.viewsList) {
+        console.log('[Views] Creating LV-Views list at', siteUrl);
+        try {
+          const viewsList = await createViewsList(sp, siteUrl);
+          setState((prev) => ({ ...prev, viewsList }));
+          console.log('[Views] LV-Views list created successfully');
+        } catch (error) {
+          console.error('[Views] Failed to create LV-Views list:', error);
+          throw new Error('Failed to create views list. Please check your permissions.');
+        }
+      }
+
+      if (view.id) {
+        // Update existing view
+        await updateView(sp, view.id, view);
+        setState((prev) => ({
+          ...prev,
+          views: prev.views.map((v) => (v.id === view.id ? { ...v, ...view } : v)),
+        }));
+        return view;
+      } else {
+        // Create new view
+        const newView = await createView(sp, view);
+        setState((prev) => ({
+          ...prev,
+          views: [...prev.views, newView],
+        }));
+        return newView;
+      }
+    },
+    [state.viewsList, state.hostname, state.sitePath]
+  );
+
+  const removeViewCallback = useCallback(
+    async (id: string): Promise<void> => {
+      const sp = spClientRef.current;
+      if (!sp) {
+        throw new Error('SharePoint client not initialized');
+      }
+
+      if (!state.viewsList) {
+        // No views list, just remove from local state
+        setState((prev) => ({
+          ...prev,
+          views: prev.views.filter((v) => v.id !== id),
+        }));
+        return;
+      }
+
+      await deleteView(sp, id);
+
+      setState((prev) => ({
+        ...prev,
+        views: prev.views.filter((v) => v.id !== id),
+      }));
+    },
+    [state.viewsList]
+  );
+
   // Auto-initialize when accounts change
   useEffect(() => {
     if (accounts.length > 0) {
@@ -371,6 +524,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     getSetting: getSettingValue,
     updateSetting,
     enabledLists,
+    createViewsList: createViewsListCallback,
+    loadViews: loadViewsCallback,
+    saveView: saveViewCallback,
+    removeView: removeViewCallback,
   };
 
   return (

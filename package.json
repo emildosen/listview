@@ -16,6 +16,8 @@
     "@pnp/logging": "^4.17.0",
     "@pnp/queryable": "^4.17.0",
     "@pnp/sp": "^4.17.0",
+    "ag-grid-community": "^35.0.0",
+    "ag-grid-react": "^35.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.10.1"

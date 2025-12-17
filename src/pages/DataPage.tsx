@@ -8,6 +8,7 @@ import {
   type GraphSite,
   type GraphList,
 } from '../auth/graphClient';
+import { SYSTEM_LIST_NAMES } from '../services/sharepoint';
 
 export interface ListRow {
   siteId: string;
@@ -27,6 +28,7 @@ function DataPage() {
   const [selectedLists, setSelectedLists] = useState<Set<string>>(new Set());
   const [savedLists, setSavedLists] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const account = accounts[0];
 
@@ -63,7 +65,12 @@ function DataPage() {
         const listsArrays = await Promise.all(listsPromises);
         const allLists = listsArrays.flat();
 
-        setLists(allLists);
+        // Filter out system lists used by ListView app
+        const userLists = allLists.filter(
+          (list) => !SYSTEM_LIST_NAMES.includes(list.listName as typeof SYSTEM_LIST_NAMES[number])
+        );
+
+        setLists(userLists);
 
         // Load saved enabled lists from settings
         const savedJson = getSetting(ENABLED_LISTS_KEY);
@@ -139,6 +146,16 @@ function DataPage() {
     selectedLists.size !== savedLists.size ||
     [...selectedLists].some((key) => !savedLists.has(key));
 
+  // Filter lists based on search query
+  const filteredLists = lists.filter((list) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      list.listName.toLowerCase().includes(query) ||
+      list.siteName.toLowerCase().includes(query)
+    );
+  });
+
   return (
     <div className="p-8">
       {/* Breadcrumb */}
@@ -147,14 +164,14 @@ function DataPage() {
           <li>
             <Link to="/app">Home</Link>
           </li>
-          <li>Data</li>
+          <li>Lists</li>
         </ul>
       </div>
 
       <div className="max-w-4xl">
         <div className="flex items-start justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold mb-1">Data</h1>
+            <h1 className="text-2xl font-bold mb-1">Manage Lists</h1>
             <p className="text-base-content/60">
               Select which SharePoint lists to enable.
             </p>
@@ -165,6 +182,52 @@ function DataPage() {
             </div>
           )}
         </div>
+
+        {/* Search Bar */}
+        {!loading && lists.length > 0 && (
+          <div className="mb-4">
+            <label className="input input-bordered flex items-center gap-2">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-5 h-5 text-base-content/50"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+                />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search lists..."
+                className="grow bg-transparent border-none outline-none"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-base-content/50 hover:text-base-content"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="w-5 h-5"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </label>
+          </div>
+        )}
 
         {/* Loading State */}
         {loading && (
@@ -223,8 +286,37 @@ function DataPage() {
           </div>
         )}
 
+        {/* No Search Results */}
+        {!loading && lists.length > 0 && filteredLists.length === 0 && searchQuery && (
+          <div className="card bg-base-200">
+            <div className="card-body items-center text-center py-12">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-12 h-12 text-base-content/30 mb-4"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
+                />
+              </svg>
+              <p className="text-base-content/60">No lists match "{searchQuery}"</p>
+              <button
+                onClick={() => setSearchQuery('')}
+                className="btn btn-ghost btn-sm mt-2"
+              >
+                Clear search
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Lists Table */}
-        {!loading && lists.length > 0 && (
+        {!loading && filteredLists.length > 0 && (
           <div className="card bg-base-200">
             <div className="overflow-x-auto">
               <table className="table">
@@ -245,7 +337,7 @@ function DataPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {lists.map((list) => {
+                  {filteredLists.map((list) => {
                     const key = getListKey(list.siteId, list.listId);
                     const isSelected = selectedLists.has(key);
                     return (
