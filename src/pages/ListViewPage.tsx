@@ -1,10 +1,34 @@
 import { useMsal } from '@azure/msal-react';
-import { useEffect, useState, useMemo } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { AgGridReact } from 'ag-grid-react';
-import { ModuleRegistry, AllCommunityModule, themeQuartz, colorSchemeDark } from 'ag-grid-community';
-import type { ColDef, ValueFormatterParams } from 'ag-grid-community';
-import { useTheme } from '../contexts/ThemeContext';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import {
+  makeStyles,
+  tokens,
+  Button,
+  Card,
+  Text,
+  Title2,
+  Spinner,
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbDivider,
+  MessageBar,
+  MessageBarBody,
+  DataGrid,
+  DataGridHeader,
+  DataGridRow,
+  DataGridHeaderCell,
+  DataGridBody,
+  DataGridCell,
+  createTableColumn,
+  TableCellLayout,
+} from '@fluentui/react-components';
+import type { TableColumnDefinition } from '@fluentui/react-components';
+import {
+  WarningRegular,
+  DatabaseRegular,
+  ArrowLeftRegular,
+} from '@fluentui/react-icons';
 import {
   getListById,
   getListItems,
@@ -14,17 +38,75 @@ import {
 } from '../auth/graphClient';
 import { getDefaultViewColumnOrder } from '../services/sharepoint';
 
-// Register AG Grid modules
-ModuleRegistry.registerModules([AllCommunityModule]);
-
 interface RowData {
+  _id: string;
   [key: string]: unknown;
 }
 
+const useStyles = makeStyles({
+  container: {
+    padding: '32px',
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  breadcrumb: {
+    marginBottom: '24px',
+  },
+  content: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: '24px',
+  },
+  description: {
+    color: tokens.colorNeutralForeground2,
+    marginTop: '4px',
+  },
+  cardBody: {
+    padding: '48px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    flex: 1,
+  },
+  emptyIcon: {
+    color: tokens.colorNeutralForeground3,
+    marginBottom: '16px',
+  },
+  emptyText: {
+    color: tokens.colorNeutralForeground2,
+  },
+  footer: {
+    marginTop: '32px',
+    paddingTop: '24px',
+    borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
+  },
+  gridWrapper: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'auto',
+  },
+  rowCount: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+    marginTop: '8px',
+  },
+});
+
 function ListViewPage() {
+  const styles = useStyles();
   const { siteId, listId } = useParams<{ siteId: string; listId: string }>();
   const { instance, accounts } = useMsal();
-  const { theme } = useTheme();
+  const navigate = useNavigate();
   const [list, setList] = useState<GraphList | null>(null);
   const [columns, setColumns] = useState<GraphListColumn[]>([]);
   const [items, setItems] = useState<GraphListItem[]>([]);
@@ -96,7 +178,7 @@ function ListViewPage() {
   }, [instance, account, siteId, listId]);
 
   // Format cell values for display
-  const formatCellValue = (value: unknown): string => {
+  const formatCellValue = useCallback((value: unknown): string => {
     if (value === null || value === undefined) return '-';
     if (typeof value === 'boolean') return value ? 'Yes' : 'No';
     if (typeof value === 'object') {
@@ -110,7 +192,7 @@ function ListViewPage() {
       return JSON.stringify(value);
     }
     return String(value);
-  };
+  }, []);
 
   // Convert items to row data
   const rowData = useMemo((): RowData[] => {
@@ -120,154 +202,130 @@ function ListViewPage() {
     }));
   }, [items]);
 
-  // Generate AG Grid column definitions
-  const columnDefs = useMemo((): ColDef[] => {
-    return columns.map((col) => ({
-      headerName: col.displayName,
-      field: col.name,
-      sortable: true,
-      filter: true,
-      resizable: true,
-      valueFormatter: (params: ValueFormatterParams) => formatCellValue(params.value),
-    }));
-  }, [columns]);
-
-  // AG Grid default column settings
-  const defaultColDef = useMemo((): ColDef => ({
-    flex: 1,
-    minWidth: 100,
-    resizable: true,
-  }), []);
-
-  // AG Grid theme based on current app theme
-  const gridTheme = useMemo(() => {
-    return theme === 'dark' ? themeQuartz.withPart(colorSchemeDark) : themeQuartz;
-  }, [theme]);
+  // Generate Fluent UI DataGrid column definitions
+  const columnDefs = useMemo((): TableColumnDefinition<RowData>[] => {
+    return columns.map((col) =>
+      createTableColumn<RowData>({
+        columnId: col.name,
+        compare: (a, b) => {
+          const aVal = String(a[col.name] ?? '');
+          const bVal = String(b[col.name] ?? '');
+          return aVal.localeCompare(bVal);
+        },
+        renderHeaderCell: () => col.displayName,
+        renderCell: (item) => (
+          <TableCellLayout truncate>
+            {formatCellValue(item[col.name])}
+          </TableCellLayout>
+        ),
+      })
+    );
+  }, [columns, formatCellValue]);
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className={styles.container}>
       {/* Breadcrumb */}
-      <div className="text-sm breadcrumbs mb-6">
-        <ul>
-          <li>
-            <Link to="/app">Home</Link>
-          </li>
-          <li>
-            <Link to="/app/lists">Lists</Link>
-          </li>
-          <li>{list?.displayName || 'List'}</li>
-        </ul>
-      </div>
+      <Breadcrumb className={styles.breadcrumb}>
+        <BreadcrumbItem>
+          <Link to="/app" style={{ textDecoration: 'none', color: 'inherit' }}>
+            Home
+          </Link>
+        </BreadcrumbItem>
+        <BreadcrumbDivider />
+        <BreadcrumbItem>
+          <Link to="/app/lists" style={{ textDecoration: 'none', color: 'inherit' }}>
+            Lists
+          </Link>
+        </BreadcrumbItem>
+        <BreadcrumbDivider />
+        <BreadcrumbItem>
+          <Text weight="semibold">{list?.displayName || 'List'}</Text>
+        </BreadcrumbItem>
+      </Breadcrumb>
 
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className={styles.content}>
         {/* Header */}
-        <div className="flex items-start justify-between mb-6">
+        <div className={styles.header}>
           <div>
-            <h1 className="text-2xl font-bold mb-1">{list?.displayName || 'List'}</h1>
+            <Title2 as="h1">{list?.displayName || 'List'}</Title2>
             {!loading && items.length > 0 && (
-              <p className="text-base-content/60">
+              <Text className={styles.description}>
                 {items.length} item{items.length !== 1 ? 's' : ''}
                 {items.length === 1000 && ' (limited to 1000)'}
-              </p>
+              </Text>
             )}
           </div>
         </div>
 
         {/* Loading State */}
         {loading && (
-          <div className="card bg-base-200 flex-1">
-            <div className="card-body items-center justify-center">
-              <span className="loading loading-spinner loading-lg text-primary" />
-              <p className="text-base-content/60 mt-4">Loading list data...</p>
+          <Card style={{ flex: 1 }}>
+            <div className={styles.cardBody}>
+              <Spinner size="large" />
+              <Text className={styles.emptyText} style={{ marginTop: '16px' }}>
+                Loading list data...
+              </Text>
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Error State */}
         {error && !loading && (
-          <div className="alert alert-error mb-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-5 h-5"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-              />
-            </svg>
-            <span>{error}</span>
-          </div>
+          <MessageBar intent="error" style={{ marginBottom: '16px' }}>
+            <MessageBarBody>
+              <WarningRegular /> {error}
+            </MessageBarBody>
+          </MessageBar>
         )}
 
         {/* Empty State */}
         {!loading && !error && items.length === 0 && (
-          <div className="card bg-base-200 flex-1">
-            <div className="card-body items-center justify-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-12 h-12 text-base-content/30 mb-4"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"
-                />
-              </svg>
-              <p className="text-base-content/60">No items in this list</p>
+          <Card style={{ flex: 1 }}>
+            <div className={styles.cardBody}>
+              <DatabaseRegular fontSize={48} className={styles.emptyIcon} />
+              <Text className={styles.emptyText}>No items in this list</Text>
             </div>
-          </div>
+          </Card>
         )}
 
-        {/* AG Grid Data Table */}
+        {/* Fluent UI DataGrid */}
         {!loading && !error && items.length > 0 && (
-          <div>
-            <AgGridReact
-              theme={gridTheme}
-              rowData={rowData}
-              columnDefs={columnDefs}
-              defaultColDef={defaultColDef}
-              domLayout="autoHeight"
-              animateRows={true}
-              pagination={true}
-              paginationPageSize={50}
-              paginationPageSizeSelector={[25, 50, 100, 200]}
-              suppressMovableColumns={false}
-              enableCellTextSelection={true}
-            />
-            <p className="text-sm text-base-content/60 mt-2">
+          <div className={styles.gridWrapper}>
+            <DataGrid
+              items={rowData}
+              columns={columnDefs}
+              sortable
+              resizableColumns
+              getRowId={(item) => item._id}
+            >
+              <DataGridHeader>
+                <DataGridRow>
+                  {({ renderHeaderCell }) => (
+                    <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
+                  )}
+                </DataGridRow>
+              </DataGridHeader>
+              <DataGridBody<RowData>>
+                {({ item, rowId }) => (
+                  <DataGridRow<RowData> key={rowId}>
+                    {({ renderCell }) => (
+                      <DataGridCell>{renderCell(item)}</DataGridCell>
+                    )}
+                  </DataGridRow>
+                )}
+              </DataGridBody>
+            </DataGrid>
+            <Text className={styles.rowCount}>
               {items.length} row{items.length !== 1 ? 's' : ''} total
-            </p>
+            </Text>
           </div>
         )}
 
         {/* Back Button */}
-        <div className="mt-8 pt-6 border-t border-base-300">
-          <Link to="/app" className="btn btn-ghost">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-4 h-4"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"
-              />
-            </svg>
+        <div className={styles.footer}>
+          <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={() => navigate('/app')}>
             Back
-          </Link>
+          </Button>
         </div>
       </div>
     </div>

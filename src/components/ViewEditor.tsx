@@ -1,5 +1,33 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useMsal } from '@azure/msal-react';
+import {
+  makeStyles,
+  tokens,
+  Button,
+  Card,
+  Input,
+  Textarea,
+  Checkbox,
+  Radio,
+  RadioGroup,
+  Dropdown,
+  Option,
+  Text,
+  Spinner,
+  MessageBar,
+  MessageBarBody,
+  Badge,
+  Field,
+} from '@fluentui/react-components';
+import {
+  WarningRegular,
+  ReOrderDotsVerticalRegular,
+  DismissRegular,
+  AddRegular,
+  ArrowLeftRegular,
+  ArrowRightRegular,
+  CheckmarkRegular,
+} from '@fluentui/react-icons';
 import { useSettings, type EnabledList } from '../contexts/SettingsContext';
 import { getListColumns, type GraphListColumn } from '../auth/graphClient';
 import type {
@@ -59,7 +87,256 @@ interface ColumnWithMeta extends GraphListColumn {
   sourceListName: string;
 }
 
+const useStyles = makeStyles({
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '24px',
+  },
+  stepsContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '8px',
+  },
+  stepItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    cursor: 'pointer',
+  },
+  stepLabel: {
+    fontSize: tokens.fontSizeBase200,
+  },
+  stepLabelActive: {
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorBrandForeground1,
+  },
+  stepConnector: {
+    flex: 1,
+    height: '2px',
+    backgroundColor: tokens.colorNeutralStroke1,
+  },
+  stepConnectorActive: {
+    backgroundColor: tokens.colorBrandBackground,
+  },
+  formSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  modeOptions: {
+    display: 'flex',
+    gap: '24px',
+  },
+  modeOption: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '8px',
+    cursor: 'pointer',
+  },
+  modeLabel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  modeSublabel: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+  },
+  sourceList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  sourceItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px',
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    backgroundColor: tokens.colorNeutralBackground2,
+    cursor: 'pointer',
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground3,
+    },
+  },
+  sourceItemSelected: {
+    backgroundColor: tokens.colorBrandBackground2,
+    border: `1px solid ${tokens.colorBrandStroke1}`,
+  },
+  sourceInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  sourceName: {
+    fontWeight: tokens.fontWeightMedium,
+  },
+  sourceSite: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+  },
+  loadingContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '32px',
+  },
+  sourceCard: {
+    marginBottom: '12px',
+  },
+  sourceCardHeader: {
+    fontWeight: tokens.fontWeightMedium,
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+    marginBottom: '8px',
+  },
+  columnsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '8px',
+  },
+  columnCheckbox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  columnConfig: {
+    marginTop: '16px',
+  },
+  columnConfigHeader: {
+    fontWeight: tokens.fontWeightMedium,
+    marginBottom: '8px',
+  },
+  columnConfigHint: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+    marginBottom: '12px',
+  },
+  columnConfigList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  columnItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '8px',
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid transparent`,
+    cursor: 'move',
+    '&:hover': {
+      border: `1px solid ${tokens.colorNeutralStroke1}`,
+    },
+  },
+  columnItemDragging: {
+    opacity: 0.5,
+    border: `1px solid ${tokens.colorBrandStroke1}`,
+  },
+  dragHandle: {
+    color: tokens.colorNeutralForeground3,
+    flexShrink: 0,
+  },
+  columnInput: {
+    flex: 1,
+  },
+  groupByList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  groupByItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px',
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    backgroundColor: tokens.colorNeutralBackground2,
+    cursor: 'pointer',
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground3,
+    },
+  },
+  groupByItemSelected: {
+    backgroundColor: tokens.colorBrandBackground2,
+    border: `1px solid ${tokens.colorBrandStroke1}`,
+  },
+  groupByInfo: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  groupByHint: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+  },
+  filterList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  filterRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  filterColumn: {
+    flex: 1,
+    minWidth: '120px',
+  },
+  filterOperator: {
+    minWidth: '120px',
+  },
+  filterValue: {
+    flex: 1,
+    minWidth: '120px',
+  },
+  emptyFilters: {
+    textAlign: 'center',
+    padding: '32px',
+    color: tokens.colorNeutralForeground2,
+  },
+  sortCard: {
+    marginBottom: '16px',
+  },
+  sortCardHeader: {
+    fontWeight: tokens.fontWeightMedium,
+    marginBottom: '12px',
+  },
+  sortRow: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'flex-end',
+  },
+  sortColumn: {
+    flex: 1,
+  },
+  sortDirection: {
+    minWidth: '200px',
+  },
+  navigation: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  navRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  helperText: {
+    color: tokens.colorNeutralForeground2,
+  },
+});
+
 function ViewEditor({ initialView, onSave, onCancel }: ViewEditorProps) {
+  const styles = useStyles();
   const { instance, accounts } = useMsal();
   const { enabledLists } = useSettings();
   const account = accounts[0];
@@ -317,124 +594,85 @@ function ViewEditor({ initialView, onSave, onCancel }: ViewEditorProps) {
     switch (currentStep) {
       case 'basic':
         return (
-          <div className="space-y-4">
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text font-medium">View Name *</span>
-              </label>
-              <input
-                type="text"
+          <div className={styles.formSection}>
+            <Field label="View Name *" required>
+              <Input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(_e, data) => setName(data.value)}
                 placeholder="Enter view name"
-                className="input input-bordered w-full"
               />
-            </div>
+            </Field>
 
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text font-medium">Description</span>
-              </label>
-              <textarea
+            <Field label="Description">
+              <Textarea
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(_e, data) => setDescription(data.value)}
                 placeholder="Optional description"
-                className="textarea textarea-bordered w-full"
                 rows={3}
               />
-            </div>
+            </Field>
 
-            <div className="form-control">
-              <label className="label">
-                <span className="label-text font-medium">View Mode *</span>
-              </label>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="mode"
-                    value="union"
-                    checked={mode === 'union'}
-                    onChange={() => setMode('union')}
-                    className="radio radio-primary"
-                  />
-                  <div>
-                    <div className="font-medium">Union</div>
-                    <div className="text-sm text-base-content/60">
-                      Stack all rows from selected lists into one table
+            <Field label="View Mode *">
+              <RadioGroup
+                value={mode}
+                onChange={(_e, data) => setMode(data.value as 'union' | 'aggregate')}
+              >
+                <div className={styles.modeOptions}>
+                  <div className={styles.modeOption}>
+                    <Radio value="union" />
+                    <div className={styles.modeLabel}>
+                      <Text weight="medium">Union</Text>
+                      <Text className={styles.modeSublabel}>
+                        Stack all rows from selected lists into one table
+                      </Text>
                     </div>
                   </div>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="mode"
-                    value="aggregate"
-                    checked={mode === 'aggregate'}
-                    onChange={() => setMode('aggregate')}
-                    className="radio radio-primary"
-                  />
-                  <div>
-                    <div className="font-medium">Aggregate</div>
-                    <div className="text-sm text-base-content/60">
-                      Show counts, sums, or other aggregations
+                  <div className={styles.modeOption}>
+                    <Radio value="aggregate" />
+                    <div className={styles.modeLabel}>
+                      <Text weight="medium">Aggregate</Text>
+                      <Text className={styles.modeSublabel}>
+                        Show counts, sums, or other aggregations
+                      </Text>
                     </div>
                   </div>
-                </label>
-              </div>
-            </div>
+                </div>
+              </RadioGroup>
+            </Field>
           </div>
         );
 
       case 'sources':
         return (
-          <div className="space-y-4">
-            <p className="text-base-content/60">
+          <div className={styles.formSection}>
+            <Text className={styles.helperText}>
               Select the SharePoint lists to include in this view.
-            </p>
+            </Text>
 
             {enabledLists.length === 0 ? (
-              <div className="alert alert-warning">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-5 h-5"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-                  />
-                </svg>
-                <span>No lists enabled. Please enable some lists in the Data page first.</span>
-              </div>
+              <MessageBar intent="warning">
+                <MessageBarBody>
+                  <WarningRegular /> No lists enabled. Please enable some lists in the Data page first.
+                </MessageBarBody>
+              </MessageBar>
             ) : (
-              <div className="space-y-2">
+              <div className={styles.sourceList}>
                 {enabledLists.map((list) => {
                   const isSelected = sources.some(
                     (s) => s.listId === list.listId && s.siteId === list.siteId
                   );
                   return (
-                    <label
+                    <div
                       key={`${list.siteId}:${list.listId}`}
-                      className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                        isSelected ? 'bg-primary/10 border-primary' : 'bg-base-200 hover:bg-base-300'
-                      } border`}
+                      className={`${styles.sourceItem} ${isSelected ? styles.sourceItemSelected : ''}`}
+                      onClick={() => handleSourceToggle(list)}
                     >
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleSourceToggle(list)}
-                        className="checkbox checkbox-primary"
-                      />
-                      <div>
-                        <div className="font-medium">{list.listName}</div>
-                        <div className="text-sm text-base-content/60">{list.siteName}</div>
+                      <Checkbox checked={isSelected} />
+                      <div className={styles.sourceInfo}>
+                        <Text className={styles.sourceName}>{list.listName}</Text>
+                        <Text className={styles.sourceSite}>{list.siteName}</Text>
                       </div>
-                    </label>
+                    </div>
                   );
                 })}
               </div>
@@ -444,21 +682,23 @@ function ViewEditor({ initialView, onSave, onCancel }: ViewEditorProps) {
 
       case 'columns':
         return (
-          <div className="space-y-4">
-            <p className="text-base-content/60">
+          <div className={styles.formSection}>
+            <Text className={styles.helperText}>
               Select the columns to display in this view.
-            </p>
+            </Text>
 
             {loadingColumns ? (
-              <div className="flex items-center justify-center py-8">
-                <span className="loading loading-spinner loading-lg text-primary" />
+              <div className={styles.loadingContainer}>
+                <Spinner size="large" />
               </div>
             ) : availableColumns.length === 0 ? (
-              <div className="alert alert-info">
-                <span>Select data sources first to see available columns.</span>
-              </div>
+              <MessageBar intent="info">
+                <MessageBarBody>
+                  Select data sources first to see available columns.
+                </MessageBarBody>
+              </MessageBar>
             ) : (
-              <div className="space-y-4">
+              <div>
                 {/* Available columns grouped by source */}
                 {sources.map((source) => {
                   const sourceCols = availableColumns.filter(
@@ -467,116 +707,93 @@ function ViewEditor({ initialView, onSave, onCancel }: ViewEditorProps) {
                   if (sourceCols.length === 0) return null;
 
                   return (
-                    <div key={source.listId} className="card bg-base-200">
-                      <div className="card-body p-4">
-                        <h3 className="font-medium text-sm text-base-content/60 mb-2">
-                          {source.listName}
-                        </h3>
-                        <div className="grid grid-cols-2 gap-2">
-                          {sourceCols.map((col) => {
-                            const isSelected = columns.some(
-                              (c) =>
-                                c.internalName === col.name && c.sourceListId === col.sourceListId
-                            );
-                            return (
-                              <label
-                                key={`${col.sourceListId}:${col.name}`}
-                                className="flex items-center gap-2 cursor-pointer"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={() => handleColumnToggle(col)}
-                                  className="checkbox checkbox-sm checkbox-primary"
-                                />
-                                <span className="text-sm">{col.displayName}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
+                    <Card key={source.listId} className={styles.sourceCard}>
+                      <Text className={styles.sourceCardHeader}>{source.listName}</Text>
+                      <div className={styles.columnsGrid}>
+                        {sourceCols.map((col) => {
+                          const isSelected = columns.some(
+                            (c) =>
+                              c.internalName === col.name && c.sourceListId === col.sourceListId
+                          );
+                          return (
+                            <Checkbox
+                              key={`${col.sourceListId}:${col.name}`}
+                              checked={isSelected}
+                              onChange={() => handleColumnToggle(col)}
+                              label={col.displayName}
+                            />
+                          );
+                        })}
                       </div>
-                    </div>
+                    </Card>
                   );
                 })}
 
                 {/* Selected columns configuration */}
                 {columns.length > 0 && (
-                  <div className="card bg-base-200 mt-4">
-                    <div className="card-body p-4">
-                      <h3 className="font-medium mb-2">Column Configuration</h3>
-                      <p className="text-sm text-base-content/60 mb-3">Drag to reorder columns</p>
-                      <div className="space-y-2">
-                        {columns.map((col, index) => (
-                          <div
-                            key={`${col.sourceListId}:${col.internalName}`}
-                            draggable
-                            onDragStart={() => setDraggedColIndex(index)}
-                            onDragEnd={() => setDraggedColIndex(null)}
-                            onDragOver={(e) => {
-                              e.preventDefault();
-                              if (draggedColIndex !== null && draggedColIndex !== index) {
-                                handleColumnReorder(draggedColIndex, index);
-                                setDraggedColIndex(index);
-                              }
-                            }}
-                            className={`flex items-center gap-3 p-2 rounded-lg bg-base-100 border cursor-move transition-all ${
-                              draggedColIndex === index ? 'opacity-50 border-primary' : 'border-transparent hover:border-base-300'
-                            }`}
-                          >
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              strokeWidth={1.5}
-                              stroke="currentColor"
-                              className="w-4 h-4 text-base-content/40 flex-shrink-0"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
-                              />
-                            </svg>
-                            <input
-                              type="text"
-                              value={col.displayName}
-                              onChange={(e) =>
-                                handleColumnDisplayNameChange(
+                  <Card className={styles.columnConfig}>
+                    <Text className={styles.columnConfigHeader}>Column Configuration</Text>
+                    <Text className={styles.columnConfigHint}>Drag to reorder columns</Text>
+                    <div className={styles.columnConfigList}>
+                      {columns.map((col, index) => (
+                        <div
+                          key={`${col.sourceListId}:${col.internalName}`}
+                          draggable
+                          onDragStart={() => setDraggedColIndex(index)}
+                          onDragEnd={() => setDraggedColIndex(null)}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            if (draggedColIndex !== null && draggedColIndex !== index) {
+                              handleColumnReorder(draggedColIndex, index);
+                              setDraggedColIndex(index);
+                            }
+                          }}
+                          className={`${styles.columnItem} ${
+                            draggedColIndex === index ? styles.columnItemDragging : ''
+                          }`}
+                        >
+                          <ReOrderDotsVerticalRegular className={styles.dragHandle} />
+                          <Input
+                            className={styles.columnInput}
+                            value={col.displayName}
+                            onChange={(_e, data) =>
+                              handleColumnDisplayNameChange(
+                                col.sourceListId,
+                                col.internalName,
+                                data.value
+                              )
+                            }
+                            onClick={(e) => e.stopPropagation()}
+                            placeholder="Display name"
+                            size="small"
+                          />
+                          {mode === 'aggregate' && (
+                            <Dropdown
+                              value={col.aggregation || ''}
+                              selectedOptions={col.aggregation ? [col.aggregation] : []}
+                              onOptionSelect={(_e, data) =>
+                                handleColumnAggregationChange(
                                   col.sourceListId,
                                   col.internalName,
-                                  e.target.value
+                                  (data.optionValue as AggregationType) || undefined
                                 )
                               }
                               onClick={(e) => e.stopPropagation()}
-                              className="input input-sm input-bordered flex-1"
-                              placeholder="Display name"
-                            />
-                            {mode === 'aggregate' && (
-                              <select
-                                value={col.aggregation || ''}
-                                onChange={(e) =>
-                                  handleColumnAggregationChange(
-                                    col.sourceListId,
-                                    col.internalName,
-                                    (e.target.value as AggregationType) || undefined
-                                  )
-                                }
-                                onClick={(e) => e.stopPropagation()}
-                                className="select select-sm select-bordered"
-                              >
-                                <option value="">No aggregation</option>
-                                {AGGREGATION_OPTIONS.map((opt) => (
-                                  <option key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </option>
-                                ))}
-                              </select>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                              placeholder="No aggregation"
+                              size="small"
+                            >
+                              <Option value="">No aggregation</Option>
+                              {AGGREGATION_OPTIONS.map((opt) => (
+                                <Option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </Option>
+                              ))}
+                            </Dropdown>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  </Card>
                 )}
               </div>
             )}
@@ -585,141 +802,119 @@ function ViewEditor({ initialView, onSave, onCancel }: ViewEditorProps) {
 
       case 'groupby':
         return (
-          <div className="space-y-4">
-            <p className="text-base-content/60">
+          <div className={styles.formSection}>
+            <Text className={styles.helperText}>
               Select columns to group by. Rows will be grouped by these columns, and aggregations
               will be computed for each group.
-            </p>
+            </Text>
 
             {columns.length === 0 ? (
-              <div className="alert alert-info">
-                <span>Select columns first to configure grouping.</span>
-              </div>
+              <MessageBar intent="info">
+                <MessageBarBody>
+                  Select columns first to configure grouping.
+                </MessageBarBody>
+              </MessageBar>
             ) : (
-              <div className="space-y-2">
+              <div className={styles.groupByList}>
                 {columns.map((col) => {
                   const isGroupBy = groupBy.includes(col.internalName);
                   return (
-                    <label
+                    <div
                       key={`${col.sourceListId}:${col.internalName}`}
-                      className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors ${
-                        isGroupBy ? 'bg-primary/10 border-primary' : 'bg-base-200 hover:bg-base-300'
-                      } border`}
+                      className={`${styles.groupByItem} ${isGroupBy ? styles.groupByItemSelected : ''}`}
+                      onClick={() => handleGroupByToggle(col.internalName)}
                     >
-                      <input
-                        type="checkbox"
-                        checked={isGroupBy}
-                        onChange={() => handleGroupByToggle(col.internalName)}
-                        className="checkbox checkbox-primary"
-                      />
-                      <div className="flex-1">
-                        <div className="font-medium">{col.displayName}</div>
-                        <div className="text-sm text-base-content/60">
+                      <Checkbox checked={isGroupBy} />
+                      <div className={styles.groupByInfo}>
+                        <Text weight="medium">{col.displayName}</Text>
+                        <Text className={styles.groupByHint}>
                           {isGroupBy ? 'Group by this column' : col.aggregation ? `Aggregate: ${col.aggregation}` : 'No aggregation'}
-                        </div>
+                        </Text>
                       </div>
-                    </label>
+                    </div>
                   );
                 })}
               </div>
             )}
 
             {groupBy.length === 0 && columns.length > 0 && (
-              <div className="alert alert-warning">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z" />
-                </svg>
-                <span>Without group by columns, the view will show a single row with aggregated totals.</span>
-              </div>
+              <MessageBar intent="warning">
+                <MessageBarBody>
+                  <WarningRegular /> Without group by columns, the view will show a single row with aggregated totals.
+                </MessageBarBody>
+              </MessageBar>
             )}
           </div>
         );
 
       case 'filters':
         return (
-          <div className="space-y-4">
-            <p className="text-base-content/60">
+          <div className={styles.formSection}>
+            <Text className={styles.helperText}>
               Add filters to narrow down the data (optional).
-            </p>
+            </Text>
 
             {filters.length === 0 ? (
-              <div className="text-center py-8 text-base-content/60">
-                <p>No filters added</p>
+              <div className={styles.emptyFilters}>
+                <Text>No filters added</Text>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className={styles.filterList}>
                 {filters.map((filter, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <select
-                      value={filter.column}
-                      onChange={(e) => handleFilterChange(index, 'column', e.target.value)}
-                      className="select select-sm select-bordered flex-1"
+                  <div key={index} className={styles.filterRow}>
+                    <Dropdown
+                      className={styles.filterColumn}
+                      value={columns.find(c => c.internalName === filter.column)?.displayName || filter.column}
+                      selectedOptions={[filter.column]}
+                      onOptionSelect={(_e, data) => handleFilterChange(index, 'column', data.optionValue as string)}
+                      size="small"
                     >
                       {columns.map((col) => (
-                        <option key={`${col.sourceListId}:${col.internalName}`} value={col.internalName}>
+                        <Option key={`${col.sourceListId}:${col.internalName}`} value={col.internalName}>
                           {col.displayName}
-                        </option>
+                        </Option>
                       ))}
-                    </select>
-                    <select
-                      value={filter.operator}
-                      onChange={(e) => handleFilterChange(index, 'operator', e.target.value)}
-                      className="select select-sm select-bordered"
+                    </Dropdown>
+                    <Dropdown
+                      className={styles.filterOperator}
+                      value={FILTER_OPERATORS.find(op => op.value === filter.operator)?.label || filter.operator}
+                      selectedOptions={[filter.operator]}
+                      onOptionSelect={(_e, data) => handleFilterChange(index, 'operator', data.optionValue as string)}
+                      size="small"
                     >
                       {FILTER_OPERATORS.map((op) => (
-                        <option key={op.value} value={op.value}>
+                        <Option key={op.value} value={op.value}>
                           {op.label}
-                        </option>
+                        </Option>
                       ))}
-                    </select>
-                    <input
-                      type="text"
+                    </Dropdown>
+                    <Input
+                      className={styles.filterValue}
                       value={filter.value}
-                      onChange={(e) => handleFilterChange(index, 'value', e.target.value)}
+                      onChange={(_e, data) => handleFilterChange(index, 'value', data.value)}
                       placeholder="Value"
-                      className="input input-sm input-bordered flex-1"
+                      size="small"
                     />
-                    <button
+                    <Button
+                      appearance="subtle"
+                      icon={<DismissRegular />}
                       onClick={() => handleRemoveFilter(index)}
-                      className="btn btn-sm btn-ghost btn-square text-error"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        strokeWidth={1.5}
-                        stroke="currentColor"
-                        className="w-4 h-4"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M6 18 18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
+                      size="small"
+                    />
                   </div>
                 ))}
               </div>
             )}
 
-            <button
+            <Button
+              appearance="outline"
+              icon={<AddRegular />}
               onClick={handleAddFilter}
               disabled={columns.length === 0}
-              className="btn btn-sm btn-outline"
+              size="small"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-4 h-4"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
               Add Filter
-            </button>
+            </Button>
           </div>
         );
 
@@ -762,95 +957,81 @@ function ViewEditor({ initialView, onSave, onCancel }: ViewEditorProps) {
         };
 
         return (
-          <div className="space-y-6">
-            <p className="text-base-content/60">
+          <div className={styles.formSection}>
+            <Text className={styles.helperText}>
               Choose how to sort the data. You can add a primary sort and an optional secondary sort.
-            </p>
+            </Text>
 
             {/* Primary Sort */}
-            <div className="card bg-base-200">
-              <div className="card-body p-4">
-                <h3 className="font-medium mb-3">Primary Sort</h3>
-                <div className="flex gap-3 items-end">
-                  <div className="form-control flex-1">
-                    <label className="label">
-                      <span className="label-text">Column</span>
-                    </label>
-                    <select
-                      value={sorting[0]?.column || ''}
-                      onChange={(e) => setPrimarySortColumn(e.target.value)}
-                      className="select select-bordered w-full"
+            <Card className={styles.sortCard}>
+              <Text className={styles.sortCardHeader}>Primary Sort</Text>
+              <div className={styles.sortRow}>
+                <Field label="Column" className={styles.sortColumn}>
+                  <Dropdown
+                    value={sorting[0]?.column ? columns.find(c => c.internalName === sorting[0].column)?.displayName : ''}
+                    selectedOptions={sorting[0]?.column ? [sorting[0].column] : []}
+                    onOptionSelect={(_e, data) => setPrimarySortColumn(data.optionValue as string)}
+                    placeholder="No sorting"
+                  >
+                    <Option value="">No sorting</Option>
+                    {columns.map((col) => (
+                      <Option key={`${col.sourceListId}:${col.internalName}`} value={col.internalName}>
+                        {col.displayName}
+                      </Option>
+                    ))}
+                  </Dropdown>
+                </Field>
+                {sorting[0] && (
+                  <Field label="Direction" className={styles.sortDirection}>
+                    <Dropdown
+                      value={sorting[0].direction === 'asc' ? 'Ascending (A-Z, 0-9)' : 'Descending (Z-A, 9-0)'}
+                      selectedOptions={[sorting[0].direction]}
+                      onOptionSelect={(_e, data) => updateSortRule(0, { direction: data.optionValue as 'asc' | 'desc' })}
                     >
-                      <option value="">No sorting</option>
-                      {columns.map((col) => (
-                        <option key={`${col.sourceListId}:${col.internalName}`} value={col.internalName}>
-                          {col.displayName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {sorting[0] && (
-                    <div className="form-control">
-                      <label className="label">
-                        <span className="label-text">Direction</span>
-                      </label>
-                      <select
-                        value={sorting[0].direction}
-                        onChange={(e) => updateSortRule(0, { direction: e.target.value as 'asc' | 'desc' })}
-                        className="select select-bordered"
-                      >
-                        <option value="asc">Ascending (A-Z, 0-9)</option>
-                        <option value="desc">Descending (Z-A, 9-0)</option>
-                      </select>
-                    </div>
-                  )}
-                </div>
+                      <Option value="asc">Ascending (A-Z, 0-9)</Option>
+                      <Option value="desc">Descending (Z-A, 9-0)</Option>
+                    </Dropdown>
+                  </Field>
+                )}
               </div>
-            </div>
+            </Card>
 
             {/* Secondary Sort */}
             {sorting.length > 0 && (
-              <div className="card bg-base-200">
-                <div className="card-body p-4">
-                  <h3 className="font-medium mb-3">Secondary Sort (Optional)</h3>
-                  <div className="flex gap-3 items-end">
-                    <div className="form-control flex-1">
-                      <label className="label">
-                        <span className="label-text">Column</span>
-                      </label>
-                      <select
-                        value={sorting[1]?.column || ''}
-                        onChange={(e) => setSecondarySortColumn(e.target.value)}
-                        className="select select-bordered w-full"
+              <Card className={styles.sortCard}>
+                <Text className={styles.sortCardHeader}>Secondary Sort (Optional)</Text>
+                <div className={styles.sortRow}>
+                  <Field label="Column" className={styles.sortColumn}>
+                    <Dropdown
+                      value={sorting[1]?.column ? columns.find(c => c.internalName === sorting[1].column)?.displayName : ''}
+                      selectedOptions={sorting[1]?.column ? [sorting[1].column] : []}
+                      onOptionSelect={(_e, data) => setSecondarySortColumn(data.optionValue as string)}
+                      placeholder="No secondary sort"
+                    >
+                      <Option value="">No secondary sort</Option>
+                      {columns
+                        .filter((col) => col.internalName !== sorting[0]?.column)
+                        .map((col) => (
+                          <Option key={`${col.sourceListId}:${col.internalName}`} value={col.internalName}>
+                            {col.displayName}
+                          </Option>
+                        ))}
+                    </Dropdown>
+                  </Field>
+                  {sorting[1] && (
+                    <Field label="Direction" className={styles.sortDirection}>
+                      <Dropdown
+                        value={sorting[1].direction === 'asc' ? 'Ascending (A-Z, 0-9)' : 'Descending (Z-A, 9-0)'}
+                        selectedOptions={[sorting[1].direction]}
+                        onOptionSelect={(_e, data) => updateSortRule(1, { direction: data.optionValue as 'asc' | 'desc' })}
                       >
-                        <option value="">No secondary sort</option>
-                        {columns
-                          .filter((col) => col.internalName !== sorting[0]?.column)
-                          .map((col) => (
-                            <option key={`${col.sourceListId}:${col.internalName}`} value={col.internalName}>
-                              {col.displayName}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
-                    {sorting[1] && (
-                      <div className="form-control">
-                        <label className="label">
-                          <span className="label-text">Direction</span>
-                        </label>
-                        <select
-                          value={sorting[1].direction}
-                          onChange={(e) => updateSortRule(1, { direction: e.target.value as 'asc' | 'desc' })}
-                          className="select select-bordered"
-                        >
-                          <option value="asc">Ascending (A-Z, 0-9)</option>
-                          <option value="desc">Descending (Z-A, 9-0)</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
+                        <Option value="asc">Ascending (A-Z, 0-9)</Option>
+                        <Option value="desc">Descending (Z-A, 9-0)</Option>
+                      </Dropdown>
+                    </Field>
+                  )}
                 </div>
-              </div>
+              </Card>
             )}
           </div>
         );
@@ -861,124 +1042,85 @@ function ViewEditor({ initialView, onSave, onCancel }: ViewEditorProps) {
   const isLastStep = currentStep === STEPS[STEPS.length - 1].key;
 
   return (
-    <div className="space-y-6">
+    <div className={styles.container}>
       {/* Steps indicator */}
-      <ul className="steps steps-horizontal w-full">
-        {STEPS.map((step) => (
-          <li
-            key={step.key}
-            className={`step cursor-pointer ${
-              STEPS.findIndex((s) => s.key === currentStep) >=
-              STEPS.findIndex((s) => s.key === step.key)
-                ? 'step-primary'
-                : ''
-            }`}
-            onClick={() => setCurrentStep(step.key)}
-          >
-            {step.label}
-          </li>
-        ))}
-      </ul>
+      <div className={styles.stepsContainer}>
+        {STEPS.map((step, index) => {
+          const currentIndex = STEPS.findIndex((s) => s.key === currentStep);
+          const isActive = index <= currentIndex;
+          const isCurrent = step.key === currentStep;
+
+          return (
+            <div key={step.key} style={{ display: 'contents' }}>
+              <div className={styles.stepItem} onClick={() => setCurrentStep(step.key)}>
+                <Badge
+                  appearance={isActive ? 'filled' : 'outline'}
+                  color={isActive ? 'brand' : 'informative'}
+                  size="medium"
+                >
+                  {index + 1}
+                </Badge>
+                <Text className={`${styles.stepLabel} ${isCurrent ? styles.stepLabelActive : ''}`}>
+                  {step.label}
+                </Text>
+              </div>
+              {index < STEPS.length - 1 && (
+                <div
+                  className={`${styles.stepConnector} ${isActive ? styles.stepConnectorActive : ''}`}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
 
       {/* Error message */}
       {error && (
-        <div className="alert alert-error">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={1.5}
-            stroke="currentColor"
-            className="w-5 h-5"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-            />
-          </svg>
-          <span>{error}</span>
-        </div>
+        <MessageBar intent="error">
+          <MessageBarBody>
+            <WarningRegular /> {error}
+          </MessageBarBody>
+        </MessageBar>
       )}
 
       {/* Step content */}
-      <div className="card bg-base-200">
-        <div className="card-body">{renderStepContent()}</div>
-      </div>
+      <Card>
+        {renderStepContent()}
+      </Card>
 
       {/* Navigation buttons */}
-      <div className="flex items-center justify-between">
+      <div className={styles.navigation}>
         <div>
           {currentStep !== STEPS[0].key && (
-            <button onClick={goToPreviousStep} className="btn btn-ghost">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-4 h-4"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"
-                />
-              </svg>
+            <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={goToPreviousStep}>
               Previous
-            </button>
+            </Button>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
-          <button onClick={onCancel} className="btn btn-ghost">
+        <div className={styles.navRight}>
+          <Button appearance="subtle" onClick={onCancel}>
             Cancel
-          </button>
+          </Button>
           {isLastStep ? (
-            <button onClick={handleSave} disabled={saving} className="btn btn-primary">
-              {saving ? (
-                <>
-                  <span className="loading loading-spinner loading-sm" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                    className="w-4 h-4"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                  </svg>
-                  Save View
-                </>
-              )}
-            </button>
+            <Button
+              appearance="primary"
+              icon={saving ? <Spinner size="tiny" /> : <CheckmarkRegular />}
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? 'Saving...' : 'Save View'}
+            </Button>
           ) : (
-            <button
+            <Button
+              appearance="primary"
+              icon={<ArrowRightRegular />}
+              iconPosition="after"
               onClick={goToNextStep}
               disabled={!canProceed(currentStep)}
-              className="btn btn-primary"
             >
               Next
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-4 h-4"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"
-                />
-              </svg>
-            </button>
+            </Button>
           )}
         </div>
       </div>

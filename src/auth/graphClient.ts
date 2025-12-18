@@ -33,6 +33,28 @@ export interface GraphListColumn {
   columnGroup?: string;
   hidden?: boolean;
   readOnly?: boolean;
+  // Default value configured in SharePoint
+  defaultValue?: { value?: string; formula?: string };
+  // Type-specific properties from Graph API (only one will be present)
+  text?: { allowMultipleLines?: boolean; maxLength?: number };
+  boolean?: Record<string, never>;  // Empty object indicates boolean column
+  number?: { minimum?: number; maximum?: number };
+  dateTime?: { format?: string };
+  // Lookup column metadata - present if this is a lookup column
+  lookup?: {
+    listId: string;       // The list this lookup points to
+    columnName: string;   // The column in the target list
+    allowMultipleValues?: boolean;
+  };
+  // Choice column metadata - present if this is a choice column
+  choice?: {
+    choices: string[];
+    allowMultipleValues?: boolean;
+  };
+  // Hyperlink or picture column - present if this is a URL column
+  hyperlinkOrPicture?: {
+    isPicture?: boolean;
+  };
 }
 
 export interface GraphListItem {
@@ -186,16 +208,60 @@ export async function getListColumns(
 
   const response = await client
     .api(`/sites/${siteId}/lists/${listId}/columns`)
-    .select('id,name,displayName,columnGroup,hidden,readOnly')
+    .select('id,name,displayName,columnGroup,hidden,readOnly,defaultValue,text,boolean,number,dateTime,lookup,choice,hyperlinkOrPicture')
     .get();
 
   // Filter out hidden and system columns
-  const columns: GraphListColumn[] = (response.value || []).filter(
-    (col: GraphListColumn) =>
-      !col.hidden &&
-      col.columnGroup !== '_Hidden' &&
-      !['ContentType', 'Attachments', '_UIVersionString', 'Edit', 'LinkTitleNoMenu', 'LinkTitle', 'DocIcon', 'ItemChildCount', 'FolderChildCount', 'AppAuthor', 'AppEditor'].includes(col.name)
-  );
+  const columns: GraphListColumn[] = (response.value || [])
+    .filter(
+      (col: GraphListColumn & { lookup?: { listId?: string; columnName?: string; allowMultipleValues?: boolean } }) =>
+        !col.hidden &&
+        col.columnGroup !== '_Hidden' &&
+        !['ContentType', 'Attachments', '_UIVersionString', 'Edit', 'LinkTitleNoMenu', 'LinkTitle', 'DocIcon', 'ItemChildCount', 'FolderChildCount', 'AppAuthor', 'AppEditor'].includes(col.name)
+    )
+    .map((col: GraphListColumn) => {
+      // Include type metadata from Graph API
+      const result: GraphListColumn = {
+        id: col.id,
+        name: col.name,
+        displayName: col.displayName,
+        columnGroup: col.columnGroup,
+        hidden: col.hidden,
+        readOnly: col.readOnly,
+      };
+
+      // Default value
+      if (col.defaultValue) result.defaultValue = col.defaultValue;
+
+      // Type-specific properties (only one will be present)
+      if (col.text) result.text = col.text;
+      if (col.boolean) result.boolean = col.boolean;
+      if (col.number) result.number = col.number;
+      if (col.dateTime) result.dateTime = col.dateTime;
+
+      if (col.lookup?.listId) {
+        result.lookup = {
+          listId: col.lookup.listId,
+          columnName: col.lookup.columnName || 'Title',
+          allowMultipleValues: col.lookup.allowMultipleValues,
+        };
+      }
+
+      if (col.choice?.choices) {
+        result.choice = {
+          choices: col.choice.choices,
+          allowMultipleValues: col.choice.allowMultipleValues,
+        };
+      }
+
+      if (col.hyperlinkOrPicture) {
+        result.hyperlinkOrPicture = {
+          isPicture: col.hyperlinkOrPicture.isPicture,
+        };
+      }
+
+      return result;
+    });
 
   return columns;
 }
@@ -238,13 +304,21 @@ export async function getListItems(
   const columns = await getListColumns(msalInstance, account, siteId, listId);
 
   // Build $expand=fields($select=...) with column names
-  const columnNames = columns.map((c) => c.name).join(',');
+  // For lookup columns, also request the LookupId field (e.g., StudentLookupId for Student column)
+  const columnNames: string[] = [];
+  for (const col of columns) {
+    columnNames.push(col.name);
+    if (col.lookup) {
+      // SharePoint stores lookup IDs in a separate field: {ColumnName}LookupId
+      columnNames.push(`${col.name}LookupId`);
+    }
+  }
 
   // Get items with pagination, up to 1000
   const items: GraphListItem[] = [];
   let response = await client
     .api(`/sites/${siteId}/lists/${listId}/items`)
-    .expand(`fields($select=${columnNames})`)
+    .expand(`fields($select=${columnNames.join(',')})`)
     .top(250)
     .get();
 

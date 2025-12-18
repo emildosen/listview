@@ -7,7 +7,6 @@ import {
   Card,
   Text,
   Title2,
-  Badge,
   Spinner,
   Breadcrumb,
   BreadcrumbItem,
@@ -22,7 +21,7 @@ import {
 } from '@fluentui/react-components';
 import {
   AddRegular,
-  TableRegular,
+  DocumentTextRegular,
   SettingsRegular,
   DeleteRegular,
   ArrowLeftRegular,
@@ -85,7 +84,7 @@ const useStyles = makeStyles({
       backgroundColor: tokens.colorNeutralBackground3,
     },
   },
-  viewDescription: {
+  pageDescription: {
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground2,
     whiteSpace: 'nowrap',
@@ -93,7 +92,7 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     maxWidth: '300px',
   },
-  sourceCount: {
+  sourceInfo: {
     color: tokens.colorNeutralForeground2,
   },
   actionsCell: {
@@ -106,22 +105,22 @@ const useStyles = makeStyles({
   },
 });
 
-function ViewsPage() {
+function PagesPage() {
   const styles = useStyles();
-  const { views, removeView } = useSettings();
+  const { pages, removePage } = useSettings();
   const navigate = useNavigate();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this view?')) {
+    if (!confirm('Are you sure you want to delete this page?')) {
       return;
     }
 
     setDeletingId(id);
     try {
-      await removeView(id);
+      await removePage(id);
     } catch (error) {
-      console.error('Failed to delete view:', error);
+      console.error('Failed to delete page:', error);
     } finally {
       setDeletingId(null);
     }
@@ -138,82 +137,79 @@ function ViewsPage() {
         </BreadcrumbItem>
         <BreadcrumbDivider />
         <BreadcrumbItem>
-          <Text weight="semibold">Views</Text>
+          <Text weight="semibold">Pages</Text>
         </BreadcrumbItem>
       </Breadcrumb>
 
       <div className={styles.content}>
         <div className={styles.header}>
           <div>
-            <Title2 as="h1">Views</Title2>
+            <Title2 as="h1">Custom Pages</Title2>
             <Text className={styles.description}>
-              Create custom views to combine and display data from multiple lists.
+              Create entity detail pages with search, filters, and related data.
             </Text>
           </div>
-          <Button appearance="primary" icon={<AddRegular />} onClick={() => navigate('/app/views/new')}>
-            Create View
+          <Button appearance="primary" icon={<AddRegular />} onClick={() => navigate('/app/pages/new')}>
+            Create Page
           </Button>
         </div>
 
         {/* Empty State */}
-        {views.length === 0 && (
+        {pages.length === 0 && (
           <Card>
             <div className={styles.cardBody}>
-              <TableRegular fontSize={48} className={styles.emptyIcon} />
-              <Text className={styles.emptyText}>No views created yet</Text>
+              <DocumentTextRegular fontSize={48} className={styles.emptyIcon} />
+              <Text className={styles.emptyText}>No custom pages created yet</Text>
               <Text className={styles.emptySubtext}>
-                Create a view to combine data from multiple SharePoint lists
+                Create a page to view entity details with related data
               </Text>
-              <Button appearance="primary" size="small" onClick={() => navigate('/app/views/new')}>
-                Create your first view
+              <Button appearance="primary" size="small" onClick={() => navigate('/app/pages/new')}>
+                Create your first page
               </Button>
             </div>
           </Card>
         )}
 
-        {/* Views List */}
-        {views.length > 0 && (
+        {/* Pages List */}
+        {pages.length > 0 && (
           <Card>
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHeaderCell>Name</TableHeaderCell>
-                  <TableHeaderCell>Mode</TableHeaderCell>
-                  <TableHeaderCell>Sources</TableHeaderCell>
+                  <TableHeaderCell>Primary List</TableHeaderCell>
+                  <TableHeaderCell>Related Sections</TableHeaderCell>
                   <TableHeaderCell style={{ width: '96px' }}>Actions</TableHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {views.map((view) => (
+                {pages.map((page) => (
                   <TableRow
-                    key={view.id}
+                    key={page.id}
                     className={styles.tableRow}
-                    onClick={() => navigate(`/app/views/${view.id}`)}
+                    onClick={() => navigate(`/app/pages/${page.id}`)}
                   >
                     <TableCell>
                       <TableCellLayout>
                         <div>
-                          <Text weight="medium">{view.name}</Text>
-                          {view.description && (
-                            <div className={styles.viewDescription}>
-                              {view.description}
+                          <Text weight="medium">{page.name}</Text>
+                          {page.description && (
+                            <div className={styles.pageDescription}>
+                              {page.description}
                             </div>
                           )}
                         </div>
                       </TableCellLayout>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        appearance="tint"
-                        color={view.mode === 'aggregate' ? 'important' : 'brand'}
-                        size="small"
-                      >
-                        {view.mode === 'aggregate' ? 'Aggregate' : 'Union'}
-                      </Badge>
+                      <Text className={styles.sourceInfo}>
+                        {page.primarySource?.listName || 'Not configured'}
+                      </Text>
                     </TableCell>
                     <TableCell>
-                      <Text className={styles.sourceCount}>
-                        {view.sources.length} list{view.sources.length !== 1 ? 's' : ''}
+                      <Text className={styles.sourceInfo}>
+                        {page.relatedSections?.length || 0} section
+                        {(page.relatedSections?.length || 0) !== 1 ? 's' : ''}
                       </Text>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -222,17 +218,17 @@ function ViewsPage() {
                           appearance="subtle"
                           size="small"
                           icon={<SettingsRegular />}
-                          title="Edit view"
-                          onClick={() => navigate(`/app/views/${view.id}/edit`)}
+                          title="Edit page"
+                          onClick={() => navigate(`/app/pages/${page.id}/edit`)}
                         />
                         <Button
                           appearance="subtle"
                           size="small"
-                          icon={deletingId === view.id ? <Spinner size="tiny" /> : <DeleteRegular />}
+                          icon={deletingId === page.id ? <Spinner size="tiny" /> : <DeleteRegular />}
                           className={styles.deleteButton}
-                          onClick={() => view.id && handleDelete(view.id)}
-                          disabled={deletingId === view.id}
-                          title="Delete view"
+                          onClick={() => page.id && handleDelete(page.id)}
+                          disabled={deletingId === page.id}
+                          title="Delete page"
                         />
                       </div>
                     </TableCell>
@@ -254,4 +250,4 @@ function ViewsPage() {
   );
 }
 
-export default ViewsPage;
+export default PagesPage;

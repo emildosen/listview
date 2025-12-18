@@ -9,10 +9,12 @@ import type { IPublicClientApplication, AccountInfo } from '@azure/msal-browser'
 import { getSharePointToken } from '../auth/graphClient';
 import type { Queryable } from '@pnp/queryable';
 import type { ViewDefinition, ViewItem } from '../types/view';
+import type { PageDefinition, PageItem } from '../types/page';
 
 export const DEFAULT_SETTINGS_SITE_PATH = '/sites/ListView';
 const SETTINGS_LIST_NAME = 'LV-Settings';
 const VIEWS_LIST_NAME = 'LV-Views';
+const PAGES_LIST_NAME = 'LV-Pages';
 
 /**
  * System list names used by ListView app - these should be hidden from users
@@ -21,6 +23,7 @@ const VIEWS_LIST_NAME = 'LV-Views';
 export const SYSTEM_LIST_NAMES = [
   SETTINGS_LIST_NAME,
   VIEWS_LIST_NAME,
+  PAGES_LIST_NAME,
 ] as const;
 
 export interface SharePointSite {
@@ -544,4 +547,324 @@ export async function getDefaultViewColumnOrder(
     console.warn('[SharePoint] Could not get default view column order:', error);
     return [];
   }
+}
+
+// ============================================
+// Pages List Operations
+// ============================================
+
+/**
+ * Find the pages list if it exists
+ */
+export async function findPagesList(
+  sp: SPFI,
+  siteUrl: string
+): Promise<SharePointList | null> {
+  try {
+    const list = await sp.web.lists.getByTitle(PAGES_LIST_NAME)
+      .select('Id', 'Title', 'RootFolder/ServerRelativeUrl')
+      .expand('RootFolder')();
+
+    return {
+      id: list.Id,
+      name: PAGES_LIST_NAME,
+      displayName: list.Title,
+      webUrl: `${siteUrl}/Lists/${PAGES_LIST_NAME}`,
+    };
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'status' in error) {
+      const status = (error as { status: number }).status;
+      if (status === 404) {
+        return null;
+      }
+    }
+    throw error;
+  }
+}
+
+/**
+ * Create the pages list with custom columns
+ */
+export async function createPagesList(
+  sp: SPFI,
+  siteUrl: string
+): Promise<SharePointList> {
+  const listAddResult = await sp.web.lists.add(
+    PAGES_LIST_NAME,
+    'ListView custom pages configuration',
+    100,
+    false
+  );
+
+  const list = sp.web.lists.getByTitle(PAGES_LIST_NAME);
+
+  // Add PageConfig column (multi-line text for JSON storage)
+  await list.fields.addMultilineText('PageConfig', {
+    NumberOfLines: 10,
+    RichText: false,
+  });
+
+  // Add columns to default view
+  const views = await list.views.filter("DefaultView eq true")();
+  if (views.length > 0) {
+    const defaultViewId = views[0].Id;
+    await list.views.getById(defaultViewId).fields.add('PageConfig');
+  }
+
+  return {
+    id: listAddResult.Id,
+    name: PAGES_LIST_NAME,
+    displayName: PAGES_LIST_NAME,
+    webUrl: `${siteUrl}/Lists/${PAGES_LIST_NAME}`,
+  };
+}
+
+/**
+ * Get all pages from the list
+ */
+export async function getPages(sp: SPFI): Promise<PageDefinition[]> {
+  try {
+    const items: PageItem[] = await sp.web.lists
+      .getByTitle(PAGES_LIST_NAME)
+      .items
+      .select('Id', 'Title', 'PageConfig')();
+
+    return items.map((item) => {
+      try {
+        const config = JSON.parse(item.PageConfig || '{}') as Omit<PageDefinition, 'id' | 'name'>;
+        return {
+          ...config,
+          id: String(item.Id),
+          name: item.Title,
+        };
+      } catch {
+        return {
+          id: String(item.Id),
+          name: item.Title,
+          primarySource: { siteId: '', listId: '', listName: '' },
+          displayColumns: [],
+          searchConfig: {
+            displayMode: 'inline' as const,
+            titleColumn: '',
+            textSearchColumns: [],
+            filterColumns: [],
+          },
+          relatedSections: [],
+        };
+      }
+    });
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'status' in error) {
+      const status = (error as { status: number }).status;
+      if (status === 404) {
+        console.log('[Pages] LV-Pages list does not exist yet');
+        return [];
+      }
+    }
+    console.error('[Pages] Error fetching pages:', error);
+    return [];
+  }
+}
+
+/**
+ * Get a single page by ID
+ */
+export async function getPage(sp: SPFI, id: string): Promise<PageDefinition | null> {
+  try {
+    const item: PageItem = await sp.web.lists
+      .getByTitle(PAGES_LIST_NAME)
+      .items
+      .getById(parseInt(id, 10))
+      .select('Id', 'Title', 'PageConfig')();
+
+    const config = JSON.parse(item.PageConfig || '{}') as Omit<PageDefinition, 'id' | 'name'>;
+    return {
+      ...config,
+      id: String(item.Id),
+      name: item.Title,
+    };
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'status' in error) {
+      const status = (error as { status: number }).status;
+      if (status === 404) {
+        return null;
+      }
+    }
+    console.error('[Pages] Error fetching page:', error);
+    return null;
+  }
+}
+
+/**
+ * Create a new page
+ */
+export async function createPage(sp: SPFI, page: PageDefinition): Promise<PageDefinition> {
+  const { name, ...config } = page;
+
+  const result = await sp.web.lists
+    .getByTitle(PAGES_LIST_NAME)
+    .items
+    .add({
+      Title: name,
+      PageConfig: JSON.stringify({
+        ...config,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }),
+    });
+
+  return {
+    ...page,
+    id: String(result.Id),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Update an existing page
+ */
+export async function updatePage(
+  sp: SPFI,
+  id: string,
+  page: Partial<PageDefinition>
+): Promise<void> {
+  const { name, ...config } = page;
+
+  const updateData: Record<string, unknown> = {
+    PageConfig: JSON.stringify({
+      ...config,
+      updatedAt: new Date().toISOString(),
+    }),
+  };
+
+  if (name) {
+    updateData.Title = name;
+  }
+
+  await sp.web.lists
+    .getByTitle(PAGES_LIST_NAME)
+    .items
+    .getById(parseInt(id, 10))
+    .update(updateData);
+}
+
+/**
+ * Delete a page
+ */
+export async function deletePage(sp: SPFI, id: string): Promise<void> {
+  await sp.web.lists
+    .getByTitle(PAGES_LIST_NAME)
+    .items
+    .getById(parseInt(id, 10))
+    .delete();
+}
+
+// ============================================
+// Column Formatting Operations
+// ============================================
+
+export interface ColumnFormatting {
+  internalName: string;
+  customFormatter: string | null;
+}
+
+/**
+ * Get custom column formatting for all fields in a list
+ */
+export async function getColumnFormatting(
+  sp: SPFI,
+  listId: string
+): Promise<ColumnFormatting[]> {
+  try {
+    const fields = await sp.web.lists
+      .getById(listId)
+      .fields
+      .select('InternalName', 'CustomFormatter')();
+
+    return fields.map((field: { InternalName: string; CustomFormatter?: string }) => ({
+      internalName: field.InternalName,
+      customFormatter: field.CustomFormatter || null,
+    }));
+  } catch (error) {
+    console.error('[SharePoint] Failed to get column formatting:', error);
+    return [];
+  }
+}
+
+/**
+ * Parse column formatting JSON to determine if it renders as a link
+ * Returns the URL field expression if it's a link formatter, null otherwise
+ */
+export function parseColumnFormattingForLink(customFormatter: string | null): boolean {
+  if (!customFormatter) return false;
+
+  try {
+    const format = JSON.parse(customFormatter);
+
+    // Check if root element is an anchor tag
+    if (format.elmType === 'a') {
+      return true;
+    }
+
+    // Check for nested anchor in children
+    if (format.children && Array.isArray(format.children)) {
+      return format.children.some((child: { elmType?: string }) => child.elmType === 'a');
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+// ============================================
+// Generic List Item CRUD Operations
+// ============================================
+
+/**
+ * Create a new item in any list
+ */
+export async function createListItem(
+  sp: SPFI,
+  listId: string,
+  fields: Record<string, unknown>
+): Promise<{ Id: number }> {
+  const result = await sp.web.lists
+    .getById(listId)
+    .items
+    .add(fields);
+
+  return { Id: result.Id };
+}
+
+/**
+ * Update an item in any list
+ */
+export async function updateListItem(
+  sp: SPFI,
+  listId: string,
+  itemId: number,
+  fields: Record<string, unknown>
+): Promise<void> {
+  await sp.web.lists
+    .getById(listId)
+    .items
+    .getById(itemId)
+    .update(fields);
+}
+
+/**
+ * Delete an item from any list
+ */
+export async function deleteListItem(
+  sp: SPFI,
+  listId: string,
+  itemId: number
+): Promise<void> {
+  await sp.web.lists
+    .getById(listId)
+    .items
+    .getById(itemId)
+    .delete();
 }

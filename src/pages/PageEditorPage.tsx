@@ -15,8 +15,8 @@ import {
 } from '@fluentui/react-components';
 import { ArrowLeftRegular } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
-import ViewEditor from '../components/ViewEditor';
-import type { ViewDefinition } from '../types/view';
+import PageEditor from '../components/PageEditor/PageEditor';
+import type { PageDefinition } from '../types/page';
 
 const useStyles = makeStyles({
   container: {
@@ -56,29 +56,29 @@ const useStyles = makeStyles({
   },
 });
 
-function ViewEditorPage() {
+function PageEditorPage() {
   const styles = useStyles();
-  const { viewId } = useParams<{ viewId?: string }>();
+  const { pageId } = useParams<{ pageId?: string }>();
   const navigate = useNavigate();
-  const { views, saveView } = useSettings();
+  const { pages, savePage } = useSettings();
 
-  const isEditMode = !!viewId;
+  const isEditMode = !!pageId;
 
-  // Find view for editing
-  const initialView = useMemo((): ViewDefinition | undefined => {
-    if (!viewId) return undefined;
-    return views.find((v) => v.id === viewId);
-  }, [viewId, views]);
+  // Find page for editing
+  const initialPage = useMemo((): PageDefinition | undefined => {
+    if (!pageId) return undefined;
+    return pages.find((p) => p.id === pageId);
+  }, [pageId, pages]);
 
-  const loading = isEditMode && views.length === 0;
+  const loading = isEditMode && pages.length === 0;
 
-  const handleSave = async (view: ViewDefinition) => {
-    await saveView(view);
-    navigate('/app/views');
+  const handleSave = async (page: PageDefinition) => {
+    await savePage(page);
+    navigate('/app/pages');
   };
 
   const handleCancel = () => {
-    navigate('/app/views');
+    navigate('/app/pages');
   };
 
   if (loading) {
@@ -91,7 +91,7 @@ function ViewEditorPage() {
     );
   }
 
-  if (isEditMode && !initialView) {
+  if (isEditMode && !initialPage) {
     return (
       <div className={styles.container}>
         <Breadcrumb className={styles.breadcrumb}>
@@ -102,8 +102,8 @@ function ViewEditorPage() {
           </BreadcrumbItem>
           <BreadcrumbDivider />
           <BreadcrumbItem>
-            <Link to="/app/views" className={styles.breadcrumbLink}>
-              Views
+            <Link to="/app/pages" className={styles.breadcrumbLink}>
+              Pages
             </Link>
           </BreadcrumbItem>
           <BreadcrumbDivider />
@@ -112,11 +112,11 @@ function ViewEditorPage() {
           </BreadcrumbItem>
         </Breadcrumb>
         <MessageBar intent="error" className={styles.messageBar}>
-          <MessageBarBody>View not found</MessageBarBody>
+          <MessageBarBody>Page not found</MessageBarBody>
         </MessageBar>
         <div className={styles.backLink}>
-          <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={() => navigate('/app/views')}>
-            Back to Views
+          <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={() => navigate('/app/pages')}>
+            Back to Pages
           </Button>
         </div>
       </div>
@@ -134,14 +134,14 @@ function ViewEditorPage() {
         </BreadcrumbItem>
         <BreadcrumbDivider />
         <BreadcrumbItem>
-          <Link to="/app/views" className={styles.breadcrumbLink}>
-            Views
+          <Link to="/app/pages" className={styles.breadcrumbLink}>
+            Pages
           </Link>
         </BreadcrumbItem>
         <BreadcrumbDivider />
         <BreadcrumbItem>
           <Text weight="semibold">
-            {isEditMode ? `Edit: ${initialView?.name}` : 'Create View'}
+            {isEditMode ? `Edit: ${initialPage?.name}` : 'Create Page'}
           </Text>
         </BreadcrumbItem>
       </Breadcrumb>
@@ -149,17 +149,17 @@ function ViewEditorPage() {
       <div className={styles.content}>
         <div className={styles.header}>
           <Title2 as="h1" className={styles.title}>
-            {isEditMode ? 'Edit View' : 'Create View'}
+            {isEditMode ? 'Edit Page' : 'Create Page'}
           </Title2>
           <Text className={styles.description}>
             {isEditMode
-              ? 'Modify the view configuration below.'
-              : 'Configure a new view to combine and display data from multiple lists.'}
+              ? 'Modify the page configuration below.'
+              : 'Configure a new entity detail page with search, filters, and related data.'}
           </Text>
         </div>
 
-        <ViewEditor
-          initialView={initialView}
+        <PageEditor
+          initialPage={initialPage}
           onSave={handleSave}
           onCancel={handleCancel}
         />
@@ -168,4 +168,4 @@ function ViewEditorPage() {
   );
 }
 
-export default ViewEditorPage;
+export default PageEditorPage;

@@ -1,20 +1,271 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMsal } from '@azure/msal-react';
 import { useLocation, Link } from 'react-router-dom';
+import {
+  makeStyles,
+  tokens,
+  Button,
+  Avatar,
+  Text,
+  Divider,
+  mergeClasses,
+} from '@fluentui/react-components';
+import {
+  HomeRegular,
+  AddRegular,
+  EditRegular,
+  ChevronUpRegular,
+  WeatherSunnyRegular,
+  WeatherMoonRegular,
+  SettingsRegular,
+  SignOutRegular,
+} from '@fluentui/react-icons';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { graphScopes } from '../auth/msalConfig';
+import Logo from './Logo';
+
+const useStyles = makeStyles({
+  sidebar: {
+    width: '256px',
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderRight: `1px solid ${tokens.colorNeutralStroke1}`,
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100vh',
+    position: 'fixed',
+    left: 0,
+    top: 0,
+  },
+  logo: {
+    padding: '16px',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+  },
+  logoLink: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    fontSize: tokens.fontSizeBase500,
+    fontWeight: tokens.fontWeightBold,
+    letterSpacing: '-0.02em',
+    textDecoration: 'none',
+    color: tokens.colorNeutralForeground1,
+  },
+  nav: {
+    flex: 1,
+    padding: '16px',
+    overflowY: 'auto',
+  },
+  menuList: {
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+  },
+  menuItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 12px',
+    borderRadius: tokens.borderRadiusMedium,
+    textDecoration: 'none',
+    color: tokens.colorNeutralForeground1,
+    fontSize: tokens.fontSizeBase400,
+    cursor: 'pointer',
+    transitionProperty: 'background-color',
+    transitionDuration: tokens.durationNormal,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground3,
+    },
+  },
+  menuItemActive: {
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  section: {
+    marginTop: '16px',
+  },
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '10px 12px',
+  },
+  sectionTitle: {
+    flex: 1,
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground2,
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    textAlign: 'left',
+    padding: 0,
+  },
+  sectionActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    opacity: 0,
+    transitionProperty: 'opacity',
+    transitionDuration: tokens.durationNormal,
+  },
+  sectionHeaderHover: {
+    ':hover': {
+      '& .section-actions': {
+        opacity: 1,
+      },
+    },
+  },
+  sectionActionLink: {
+    color: tokens.colorNeutralForeground3,
+    display: 'flex',
+    alignItems: 'center',
+    transitionProperty: 'color',
+    transitionDuration: tokens.durationNormal,
+    ':hover': {
+      color: tokens.colorBrandForeground1,
+    },
+  },
+  sectionContent: {
+    marginLeft: '20px',
+    borderLeft: `1px solid ${tokens.colorNeutralStroke1}`,
+    paddingLeft: '4px',
+  },
+  sectionLink: {
+    display: 'block',
+    padding: '8px 12px',
+    margin: '0 4px',
+    fontSize: tokens.fontSizeBase300,
+    borderRadius: tokens.borderRadiusMedium,
+    textDecoration: 'none',
+    color: tokens.colorNeutralForeground2,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    transitionProperty: 'background-color',
+    transitionDuration: tokens.durationNormal,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground3,
+    },
+  },
+  sectionLinkActive: {
+    backgroundColor: tokens.colorNeutralBackground3,
+    color: tokens.colorNeutralForeground1,
+  },
+  userProfile: {
+    padding: '16px',
+    borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
+  },
+  profileButton: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '8px',
+    borderRadius: tokens.borderRadiusMedium,
+    border: 'none',
+    background: 'none',
+    cursor: 'pointer',
+    transitionProperty: 'background-color',
+    transitionDuration: tokens.durationNormal,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground3,
+    },
+  },
+  profileInfo: {
+    flex: 1,
+    textAlign: 'left',
+    minWidth: 0,
+  },
+  profileName: {
+    display: 'block',
+    fontWeight: tokens.fontWeightMedium,
+    fontSize: tokens.fontSizeBase200,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  profileEmail: {
+    display: 'block',
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground2,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  chevron: {
+    transitionProperty: 'transform',
+    transitionDuration: tokens.durationNormal,
+  },
+  chevronRotated: {
+    transform: 'rotate(180deg)',
+  },
+  dropdown: {
+    position: 'absolute',
+    bottom: '100%',
+    left: 0,
+    right: 0,
+    marginBottom: '8px',
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    borderRadius: tokens.borderRadiusMedium,
+    boxShadow: tokens.shadow16,
+    overflow: 'hidden',
+  },
+  dropdownSection: {
+    padding: '12px',
+  },
+  dropdownLabel: {
+    display: 'block',
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground2,
+    marginBottom: '8px',
+  },
+  themeButtons: {
+    display: 'flex',
+    gap: '4px',
+  },
+  dropdownItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '12px',
+    width: '100%',
+    border: 'none',
+    background: 'none',
+    cursor: 'pointer',
+    textDecoration: 'none',
+    color: tokens.colorNeutralForeground1,
+    fontSize: tokens.fontSizeBase300,
+    transitionProperty: 'background-color',
+    transitionDuration: tokens.durationNormal,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground2,
+    },
+  },
+  signOutItem: {
+    color: tokens.colorPaletteRedForeground1,
+  },
+  relativeContainer: {
+    position: 'relative',
+  },
+});
 
 function Sidebar() {
+  const styles = useStyles();
   const { instance, accounts } = useMsal();
-  const { setupStatus, enabledLists, views } = useSettings();
+  const { setupStatus, enabledLists, views, pages } = useSettings();
   const { theme, setTheme } = useTheme();
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [listsExpanded, setListsExpanded] = useState(true);
   const [viewsExpanded, setViewsExpanded] = useState(true);
+  const [pagesExpanded, setPagesExpanded] = useState(true);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
+  const profilePictureUrlRef = useRef<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [sectionHover, setSectionHover] = useState<string | null>(null);
 
   const account = accounts[0];
   const isReady = setupStatus === 'ready';
@@ -50,6 +301,7 @@ function Sidebar() {
         if (response.ok) {
           const blob = await response.blob();
           const url = URL.createObjectURL(blob);
+          profilePictureUrlRef.current = url;
           setProfilePicture(url);
         }
       } catch (error) {
@@ -62,8 +314,8 @@ function Sidebar() {
 
     // Cleanup blob URL on unmount
     return () => {
-      if (profilePicture) {
-        URL.revokeObjectURL(profilePicture);
+      if (profilePictureUrlRef.current) {
+        URL.revokeObjectURL(profilePictureUrlRef.current);
       }
     };
   }, [account, instance]);
@@ -98,36 +350,27 @@ function Sidebar() {
   };
 
   return (
-    <aside className="w-64 bg-base-200 border-r border-base-300 flex flex-col h-screen fixed left-0 top-0">
+    <aside className={styles.sidebar}>
       {/* Logo */}
-      <div className="p-4 border-b border-base-300">
-        <Link to="/app" className="text-xl font-bold tracking-tight">
+      <div className={styles.logo}>
+        <Link to="/app" className={styles.logoLink}>
+          <Logo size={28} />
           ListView
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4">
-        <ul className="menu gap-1">
+      <nav className={styles.nav}>
+        <ul className={styles.menuList}>
           <li>
             <Link
               to="/app"
-              className={isActive('/app') ? 'active' : ''}
+              className={mergeClasses(
+                styles.menuItem,
+                isActive('/app') && styles.menuItemActive
+              )}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-5 h-5"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
-                />
-              </svg>
+              <HomeRegular fontSize={22} />
               Home
             </Link>
           </li>
@@ -135,57 +378,42 @@ function Sidebar() {
 
         {/* Views Section */}
         {isReady && (
-          <div className="mt-4">
-            <div className="group flex items-center px-3 py-2">
+          <div className={styles.section}>
+            <div
+              className={styles.sectionHeader}
+              onMouseEnter={() => setSectionHover('views')}
+              onMouseLeave={() => setSectionHover(null)}
+            >
               <button
                 onClick={() => setViewsExpanded(!viewsExpanded)}
-                className="flex-1 text-left text-sm font-medium text-base-content/70"
+                className={styles.sectionTitle}
               >
                 Views
               </button>
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div
+                className={styles.sectionActions}
+                style={{ opacity: sectionHover === 'views' ? 1 : 0 }}
+              >
                 <Link
                   to="/app/views/new"
-                  className="text-base-content/50 hover:text-primary transition-colors"
+                  className={styles.sectionActionLink}
                   title="Create View"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                    className="w-4 h-4"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                  </svg>
+                  <AddRegular fontSize={16} />
                 </Link>
                 <Link
                   to="/app/views"
-                  className="text-base-content/50 hover:text-primary transition-colors"
+                  className={styles.sectionActionLink}
                   title="Manage Views"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                    className="w-4 h-4"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"
-                    />
-                  </svg>
+                  <EditRegular fontSize={16} />
                 </Link>
               </div>
             </div>
             {viewsExpanded && views.length > 0 && (
-              <div className="ml-5 border-l border-base-300 pl-1">
+              <div className={styles.sectionContent}>
                 {views.map((view) => {
                   const viewPath = `/app/views/${view.id}`;
                   const isViewActive = location.pathname === viewPath;
@@ -193,12 +421,73 @@ function Sidebar() {
                     <Link
                       key={view.id}
                       to={viewPath}
-                      className={`block px-3 py-1.5 mx-1 text-sm rounded-lg hover:bg-base-300 transition-colors ${
-                        isViewActive ? 'bg-base-300 text-base-content' : 'text-base-content/70'
-                      }`}
+                      className={mergeClasses(
+                        styles.sectionLink,
+                        isViewActive && styles.sectionLinkActive
+                      )}
                       title={view.description || view.name}
                     >
-                      <span className="truncate block">{view.name}</span>
+                      {view.name}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Pages Section */}
+        {isReady && (
+          <div className={styles.section}>
+            <div
+              className={styles.sectionHeader}
+              onMouseEnter={() => setSectionHover('pages')}
+              onMouseLeave={() => setSectionHover(null)}
+            >
+              <button
+                onClick={() => setPagesExpanded(!pagesExpanded)}
+                className={styles.sectionTitle}
+              >
+                Pages
+              </button>
+              <div
+                className={styles.sectionActions}
+                style={{ opacity: sectionHover === 'pages' ? 1 : 0 }}
+              >
+                <Link
+                  to="/app/pages/new"
+                  className={styles.sectionActionLink}
+                  title="Create Page"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <AddRegular fontSize={16} />
+                </Link>
+                <Link
+                  to="/app/pages"
+                  className={styles.sectionActionLink}
+                  title="Manage Pages"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <EditRegular fontSize={16} />
+                </Link>
+              </div>
+            </div>
+            {pagesExpanded && pages.length > 0 && (
+              <div className={styles.sectionContent}>
+                {pages.map((page) => {
+                  const pagePath = `/app/pages/${page.id}`;
+                  const isPageActive = location.pathname === pagePath;
+                  return (
+                    <Link
+                      key={page.id}
+                      to={pagePath}
+                      className={mergeClasses(
+                        styles.sectionLink,
+                        isPageActive && styles.sectionLinkActive
+                      )}
+                      title={page.description || page.name}
+                    >
+                      {page.name}
                     </Link>
                   );
                 })}
@@ -209,38 +498,34 @@ function Sidebar() {
 
         {/* Lists Section */}
         {isReady && (
-          <div className="mt-4">
-            <div className="group flex items-center px-3 py-2">
+          <div className={styles.section}>
+            <div
+              className={styles.sectionHeader}
+              onMouseEnter={() => setSectionHover('lists')}
+              onMouseLeave={() => setSectionHover(null)}
+            >
               <button
                 onClick={() => setListsExpanded(!listsExpanded)}
-                className="flex-1 text-left text-sm font-medium text-base-content/70"
+                className={styles.sectionTitle}
               >
                 Lists
               </button>
-              <Link
-                to="/app/lists"
-                className="opacity-0 group-hover:opacity-100 text-base-content/50 hover:text-primary transition-all"
-                title="Manage Lists"
-                onClick={(e) => e.stopPropagation()}
+              <div
+                className={styles.sectionActions}
+                style={{ opacity: sectionHover === 'lists' ? 1 : 0 }}
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-4 h-4"
+                <Link
+                  to="/app/lists"
+                  className={styles.sectionActionLink}
+                  title="Manage Lists"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"
-                  />
-                </svg>
-              </Link>
+                  <EditRegular fontSize={16} />
+                </Link>
+              </div>
             </div>
             {listsExpanded && enabledLists.length > 0 && (
-              <div className="ml-5 border-l border-base-300 pl-1">
+              <div className={styles.sectionContent}>
                 {enabledLists.map((list) => {
                   const listPath = `/app/lists/${encodeURIComponent(list.siteId)}/${encodeURIComponent(list.listId)}`;
                   const isListActive = location.pathname === listPath;
@@ -248,12 +533,13 @@ function Sidebar() {
                     <Link
                       key={`${list.siteId}:${list.listId}`}
                       to={listPath}
-                      className={`block px-3 py-1.5 mx-1 text-sm rounded-lg hover:bg-base-300 transition-colors ${
-                        isListActive ? 'bg-base-300 text-base-content' : 'text-base-content/70'
-                      }`}
+                      className={mergeClasses(
+                        styles.sectionLink,
+                        isListActive && styles.sectionLinkActive
+                      )}
                       title={`${list.listName} (${list.siteName})`}
                     >
-                      <span className="truncate block">{list.listName}</span>
+                      {list.listName}
                     </Link>
                   );
                 })}
@@ -264,122 +550,74 @@ function Sidebar() {
       </nav>
 
       {/* User Profile */}
-      <div className="p-4 border-t border-base-300" ref={dropdownRef}>
-        <div className="relative">
+      <div className={styles.userProfile} ref={dropdownRef}>
+        <div className={styles.relativeContainer}>
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-base-300 transition-colors"
+            className={styles.profileButton}
           >
-            {/* Avatar with profile picture or initials */}
-            {profilePicture ? (
-              <img
-                src={profilePicture}
-                alt=""
-                className="w-10 h-10 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-primary text-primary-content flex items-center justify-center font-medium text-sm">
-                {getInitials()}
-              </div>
-            )}
-            <div className="flex-1 text-left min-w-0">
-              <p className="font-medium text-sm truncate">
+            <Avatar
+              image={profilePicture ? { src: profilePicture } : undefined}
+              name={account?.name || 'User'}
+              initials={!profilePicture ? getInitials() : undefined}
+              size={40}
+              color="brand"
+            />
+            <div className={styles.profileInfo}>
+              <Text className={styles.profileName}>
                 {account?.name || 'User'}
-              </p>
-              <p className="text-xs text-base-content/60 truncate">
+              </Text>
+              <Text className={styles.profileEmail}>
                 {account?.username}
-              </p>
+              </Text>
             </div>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
-            </svg>
+            <ChevronUpRegular
+              fontSize={16}
+              className={mergeClasses(
+                styles.chevron,
+                dropdownOpen && styles.chevronRotated
+              )}
+            />
           </button>
 
           {/* Dropdown Menu */}
           {dropdownOpen && (
-            <div className="absolute bottom-full left-0 right-0 mb-2 bg-base-100 border border-base-300 rounded-lg shadow-lg overflow-hidden">
+            <div className={styles.dropdown}>
               {/* Theme Switcher */}
-              <div className="p-3">
-                <p className="text-xs text-base-content/60 mb-2">Theme</p>
-                <div className="flex gap-1">
-                  <button
+              <div className={styles.dropdownSection}>
+                <Text className={styles.dropdownLabel}>Theme</Text>
+                <div className={styles.themeButtons}>
+                  <Button
+                    appearance={theme === 'light' ? 'primary' : 'subtle'}
+                    size="small"
+                    icon={<WeatherSunnyRegular />}
                     onClick={() => setTheme('light')}
-                    className={`flex-1 btn btn-sm ${theme === 'light' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ flex: 1 }}
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={1.5}
-                      stroke="currentColor"
-                      className="w-4 h-4"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
-                      />
-                    </svg>
                     Light
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    appearance={theme === 'dark' ? 'primary' : 'subtle'}
+                    size="small"
+                    icon={<WeatherMoonRegular />}
                     onClick={() => setTheme('dark')}
-                    className={`flex-1 btn btn-sm ${theme === 'dark' ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ flex: 1 }}
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={1.5}
-                      stroke="currentColor"
-                      className="w-4 h-4"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"
-                      />
-                    </svg>
                     Dark
-                  </button>
+                  </Button>
                 </div>
               </div>
 
-              {/* Divider */}
-              <div className="border-t border-base-300" />
+              <Divider />
 
               {/* Settings */}
               {isReady && (
                 <Link
                   to="/app/settings"
-                  className="p-3 hover:bg-base-200 transition-colors flex items-center gap-2"
+                  className={styles.dropdownItem}
+                  onClick={() => setDropdownOpen(false)}
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                    className="w-5 h-5"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"
-                    />
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
-                    />
-                  </svg>
+                  <SettingsRegular fontSize={20} />
                   Settings
                 </Link>
               )}
@@ -387,22 +625,9 @@ function Sidebar() {
               {/* Sign Out */}
               <button
                 onClick={handleSignOut}
-                className="w-full p-3 text-left hover:bg-base-200 transition-colors flex items-center gap-2 text-error"
+                className={mergeClasses(styles.dropdownItem, styles.signOutItem)}
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-5 h-5"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m-3 0-3-3m0 0 3-3m-3 3H15"
-                  />
-                </svg>
+                <SignOutRegular fontSize={20} />
                 Sign out
               </button>
             </div>

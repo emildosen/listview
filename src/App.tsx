@@ -8,6 +8,9 @@ import ListViewPage from './pages/ListViewPage';
 import ViewsPage from './pages/ViewsPage';
 import ViewEditorPage from './pages/ViewEditorPage';
 import ViewDisplayPage from './pages/ViewDisplayPage';
+import PagesPage from './pages/PagesPage';
+import PageEditorPage from './pages/PageEditorPage';
+import PageDisplayPage from './pages/PageDisplayPage';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 
@@ -26,6 +29,10 @@ function App() {
               <Route path="views/new" element={<ViewEditorPage />} />
               <Route path="views/:viewId" element={<ViewDisplayPage />} />
               <Route path="views/:viewId/edit" element={<ViewEditorPage />} />
+              <Route path="pages" element={<PagesPage />} />
+              <Route path="pages/new" element={<PageEditorPage />} />
+              <Route path="pages/:pageId" element={<PageDisplayPage />} />
+              <Route path="pages/:pageId/edit" element={<PageEditorPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
           </Routes>

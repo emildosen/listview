@@ -26,15 +26,23 @@ import {
   createView,
   updateView,
   deleteView,
+  findPagesList,
+  createPagesList,
+  getPages,
+  createPage,
+  updatePage,
+  deletePage,
   type SharePointSite,
   type SharePointList,
 } from '../services/sharepoint';
 import { getSharePointHostname } from '../auth/graphClient';
 import type { ViewDefinition } from '../types/view';
+import type { PageDefinition } from '../types/page';
 
 export interface EnabledList {
   siteId: string;
   siteName: string;
+  siteUrl: string;
   listId: string;
   listName: string;
 }
@@ -65,6 +73,8 @@ interface SettingsState {
   settings: Record<string, string>;
   viewsList: SharePointList | null;
   views: ViewDefinition[];
+  pagesList: SharePointList | null;
+  pages: PageDefinition[];
 }
 
 interface SettingsContextValue extends SettingsState {
@@ -81,6 +91,11 @@ interface SettingsContextValue extends SettingsState {
   loadViews: () => Promise<void>;
   saveView: (view: ViewDefinition) => Promise<ViewDefinition>;
   removeView: (id: string) => Promise<void>;
+  // Pages operations
+  createPagesList: () => Promise<boolean>;
+  loadPages: () => Promise<void>;
+  savePage: (page: PageDefinition) => Promise<PageDefinition>;
+  removePage: (id: string) => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -99,6 +114,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     settings: {},
     viewsList: null,
     views: [],
+    pagesList: null,
+    pages: [],
   });
 
   const getAccount = useCallback(() => {
@@ -168,6 +185,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           settings: {},
           viewsList: null,
           views: [],
+          pagesList: null,
+          pages: [],
         });
         return;
       }
@@ -182,6 +201,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         views = await getViews(sp);
       }
 
+      // Check for pages list and load pages
+      const pagesList = await findPagesList(sp, siteUrl);
+      let pages: PageDefinition[] = [];
+      if (pagesList) {
+        pages = await getPages(sp);
+      }
+
       setState({
         setupStatus: 'ready',
         error: null,
@@ -193,6 +219,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         settings,
         viewsList,
         views,
+        pagesList,
+        pages,
       });
     } catch (error) {
       console.error('Failed to initialize settings:', error);
@@ -255,6 +283,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             settings: {},
             viewsList: null,
             views: [],
+            pagesList: null,
+            pages: [],
           });
           return true; // Site found, but list needs to be created
         }
@@ -268,6 +298,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           views = await getViews(sp);
         }
 
+        // Check for pages list and load pages
+        const pagesList = await findPagesList(sp, siteUrl);
+        let pages: PageDefinition[] = [];
+        if (pagesList) {
+          pages = await getPages(sp);
+        }
+
         setState({
           setupStatus: 'ready',
           error: null,
@@ -279,6 +316,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           settings,
           viewsList,
           views,
+          pagesList,
+          pages,
         });
 
         return true;
@@ -492,6 +531,121 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [state.viewsList]
   );
 
+  // Pages operations
+  const createPagesListCallback = useCallback(async (): Promise<boolean> => {
+    if (!state.site || !state.hostname || !state.sitePath) {
+      return false;
+    }
+
+    const sp = spClientRef.current;
+    if (!sp) {
+      return false;
+    }
+
+    try {
+      const siteUrl = buildSiteUrl(state.hostname, state.sitePath);
+      const pagesList = await createPagesList(sp, siteUrl);
+
+      setState((prev) => ({
+        ...prev,
+        pagesList,
+        pages: [],
+      }));
+
+      return true;
+    } catch (error) {
+      console.error('Failed to create pages list:', error);
+      return false;
+    }
+  }, [state.site, state.hostname, state.sitePath]);
+
+  const loadPagesCallback = useCallback(async (): Promise<void> => {
+    const sp = spClientRef.current;
+    if (!sp || !state.pagesList) {
+      return;
+    }
+
+    try {
+      const pages = await getPages(sp);
+      setState((prev) => ({ ...prev, pages }));
+    } catch (error) {
+      console.error('Failed to load pages:', error);
+    }
+  }, [state.pagesList]);
+
+  const savePageCallback = useCallback(
+    async (page: PageDefinition): Promise<PageDefinition> => {
+      const sp = spClientRef.current;
+      if (!sp) {
+        throw new Error('SharePoint client not initialized');
+      }
+
+      if (!state.hostname || !state.sitePath) {
+        throw new Error('Site not configured');
+      }
+
+      const siteUrl = buildSiteUrl(state.hostname, state.sitePath);
+
+      // If no pages list exists, create it first
+      if (!state.pagesList) {
+        console.log('[Pages] Creating LV-Pages list at', siteUrl);
+        try {
+          const pagesList = await createPagesList(sp, siteUrl);
+          setState((prev) => ({ ...prev, pagesList }));
+          console.log('[Pages] LV-Pages list created successfully');
+        } catch (error) {
+          console.error('[Pages] Failed to create LV-Pages list:', error);
+          throw new Error('Failed to create pages list. Please check your permissions.');
+        }
+      }
+
+      if (page.id) {
+        // Update existing page
+        await updatePage(sp, page.id, page);
+        setState((prev) => ({
+          ...prev,
+          pages: prev.pages.map((p) => (p.id === page.id ? { ...p, ...page } : p)),
+        }));
+        return page;
+      } else {
+        // Create new page
+        const newPage = await createPage(sp, page);
+        setState((prev) => ({
+          ...prev,
+          pages: [...prev.pages, newPage],
+        }));
+        return newPage;
+      }
+    },
+    [state.pagesList, state.hostname, state.sitePath]
+  );
+
+  const removePageCallback = useCallback(
+    async (id: string): Promise<void> => {
+      const sp = spClientRef.current;
+      if (!sp) {
+        throw new Error('SharePoint client not initialized');
+      }
+
+      if (!state.pagesList) {
+        // No pages list, just remove from local state
+        setState((prev) => ({
+          ...prev,
+          pages: prev.pages.filter((p) => p.id !== id),
+        }));
+        return;
+      }
+
+      await deletePage(sp, id);
+
+      setState((prev) => ({
+        ...prev,
+        pages: prev.pages.filter((p) => p.id !== id),
+      }));
+    },
+    [state.pagesList]
+  );
+
   // Auto-initialize when accounts change
   useEffect(() => {
     if (accounts.length > 0) {
@@ -528,6 +682,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     loadViews: loadViewsCallback,
     saveView: saveViewCallback,
     removeView: removeViewCallback,
+    createPagesList: createPagesListCallback,
+    loadPages: loadPagesCallback,
+    savePage: savePageCallback,
+    removePage: removePageCallback,
   };
 
   return (

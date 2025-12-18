@@ -1,19 +1,26 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import type { ReactNode } from 'react';
+import {
+  FluentProvider,
+  webLightTheme,
+  webDarkTheme,
+  type Theme,
+} from '@fluentui/react-components';
 
-type Theme = 'light' | 'dark';
+type ThemeMode = 'light' | 'dark';
 
 interface ThemeContextType {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
+  theme: ThemeMode;
+  setTheme: (theme: ThemeMode) => void;
   toggleTheme: () => void;
+  fluentTheme: Theme;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 const STORAGE_KEY = 'listview-theme';
 
-function getInitialTheme(): Theme {
+function getInitialTheme(): ThemeMode {
   const stored = localStorage.getItem(STORAGE_KEY);
   if (stored === 'light' || stored === 'dark') {
     return stored;
@@ -26,14 +33,18 @@ function getInitialTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(getInitialTheme);
+  const [theme, setThemeState] = useState<ThemeMode>(getInitialTheme);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
-  const setTheme = (newTheme: Theme) => {
+  const fluentTheme = useMemo(
+    () => (theme === 'dark' ? webDarkTheme : webLightTheme),
+    [theme]
+  );
+
+  const setTheme = (newTheme: ThemeMode) => {
     setThemeState(newTheme);
   };
 
@@ -41,13 +52,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
+  const value = useMemo(
+    () => ({ theme, setTheme, toggleTheme, fluentTheme }),
+    [theme, fluentTheme]
+  );
+
   return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggleTheme }}>
-      {children}
+    <ThemeContext.Provider value={value}>
+      <FluentProvider theme={fluentTheme} style={{ height: '100%' }}>
+        {children}
+      </FluentProvider>
     </ThemeContext.Provider>
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme() {
   const context = useContext(ThemeContext);
   if (context === undefined) {

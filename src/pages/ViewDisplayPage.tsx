@@ -1,20 +1,45 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
-import { AgGridReact } from 'ag-grid-react';
-import { ModuleRegistry, AllCommunityModule, themeQuartz, colorSchemeDark } from 'ag-grid-community';
-import type { ColDef, ValueFormatterParams } from 'ag-grid-community';
+import {
+  makeStyles,
+  tokens,
+  Text,
+  Title2,
+  Badge,
+  Button,
+  Spinner,
+  Card,
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbDivider,
+  MessageBar,
+  MessageBarBody,
+  DataGrid,
+  DataGridHeader,
+  DataGridHeaderCell,
+  DataGridBody,
+  DataGridRow,
+  DataGridCell,
+  TableCellLayout,
+  createTableColumn,
+} from '@fluentui/react-components';
+import type { TableColumnDefinition } from '@fluentui/react-components';
+import {
+  SettingsRegular,
+  WarningRegular,
+  DatabaseRegular,
+  ArrowLeftRegular,
+} from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
-import { useTheme } from '../contexts/ThemeContext';
-import { getListItems, type GraphListItem } from '../auth/graphClient';
+import { getListItems, type GraphListItem, type GraphListColumn } from '../auth/graphClient';
 
-// Register AG Grid modules
-ModuleRegistry.registerModules([AllCommunityModule]);
 import type { ViewDefinition, ViewFilter, FilterOperator, ViewSorting } from '../types/view';
 
 interface RowData {
   _sourceListId: string;
   _sourceListName: string;
+  _itemId?: string;  // SharePoint item ID for JOIN matching
   [key: string]: unknown;
 }
 
@@ -22,17 +47,120 @@ interface AggregateResult {
   [key: string]: number | string;
 }
 
+// Represents a lookup relationship between two sources
+interface LookupRelationship {
+  childListId: string;       // The list that HAS the lookup column
+  parentListId: string;      // The list that is LOOKED UP TO
+  lookupColumnName: string;  // The column name in the child list (e.g., "Student")
+}
+
+const useStyles = makeStyles({
+  container: {
+    padding: '32px',
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  breadcrumb: {
+    marginBottom: '24px',
+  },
+  breadcrumbLink: {
+    textDecoration: 'none',
+    color: 'inherit',
+  },
+  content: {
+    flex: '1',
+    display: 'flex',
+    flexDirection: 'column',
+    minHeight: 0,
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: '24px',
+  },
+  titleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  description: {
+    color: tokens.colorNeutralForeground2,
+    marginTop: '4px',
+  },
+  meta: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    marginTop: '8px',
+    fontSize: '14px',
+    color: tokens.colorNeutralForeground2,
+  },
+  loadingCard: {
+    flex: '1',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '16px',
+  },
+  emptyCard: {
+    flex: '1',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '8px',
+    color: tokens.colorNeutralForeground3,
+  },
+  emptyIcon: {
+    fontSize: '48px',
+    marginBottom: '8px',
+    color: tokens.colorNeutralForeground4,
+  },
+  dataGrid: {
+    minWidth: '100%',
+  },
+  rowCount: {
+    marginTop: '8px',
+    fontSize: '14px',
+    color: tokens.colorNeutralForeground2,
+  },
+  footer: {
+    marginTop: '32px',
+    paddingTop: '24px',
+    borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
+  },
+  backLink: {
+    marginTop: '16px',
+  },
+  messageBar: {
+    marginBottom: '16px',
+  },
+});
+
 function ViewDisplayPage() {
+  const styles = useStyles();
   const { viewId } = useParams<{ viewId: string }>();
+  const navigate = useNavigate();
   const { instance, accounts } = useMsal();
   const { views } = useSettings();
-  const { theme } = useTheme();
   const account = accounts[0];
 
   const [view, setView] = useState<ViewDefinition | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rawData, setRawData] = useState<RowData[]>([]);
+  const [lookupRelationships, setLookupRelationships] = useState<LookupRelationship[]>([]);
 
   // Find the view
   useEffect(() => {
@@ -53,20 +181,42 @@ function ViewDisplayPage() {
 
       try {
         const allRows: RowData[] = [];
+        const colsByList = new Map<string, GraphListColumn[]>();
+        const sourceListIds = new Set(view.sources.map(s => s.listId));
 
         for (const source of view.sources) {
           const result = await getListItems(instance, account, source.siteId, source.listId);
 
-          // Map items to row data
+          // Store column metadata for this list
+          colsByList.set(source.listId, result.columns);
+
+          // Map items to row data, including the item ID for JOIN matching
           const rows = result.items.map((item: GraphListItem) => ({
             _sourceListId: source.listId,
             _sourceListName: source.listName,
+            _itemId: item.id,
             ...item.fields,
           }));
 
           allRows.push(...rows);
         }
 
+        // Detect lookup relationships between sources
+        const relationships: LookupRelationship[] = [];
+        for (const [listId, columns] of colsByList) {
+          for (const col of columns) {
+            if (col.lookup?.listId && sourceListIds.has(col.lookup.listId)) {
+              // This list has a lookup column pointing to another source in the view
+              relationships.push({
+                childListId: listId,
+                parentListId: col.lookup.listId,
+                lookupColumnName: col.name,
+              });
+            }
+          }
+        }
+
+        setLookupRelationships(relationships);
         setRawData(allRows);
       } catch (err) {
         console.error('Failed to load view data:', err);
@@ -106,99 +256,220 @@ function ViewDisplayPage() {
     return operators[filter.operator]();
   };
 
-  // Convert value to number, treating booleans as 1/0
-  const toNumber = (v: unknown): number => {
-    if (typeof v === 'boolean') return v ? 1 : 0;
-    const num = parseFloat(String(v));
-    return isNaN(num) ? NaN : num;
-  };
-
-  // Multi-level sort function
-  const applySorting = <T extends Record<string, unknown>>(
-    data: T[],
-    sortRules: ViewSorting | undefined
-  ): T[] => {
-    if (!sortRules || sortRules.length === 0) return data;
-
-    return [...data].sort((a, b) => {
-      for (const rule of sortRules) {
-        const aVal = a[rule.column];
-        const bVal = b[rule.column];
-
-        // Handle nulls
-        if (aVal === null || aVal === undefined) {
-          if (bVal === null || bVal === undefined) continue;
-          return rule.direction === 'asc' ? 1 : -1;
-        }
-        if (bVal === null || bVal === undefined) {
-          return rule.direction === 'asc' ? -1 : 1;
-        }
-
-        // Try numeric comparison first
-        const aNum = toNumber(aVal);
-        const bNum = toNumber(bVal);
-
-        let cmp: number;
-        if (!isNaN(aNum) && !isNaN(bNum)) {
-          cmp = aNum - bNum;
-        } else {
-          // Fall back to string comparison
-          const aStr = String(aVal).toLowerCase();
-          const bStr = String(bVal).toLowerCase();
-          cmp = aStr.localeCompare(bStr, undefined, { numeric: true });
-        }
-
-        if (cmp !== 0) {
-          return rule.direction === 'asc' ? cmp : -cmp;
-        }
-      }
-      return 0;
-    });
-  };
-
-  // Compute aggregation for a set of rows
-  const computeAggregation = (
-    rows: RowData[],
-    col: { internalName: string; aggregation?: string }
-  ): number => {
-    const values = rows
-      .map((row) => row[col.internalName])
-      .filter((v) => v !== null && v !== undefined);
-
-    switch (col.aggregation) {
-      case 'count':
-        return values.length;
-      case 'sum': {
-        const numValues = values.map(toNumber).filter((n) => !isNaN(n));
-        return numValues.reduce((a, b) => a + b, 0);
-      }
-      case 'avg': {
-        const numValues = values.map(toNumber).filter((n) => !isNaN(n));
-        return numValues.length > 0
-          ? Math.round((numValues.reduce((a, b) => a + b, 0) / numValues.length) * 100) / 100
-          : 0;
-      }
-      case 'min': {
-        const numValues = values.map(toNumber).filter((n) => !isNaN(n));
-        return numValues.length > 0 ? Math.min(...numValues) : 0;
-      }
-      case 'max': {
-        const numValues = values.map(toNumber).filter((n) => !isNaN(n));
-        return numValues.length > 0 ? Math.max(...numValues) : 0;
-      }
-      default:
-        return 0;
-    }
-  };
-
   // Process data based on view mode
   const processedData = useMemo(() => {
     if (!view || rawData.length === 0) return [];
 
-    // Apply filters
-    let filteredData = rawData;
+    // Convert value to number, treating booleans as 1/0
+    const toNumber = (v: unknown): number => {
+      if (typeof v === 'boolean') return v ? 1 : 0;
+      const num = parseFloat(String(v));
+      return isNaN(num) ? NaN : num;
+    };
+
+    // Multi-level sort function
+    const applySorting = <T extends Record<string, unknown>>(
+      data: T[],
+      sortRules: ViewSorting | undefined
+    ): T[] => {
+      if (!sortRules || sortRules.length === 0) return data;
+
+      return [...data].sort((a, b) => {
+        for (const rule of sortRules) {
+          const aVal = a[rule.column];
+          const bVal = b[rule.column];
+
+          // Handle nulls
+          if (aVal === null || aVal === undefined) {
+            if (bVal === null || bVal === undefined) continue;
+            return rule.direction === 'asc' ? 1 : -1;
+          }
+          if (bVal === null || bVal === undefined) {
+            return rule.direction === 'asc' ? -1 : 1;
+          }
+
+          // Try numeric comparison first
+          const aNum = toNumber(aVal);
+          const bNum = toNumber(bVal);
+
+          let cmp: number;
+          if (!isNaN(aNum) && !isNaN(bNum)) {
+            cmp = aNum - bNum;
+          } else {
+            // Fall back to string comparison
+            const aStr = String(aVal).toLowerCase();
+            const bStr = String(bVal).toLowerCase();
+            cmp = aStr.localeCompare(bStr, undefined, { numeric: true });
+          }
+
+          if (cmp !== 0) {
+            return rule.direction === 'asc' ? cmp : -cmp;
+          }
+        }
+        return 0;
+      });
+    };
+
+    // Compute aggregation for a set of rows
+    const computeAggregation = (
+      rows: RowData[],
+      col: { internalName: string; aggregation?: string }
+    ): number => {
+      const values = rows
+        .map((row) => row[col.internalName])
+        .filter((v) => v !== null && v !== undefined);
+
+      switch (col.aggregation) {
+        case 'count':
+          return values.length;
+        case 'sum': {
+          const numValues = values.map(toNumber).filter((n) => !isNaN(n));
+          return numValues.reduce((a, b) => a + b, 0);
+        }
+        case 'avg': {
+          const numValues = values.map(toNumber).filter((n) => !isNaN(n));
+          return numValues.length > 0
+            ? Math.round((numValues.reduce((a, b) => a + b, 0) / numValues.length) * 100) / 100
+            : 0;
+        }
+        case 'min': {
+          const numValues = values.map(toNumber).filter((n) => !isNaN(n));
+          return numValues.length > 0 ? Math.min(...numValues) : 0;
+        }
+        case 'max': {
+          const numValues = values.map(toNumber).filter((n) => !isNaN(n));
+          return numValues.length > 0 ? Math.max(...numValues) : 0;
+        }
+        default:
+          return 0;
+      }
+    };
+
+    // Compute aggregation for a column that comes from joined child rows
+    const computeJoinedAggregation = (
+      rows: RowData[],
+      col: { internalName: string; aggregation?: string },
+      childListId: string
+    ): number => {
+      // Collect all values from the child rows stored in _childRows_<listId>
+      const allChildValues: unknown[] = [];
+
+      for (const row of rows) {
+        const childRows = row[`_childRows_${childListId}`] as RowData[] | undefined;
+        if (childRows && Array.isArray(childRows)) {
+          for (const childRow of childRows) {
+            const value = childRow[col.internalName];
+            if (value !== null && value !== undefined) {
+              allChildValues.push(value);
+            }
+          }
+        }
+      }
+
+      switch (col.aggregation) {
+        case 'count':
+          return allChildValues.length;
+        case 'sum': {
+          const numValues = allChildValues.map(toNumber).filter((n) => !isNaN(n));
+          return numValues.reduce((a, b) => a + b, 0);
+        }
+        case 'avg': {
+          const numValues = allChildValues.map(toNumber).filter((n) => !isNaN(n));
+          return numValues.length > 0
+            ? Math.round((numValues.reduce((a, b) => a + b, 0) / numValues.length) * 100) / 100
+            : 0;
+        }
+        case 'min': {
+          const numValues = allChildValues.map(toNumber).filter((n) => !isNaN(n));
+          return numValues.length > 0 ? Math.min(...numValues) : 0;
+        }
+        case 'max': {
+          const numValues = allChildValues.map(toNumber).filter((n) => !isNaN(n));
+          return numValues.length > 0 ? Math.max(...numValues) : 0;
+        }
+        default:
+          return 0;
+      }
+    };
+
+    // Helper to get LookupId - checks both object form and separate LookupId field
+    const getLookupId = (row: RowData, lookupColumnName: string): string | null => {
+      // First check for the separate {ColumnName}LookupId field (SharePoint's format)
+      const lookupIdField = `${lookupColumnName}LookupId`;
+      if (row[lookupIdField] !== undefined && row[lookupIdField] !== null) {
+        return String(row[lookupIdField]);
+      }
+
+      // Fall back to checking if the value is an object with LookupId property
+      const value = row[lookupColumnName];
+      if (value && typeof value === 'object' && 'LookupId' in value) {
+        return String((value as { LookupId: unknown }).LookupId);
+      }
+
+      return null;
+    };
+
+    // For aggregate views with lookup relationships, perform JOINs
+    let dataToProcess = rawData;
+
+    if (view.mode === 'aggregate' && lookupRelationships.length > 0) {
+      // Separate rows by source list
+      const rowsByList = new Map<string, RowData[]>();
+      for (const row of rawData) {
+        const listId = row._sourceListId;
+        if (!rowsByList.has(listId)) {
+          rowsByList.set(listId, []);
+        }
+        rowsByList.get(listId)!.push(row);
+      }
+
+      // Determine parent and child lists based on relationships
+      // Parent list = the one being looked up TO
+      // Child list = the one with the lookup column
+      const childListIds = new Set(lookupRelationships.map(r => r.childListId));
+      const parentListIds = new Set(lookupRelationships.map(r => r.parentListId));
+
+      // Find the primary parent list (lookup target that's not also a child)
+      const primaryParents = [...parentListIds].filter(id => !childListIds.has(id));
+
+      if (primaryParents.length > 0) {
+        const parentListId = primaryParents[0];
+        const parentRows = rowsByList.get(parentListId) || [];
+
+        // Find relationships where this is the parent
+        const childRelations = lookupRelationships.filter(r => r.parentListId === parentListId);
+
+        // Create joined rows: for each parent, collect all related child rows
+        const joinedRows: RowData[] = [];
+
+        for (const parentRow of parentRows) {
+          // Start with parent row data
+          const joinedRow: RowData = { ...parentRow };
+
+          // For each child relationship, find matching child rows
+          for (const rel of childRelations) {
+            const childRows = rowsByList.get(rel.childListId) || [];
+
+            const matchingChildren = childRows.filter(childRow => {
+              const lookupId = getLookupId(childRow, rel.lookupColumnName);
+              return lookupId === parentRow._itemId;
+            });
+
+            // Store matching child rows for aggregation
+            joinedRow[`_childRows_${rel.childListId}`] = matchingChildren;
+          }
+
+          joinedRows.push(joinedRow);
+        }
+
+        dataToProcess = joinedRows;
+      }
+    }
+
+    // Apply filters (to parent rows in joined case)
+    let filteredData = dataToProcess;
     if (view.filters && view.filters.length > 0) {
-      filteredData = rawData.filter((row) =>
+      filteredData = dataToProcess.filter((row) =>
         view.filters!.every((filter) => applyFilter(row, filter))
       );
     }
@@ -206,12 +477,20 @@ function ViewDisplayPage() {
     if (view.mode === 'aggregate') {
       const groupBy = view.groupBy || [];
 
+      // Determine which columns come from parent vs child lists
+      const childListIds = new Set(lookupRelationships.map(r => r.childListId));
+
       if (groupBy.length === 0) {
         // No grouping - single aggregate row
         const result: AggregateResult = {};
         for (const col of view.columns) {
           if (col.aggregation) {
-            result[col.internalName] = computeAggregation(filteredData, col);
+            // Check if this column is from a child list (needs special handling)
+            if (childListIds.has(col.sourceListId)) {
+              result[col.internalName] = computeJoinedAggregation(filteredData, col, col.sourceListId);
+            } else {
+              result[col.internalName] = computeAggregation(filteredData, col);
+            }
           } else {
             result[col.internalName] = '';
           }
@@ -239,8 +518,12 @@ function ViewDisplayPage() {
             // This is a group-by column - use the value from the first row
             result[col.internalName] = groupRows[0][col.internalName] as string | number;
           } else if (col.aggregation) {
-            // This is an aggregated column
-            result[col.internalName] = computeAggregation(groupRows, col);
+            // Check if this column is from a child list (needs special handling)
+            if (childListIds.has(col.sourceListId)) {
+              result[col.internalName] = computeJoinedAggregation(groupRows, col, col.sourceListId);
+            } else {
+              result[col.internalName] = computeAggregation(groupRows, col);
+            }
           } else {
             // Column without aggregation in aggregate mode - use first value
             result[col.internalName] = groupRows[0][col.internalName] as string | number;
@@ -256,102 +539,103 @@ function ViewDisplayPage() {
 
     // Union mode - apply sorting
     return applySorting(filteredData, view.sorting);
-  }, [view, rawData]);
+  }, [view, rawData, lookupRelationships]);
 
-  // Generate AG Grid column definitions
-  const columnDefs = useMemo((): ColDef[] => {
+  // Generate DataGrid column definitions
+  const columnDefs = useMemo((): TableColumnDefinition<Record<string, unknown>>[] => {
     if (!view) return [];
 
-    const cols: ColDef[] = [];
-
-    // Add view columns
-    for (const col of view.columns) {
+    return view.columns.map((col) => {
       const isGroupByCol = view.mode === 'aggregate' && view.groupBy?.includes(col.internalName);
-      const colDef: ColDef = {
-        headerName: col.displayName + (col.aggregation && !isGroupByCol ? ` (${col.aggregation})` : ''),
-        field: col.internalName,
-        sortable: true,
-        filter: true,
-        resizable: true,
-        valueFormatter: (params: ValueFormatterParams) => formatCellValue(params.value),
-      };
-      cols.push(colDef);
-    }
+      const headerLabel = col.displayName + (col.aggregation && !isGroupByCol ? ` (${col.aggregation})` : '');
 
-    return cols;
+      return createTableColumn<Record<string, unknown>>({
+        columnId: col.internalName,
+        compare: (a, b) => {
+          const aVal = String(a[col.internalName] ?? '');
+          const bVal = String(b[col.internalName] ?? '');
+          return aVal.localeCompare(bVal);
+        },
+        renderHeaderCell: () => headerLabel,
+        renderCell: (item) => (
+          <TableCellLayout truncate>
+            {formatCellValue(item[col.internalName])}
+          </TableCellLayout>
+        ),
+      });
+    });
   }, [view]);
-
-  // AG Grid default column settings
-  const defaultColDef = useMemo((): ColDef => ({
-    flex: 1,
-    minWidth: 100,
-    resizable: true,
-  }), []);
-
-  // AG Grid theme based on current app theme
-  const gridTheme = useMemo(() => {
-    return theme === 'dark' ? themeQuartz.withPart(colorSchemeDark) : themeQuartz;
-  }, [theme]);
 
   if (!view) {
     return (
-      <div className="p-8">
-        <div className="text-sm breadcrumbs mb-6">
-          <ul>
-            <li>
-              <Link to="/app">Home</Link>
-            </li>
-            <li>
-              <Link to="/app/views">Views</Link>
-            </li>
-            <li>Not Found</li>
-          </ul>
-        </div>
-        <div className="alert alert-error">
-          <span>View not found</span>
-        </div>
-        <div className="mt-4">
-          <Link to="/app/views" className="btn btn-ghost">
+      <div className={styles.container}>
+        <Breadcrumb className={styles.breadcrumb}>
+          <BreadcrumbItem>
+            <Link to="/app" className={styles.breadcrumbLink}>
+              Home
+            </Link>
+          </BreadcrumbItem>
+          <BreadcrumbDivider />
+          <BreadcrumbItem>
+            <Link to="/app/views" className={styles.breadcrumbLink}>
+              Views
+            </Link>
+          </BreadcrumbItem>
+          <BreadcrumbDivider />
+          <BreadcrumbItem>
+            <Text weight="semibold">Not Found</Text>
+          </BreadcrumbItem>
+        </Breadcrumb>
+        <MessageBar intent="error" className={styles.messageBar}>
+          <MessageBarBody>View not found</MessageBarBody>
+        </MessageBar>
+        <div className={styles.backLink}>
+          <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={() => navigate('/app/views')}>
             Back to Views
-          </Link>
+          </Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8 h-full flex flex-col">
+    <div className={styles.container}>
       {/* Breadcrumb */}
-      <div className="text-sm breadcrumbs mb-6">
-        <ul>
-          <li>
-            <Link to="/app">Home</Link>
-          </li>
-          <li>
-            <Link to="/app/views">Views</Link>
-          </li>
-          <li>{view.name}</li>
-        </ul>
-      </div>
+      <Breadcrumb className={styles.breadcrumb}>
+        <BreadcrumbItem>
+          <Link to="/app" className={styles.breadcrumbLink}>
+            Home
+          </Link>
+        </BreadcrumbItem>
+        <BreadcrumbDivider />
+        <BreadcrumbItem>
+          <Link to="/app/views" className={styles.breadcrumbLink}>
+            Views
+          </Link>
+        </BreadcrumbItem>
+        <BreadcrumbDivider />
+        <BreadcrumbItem>
+          <Text weight="semibold">{view.name}</Text>
+        </BreadcrumbItem>
+      </Breadcrumb>
 
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className={styles.content}>
         {/* Header */}
-        <div className="flex items-start justify-between mb-6">
+        <div className={styles.header}>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">{view.name}</h1>
-              <span
-                className={`badge ${
-                  view.mode === 'aggregate' ? 'badge-secondary' : 'badge-primary'
-                }`}
+            <div className={styles.titleRow}>
+              <Title2 as="h1">{view.name}</Title2>
+              <Badge
+                appearance="filled"
+                color={view.mode === 'aggregate' ? 'important' : 'brand'}
               >
                 {view.mode === 'aggregate' ? 'Aggregate' : 'Union'}
-              </span>
+              </Badge>
             </div>
             {view.description && (
-              <p className="text-base-content/60 mt-1">{view.description}</p>
+              <Text className={styles.description}>{view.description}</Text>
             )}
-            <div className="flex items-center gap-4 mt-2 text-sm text-base-content/60">
+            <div className={styles.meta}>
               <span>
                 {view.sources.length} source{view.sources.length !== 1 ? 's' : ''}
               </span>
@@ -365,130 +649,89 @@ function ViewDisplayPage() {
               )}
             </div>
           </div>
-          <Link to={`/app/views/${view.id}/edit`} className="btn btn-outline btn-sm">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-4 h-4"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"
-              />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
-              />
-            </svg>
+          <Button
+            appearance="outline"
+            size="small"
+            icon={<SettingsRegular />}
+            onClick={() => navigate(`/app/views/${view.id}/edit`)}
+          >
             Edit View
-          </Link>
+          </Button>
         </div>
 
         {/* Loading State */}
         {loading && (
-          <div className="card bg-base-200 flex-1">
-            <div className="card-body items-center justify-center">
-              <span className="loading loading-spinner loading-lg text-primary" />
-              <p className="text-base-content/60 mt-4">Loading data from sources...</p>
+          <Card className={styles.loadingCard}>
+            <div className={styles.loadingContent}>
+              <Spinner size="large" />
+              <Text className={styles.description}>Loading data from sources...</Text>
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Error State */}
         {error && !loading && (
-          <div className="alert alert-error mb-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-5 h-5"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-              />
-            </svg>
-            <span>{error}</span>
-          </div>
+          <MessageBar intent="error" className={styles.messageBar}>
+            <MessageBarBody>
+              <WarningRegular style={{ marginRight: '8px' }} />
+              {error}
+            </MessageBarBody>
+          </MessageBar>
         )}
 
         {/* No Data */}
         {!loading && !error && processedData.length === 0 && (
-          <div className="card bg-base-200 flex-1">
-            <div className="card-body items-center justify-center">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-12 h-12 text-base-content/30 mb-4"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"
-                />
-              </svg>
-              <p className="text-base-content/60">No data found</p>
-              <p className="text-sm text-base-content/40">
+          <Card className={styles.emptyCard}>
+            <div className={styles.emptyContent}>
+              <DatabaseRegular className={styles.emptyIcon} />
+              <Text>No data found</Text>
+              <Text size={200}>
                 {view.filters && view.filters.length > 0
                   ? 'Try adjusting the filters'
                   : 'The source lists may be empty'}
-              </p>
+              </Text>
             </div>
-          </div>
+          </Card>
         )}
 
-        {/* AG Grid Data Table */}
+        {/* DataGrid Data Table */}
         {!loading && !error && processedData.length > 0 && (
           <div>
-            <AgGridReact
-              theme={gridTheme}
-              rowData={processedData}
-              columnDefs={columnDefs}
-              defaultColDef={defaultColDef}
-              domLayout="autoHeight"
-              animateRows={true}
-              pagination={true}
-              paginationPageSize={50}
-              paginationPageSizeSelector={[25, 50, 100, 200]}
-              suppressMovableColumns={false}
-              enableCellTextSelection={true}
-            />
-            <p className="text-sm text-base-content/60 mt-2">
+            <DataGrid
+              items={processedData}
+              columns={columnDefs}
+              sortable
+              resizableColumns
+              className={styles.dataGrid}
+            >
+              <DataGridHeader>
+                <DataGridRow>
+                  {({ renderHeaderCell }) => (
+                    <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
+                  )}
+                </DataGridRow>
+              </DataGridHeader>
+              <DataGridBody<Record<string, unknown>>>
+                {({ item, rowId }) => (
+                  <DataGridRow<Record<string, unknown>> key={rowId}>
+                    {({ renderCell }) => (
+                      <DataGridCell>{renderCell(item)}</DataGridCell>
+                    )}
+                  </DataGridRow>
+                )}
+              </DataGridBody>
+            </DataGrid>
+            <Text className={styles.rowCount}>
               {processedData.length} row{processedData.length !== 1 ? 's' : ''} total
-            </p>
+            </Text>
           </div>
         )}
 
         {/* Back Button */}
-        <div className="mt-8 pt-6 border-t border-base-300">
-          <Link to="/app/views" className="btn btn-ghost">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-4 h-4"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"
-              />
-            </svg>
+        <div className={styles.footer}>
+          <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={() => navigate('/app/views')}>
             Back to Views
-          </Link>
+          </Button>
         </div>
       </div>
     </div>
