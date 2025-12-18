@@ -640,8 +640,7 @@ export async function getPages(sp: SPFI): Promise<PageDefinition[]> {
           primarySource: config.primarySource || { siteId: '', listId: '', listName: '' },
           displayColumns: config.displayColumns || [],
           searchConfig: config.searchConfig || {
-            displayMode: 'inline' as const,
-            titleColumn: '',
+            tableColumns: [],
             textSearchColumns: [],
             filterColumns: [],
           },
@@ -660,8 +659,7 @@ export async function getPages(sp: SPFI): Promise<PageDefinition[]> {
           primarySource: { siteId: '', listId: '', listName: '' },
           displayColumns: [],
           searchConfig: {
-            displayMode: 'inline' as const,
-            titleColumn: '',
+            tableColumns: [],
             textSearchColumns: [],
             filterColumns: [],
           },

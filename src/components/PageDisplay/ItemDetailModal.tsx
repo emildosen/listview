@@ -62,6 +62,7 @@ const useStyles = makeStyles({
   titleText: {
     fontSize: tokens.fontSizeBase500,
     fontWeight: tokens.fontWeightSemibold,
+    lineHeight: tokens.lineHeightBase500,
     flex: 1,
     minWidth: 0,
     overflow: 'hidden',
@@ -98,12 +99,12 @@ const useStyles = makeStyles({
   },
   cardTitle: {
     fontWeight: tokens.fontWeightMedium,
-    marginBottom: '12px',
+    marginBottom: '6px',
   },
   detailsGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, 1fr)',
-    gap: '16px',
+    gap: '10px',
     width: '100%',
   },
   detailItem: {
@@ -375,16 +376,22 @@ function ItemDetailModal({ page, columns, item, spClient, onClose, onPageUpdate 
   // Get effective layout configuration
   const layoutConfig = useMemo(() => getEffectiveLayoutConfig(page), [page]);
 
+  // Get the title column - first table column, first display column, or fallback to Title
+  const titleColumn = useMemo(() => {
+    return page.searchConfig?.tableColumns?.[0]?.internalName
+      || page.displayColumns[0]?.internalName
+      || 'Title';
+  }, [page.searchConfig?.tableColumns, page.displayColumns]);
+
   // Separate visible columns by display style
   const { statColumns, listColumns } = useMemo(() => {
     const visible = layoutConfig.columnSettings.filter(c => c.visible);
-    const titleColumn = page.searchConfig?.titleColumn || 'Title';
     // Exclude title column from both lists (it's shown in the header)
     return {
       statColumns: visible.filter(c => c.displayStyle === 'stat' && c.internalName !== titleColumn),
       listColumns: visible.filter(c => c.displayStyle === 'list' && c.internalName !== titleColumn),
     };
-  }, [layoutConfig, page.searchConfig?.titleColumn]);
+  }, [layoutConfig, titleColumn]);
 
   // Order related sections
   const orderedSections = useMemo(() => {
@@ -459,7 +466,6 @@ function ItemDetailModal({ page, columns, item, spClient, onClose, onPageUpdate 
     setCustomizeOpen(false);
   };
 
-  const titleColumn = page.searchConfig?.titleColumn || 'Title';
   const titleValue = getDisplayValue(titleColumn);
 
   return (

@@ -38,7 +38,6 @@ import type {
   SearchConfig,
   FilterColumn,
   RelatedSection,
-  DisplayMode,
   PageType,
 } from '../../types/page';
 
@@ -317,9 +316,7 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
   );
   const [searchConfig, setSearchConfig] = useState<SearchConfig>(
     initialPage?.searchConfig || {
-      displayMode: 'inline',
-      titleColumn: '',
-      subtitleColumns: [],
+      tableColumns: [],
       textSearchColumns: [],
       filterColumns: [],
     }
@@ -381,13 +378,11 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
     });
     // Clear columns when source changes
     setDisplayColumns([]);
-    setSearchConfig((prev) => ({
-      displayMode: prev.displayMode,
-      titleColumn: '',
-      subtitleColumns: [],
+    setSearchConfig({
+      tableColumns: [],
       textSearchColumns: [],
       filterColumns: [],
-    }));
+    });
   }, []);
 
   const handleColumnToggle = useCallback((col: ColumnWithMeta) => {
@@ -505,11 +500,7 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
       case 'columns':
         return displayColumns.length > 0;
       case 'search':
-        // Inline mode requires title column, table mode requires table columns
-        if (searchConfig.displayMode === 'table') {
-          return (searchConfig.tableColumns?.length || 0) > 0;
-        }
-        return searchConfig.titleColumn.length > 0;
+        return (searchConfig.tableColumns?.length || 0) > 0;
       case 'related':
         return true; // Related sections are optional
       case 'review':
@@ -874,160 +865,40 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
               Configure how users can search and filter entities.
             </Text>
 
-            {/* Display Mode Selection */}
-            <Field label="Display Mode *">
-              <Text size={200} style={{ color: tokens.colorNeutralForeground2, marginBottom: '12px', display: 'block' }}>
-                Choose how search results are displayed.
+            {/* Table Columns */}
+            <Field label="Table Columns *">
+              <Text size={200} style={{ color: tokens.colorNeutralForeground2, marginBottom: '8px', display: 'block' }}>
+                Columns to show in the search results table. Detail view will show all display columns.
               </Text>
-              <div className={styles.displayModeGrid}>
-                {/* Inline Mode */}
-                <div
-                  className={`${styles.displayModeOption} ${
-                    searchConfig.displayMode === 'inline' ? styles.displayModeOptionSelected : ''
-                  }`}
-                  onClick={() => setSearchConfig((prev) => ({ ...prev, displayMode: 'inline' as DisplayMode }))}
-                >
-                  <svg viewBox="0 0 120 80" style={{ width: '100%', height: '80px' }} fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="2" y="2" width="36" height="76" rx="2" fill={tokens.colorNeutralBackground3} stroke={tokens.colorNeutralStroke1} strokeWidth="1"/>
-                    <rect x="6" y="6" width="28" height="6" rx="1" fill={tokens.colorNeutralForeground3}/>
-                    <rect x="6" y="16" width="28" height="4" rx="1" fill={tokens.colorBrandBackground}/>
-                    <rect x="6" y="24" width="28" height="4" rx="1" fill={tokens.colorNeutralBackground4}/>
-                    <rect x="6" y="32" width="28" height="4" rx="1" fill={tokens.colorNeutralBackground4}/>
-                    <rect x="6" y="40" width="28" height="4" rx="1" fill={tokens.colorNeutralBackground4}/>
-                    <rect x="44" y="2" width="74" height="76" rx="2" fill={tokens.colorNeutralBackground3} stroke={tokens.colorNeutralStroke1} strokeWidth="1"/>
-                    <rect x="48" y="6" width="40" height="6" rx="1" fill={tokens.colorNeutralForeground3}/>
-                    <rect x="48" y="18" width="66" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
-                    <rect x="48" y="24" width="50" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
-                    <rect x="48" y="34" width="66" height="40" rx="2" fill={tokens.colorNeutralBackground4}/>
-                  </svg>
-                  <div className={styles.displayModeLabel}>
-                    <Text weight="medium" size={200}>Inline</Text>
-                    <Text size={100} style={{ color: tokens.colorNeutralForeground2 }}>List with detail panel</Text>
-                  </div>
-                </div>
-
-                {/* Table Mode */}
-                <div
-                  className={`${styles.displayModeOption} ${
-                    searchConfig.displayMode === 'table' ? styles.displayModeOptionSelected : ''
-                  }`}
-                  onClick={() => setSearchConfig((prev) => ({ ...prev, displayMode: 'table' as DisplayMode }))}
-                >
-                  <svg viewBox="0 0 120 80" style={{ width: '100%', height: '80px' }} fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect x="2" y="2" width="28" height="76" rx="2" fill={tokens.colorNeutralBackground3} stroke={tokens.colorNeutralStroke1} strokeWidth="1"/>
-                    <rect x="5" y="6" width="22" height="5" rx="1" fill={tokens.colorNeutralForeground3}/>
-                    <rect x="5" y="14" width="22" height="4" rx="1" fill={tokens.colorNeutralBackground4}/>
-                    <rect x="5" y="21" width="22" height="4" rx="1" fill={tokens.colorNeutralBackground4}/>
-                    <rect x="34" y="2" width="84" height="76" rx="2" fill={tokens.colorNeutralBackground3} stroke={tokens.colorNeutralStroke1} strokeWidth="1"/>
-                    <rect x="38" y="6" width="76" height="8" rx="1" fill={tokens.colorNeutralForeground3}/>
-                    <line x1="38" y1="18" x2="114" y2="18" stroke={tokens.colorNeutralStroke1} strokeWidth="1"/>
-                    <rect x="38" y="22" width="20" height="3" rx="1" fill={tokens.colorBrandBackground}/>
-                    <rect x="62" y="22" width="25" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
-                    <rect x="91" y="22" width="20" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
-                    <line x1="38" y1="29" x2="114" y2="29" stroke={tokens.colorNeutralStroke2} strokeWidth="1"/>
-                    <rect x="38" y="33" width="20" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
-                    <rect x="62" y="33" width="25" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
-                    <rect x="91" y="33" width="20" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
-                  </svg>
-                  <div className={styles.displayModeLabel}>
-                    <Text weight="medium" size={200}>Table</Text>
-                    <Text size={100} style={{ color: tokens.colorNeutralForeground2 }}>Full table with filters</Text>
-                  </div>
-                </div>
-              </div>
-            </Field>
-
-            {/* Inline Mode: Title & Subtitle Columns */}
-            {searchConfig.displayMode === 'inline' && (
-              <>
-                {/* Title Column */}
-                <Field label="Title Column *">
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground2, marginBottom: '8px', display: 'block' }}>
-                    This column is shown as the main identifier in search results.
-                  </Text>
-                  <Dropdown
-                    value={displayColumns.find(c => c.internalName === searchConfig.titleColumn)?.displayName || ''}
-                    selectedOptions={searchConfig.titleColumn ? [searchConfig.titleColumn] : []}
-                    onOptionSelect={(_e, data) =>
-                      setSearchConfig((prev) => ({ ...prev, titleColumn: data.optionValue as string }))
+              <div className={styles.badgeWrap}>
+                {displayColumns.map((col) => (
+                  <Badge
+                    key={col.internalName}
+                    className={styles.badgeItem}
+                    appearance={searchConfig.tableColumns?.some((tc) => tc.internalName === col.internalName) ? 'filled' : 'outline'}
+                    color={searchConfig.tableColumns?.some((tc) => tc.internalName === col.internalName) ? 'brand' : 'informative'}
+                    onClick={() =>
+                      setSearchConfig((prev) => {
+                        const exists = prev.tableColumns?.some((tc) => tc.internalName === col.internalName);
+                        return {
+                          ...prev,
+                          tableColumns: exists
+                            ? prev.tableColumns?.filter((tc) => tc.internalName !== col.internalName)
+                            : [...(prev.tableColumns || []), col],
+                        };
+                      })
                     }
-                    placeholder="Select a column"
                   >
-                    {displayColumns.map((col) => (
-                      <Option key={col.internalName} value={col.internalName}>
-                        {col.displayName}
-                      </Option>
-                    ))}
-                  </Dropdown>
-                </Field>
-
-                {/* Subtitle Columns */}
-                <Field label="Subtitle Columns">
-                  <Text size={200} style={{ color: tokens.colorNeutralForeground2, marginBottom: '8px', display: 'block' }}>
-                    Additional info shown below the title in search results.
-                  </Text>
-                  <div className={styles.badgeWrap}>
-                    {displayColumns
-                      .filter((col) => col.internalName !== searchConfig.titleColumn)
-                      .map((col) => (
-                        <Badge
-                          key={col.internalName}
-                          className={styles.badgeItem}
-                          appearance={searchConfig.subtitleColumns?.includes(col.internalName) ? 'filled' : 'outline'}
-                          color={searchConfig.subtitleColumns?.includes(col.internalName) ? 'brand' : 'informative'}
-                          onClick={() =>
-                            setSearchConfig((prev) => ({
-                              ...prev,
-                              subtitleColumns: prev.subtitleColumns?.includes(col.internalName)
-                                ? prev.subtitleColumns.filter((c) => c !== col.internalName)
-                                : [...(prev.subtitleColumns || []), col.internalName],
-                            }))
-                          }
-                        >
-                          {col.displayName}
-                        </Badge>
-                      ))}
-                  </div>
-                </Field>
-              </>
-            )}
-
-            {/* Table Mode: Table Columns */}
-            {searchConfig.displayMode === 'table' && (
-              <Field label="Table Columns *">
-                <Text size={200} style={{ color: tokens.colorNeutralForeground2, marginBottom: '8px', display: 'block' }}>
-                  Columns to show in the search results table. Detail view will show all display columns.
+                    {col.displayName}
+                  </Badge>
+                ))}
+              </div>
+              {(searchConfig.tableColumns?.length || 0) === 0 && (
+                <Text size={200} style={{ color: tokens.colorPaletteYellowForeground1, marginTop: '8px' }}>
+                  Select at least one column to display in the table.
                 </Text>
-                <div className={styles.badgeWrap}>
-                  {displayColumns.map((col) => (
-                    <Badge
-                      key={col.internalName}
-                      className={styles.badgeItem}
-                      appearance={searchConfig.tableColumns?.some((tc) => tc.internalName === col.internalName) ? 'filled' : 'outline'}
-                      color={searchConfig.tableColumns?.some((tc) => tc.internalName === col.internalName) ? 'brand' : 'informative'}
-                      onClick={() =>
-                        setSearchConfig((prev) => {
-                          const exists = prev.tableColumns?.some((tc) => tc.internalName === col.internalName);
-                          return {
-                            ...prev,
-                            tableColumns: exists
-                              ? prev.tableColumns?.filter((tc) => tc.internalName !== col.internalName)
-                              : [...(prev.tableColumns || []), col],
-                          };
-                        })
-                      }
-                    >
-                      {col.displayName}
-                    </Badge>
-                  ))}
-                </div>
-                {(searchConfig.tableColumns?.length || 0) === 0 && (
-                  <Text size={200} style={{ color: tokens.colorPaletteYellowForeground1, marginTop: '8px' }}>
-                    Select at least one column to display in the table.
-                  </Text>
-                )}
-              </Field>
-            )}
+              )}
+            </Field>
 
             {/* Text Search Columns */}
             <Field label="Text Search Columns">
@@ -1168,20 +1039,8 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
                   <Card className={styles.reviewCard}>
                     <Text className={styles.reviewCardTitle}>Search Configuration</Text>
                     <Text size={200} style={{ display: 'block' }}>
-                      <strong>Display Mode:</strong>{' '}
-                      {searchConfig.displayMode === 'inline' ? 'Inline (List + Detail)' : 'Table (Full Table)'}
+                      <strong>Table columns:</strong> {searchConfig.tableColumns?.length || 0}
                     </Text>
-                    {searchConfig.displayMode === 'inline' ? (
-                      <Text size={200} style={{ display: 'block' }}>
-                        <strong>Title:</strong>{' '}
-                        {displayColumns.find((c) => c.internalName === searchConfig.titleColumn)
-                          ?.displayName || 'Not set'}
-                      </Text>
-                    ) : (
-                      <Text size={200} style={{ display: 'block' }}>
-                        <strong>Table columns:</strong> {searchConfig.tableColumns?.length || 0}
-                      </Text>
-                    )}
                     <Text size={200} style={{ display: 'block' }}>
                       <strong>Search columns:</strong> {searchConfig.textSearchColumns.length}
                     </Text>

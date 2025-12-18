@@ -298,11 +298,20 @@ function getDisplayValue(item: GraphListItem, columnName: string, columns: Graph
 }
 
 /**
- * Get numeric value from a field
+ * Get numeric value from a field, handling boolean columns as 1/0
  */
-function getNumericValue(item: GraphListItem, columnName: string): number {
+function getNumericValue(item: GraphListItem, columnName: string, column?: GraphListColumn): number {
   const value = item.fields[columnName];
   if (value === null || value === undefined) return 0;
+
+  // Handle boolean columns - Yes/true = 1, No/false = 0
+  if (column?.boolean) {
+    return value === true || value === 'Yes' || value === 'true' ? 1 : 0;
+  }
+  // Handle string "Yes"/"No" even without column metadata
+  if (value === true || value === 'Yes' || value === 'true') return 1;
+  if (value === false || value === 'No' || value === 'false') return 0;
+
   const num = Number(value);
   return isNaN(num) ? 0 : num;
 }
@@ -371,7 +380,8 @@ export async function fetchChartWebPartData(
     if (config.aggregation === 'count') {
       groups.get(groupKey)!.push(1);
     } else if (config.valueColumn) {
-      const numValue = getNumericValue(item, config.valueColumn);
+      const valueCol = columns.find((c) => c.name === config.valueColumn);
+      const numValue = getNumericValue(item, config.valueColumn, valueCol);
       groups.get(groupKey)!.push(numValue);
     }
   }
@@ -521,15 +531,34 @@ export async function executeJoins(
         const aliasDisplayName = config.displayName
           || (join.alias ? `${join.alias}${col.displayName}` : `${join.targetSource.listName} - ${col.displayName}`);
 
+        // When aggregation produces a number (not 'first'), override column type
+        const isNumericAggregation = config.aggregation && config.aggregation !== 'first';
+
         resultColumns.push({
           ...col,
           name: aliasName,
           displayName: aliasDisplayName,
+          // Clear boolean flag and set number flag when aggregating
+          ...(isNumericAggregation ? { boolean: undefined, number: {} } : {}),
         });
       }
 
+      // Helper to convert value to number, handling boolean/Yes/No columns
+      const toNumericValue = (v: unknown, column?: GraphListColumn): number => {
+        if (v === null || v === undefined) return 0;
+        // Handle boolean columns - Yes/true = 1, No/false = 0
+        if (column?.boolean) {
+          return v === true || v === 'Yes' || v === 'true' ? 1 : 0;
+        }
+        // Handle string "Yes"/"No" even without column metadata
+        if (v === true || v === 'Yes' || v === 'true') return 1;
+        if (v === false || v === 'No' || v === 'false') return 0;
+        const num = Number(v);
+        return isNaN(num) ? 0 : num;
+      };
+
       // Helper to apply aggregation to values
-      const applyAggregation = (values: unknown[], aggregation: JoinColumnAggregation): unknown => {
+      const applyAggregation = (values: unknown[], aggregation: JoinColumnAggregation, column?: GraphListColumn): unknown => {
         if (values.length === 0) return null;
 
         switch (aggregation) {
@@ -538,19 +567,19 @@ export async function executeJoins(
           case 'count':
             return values.filter((v) => v !== null && v !== undefined).length;
           case 'sum': {
-            const nums = values.map((v) => Number(v) || 0);
+            const nums = values.map((v) => toNumericValue(v, column));
             return nums.reduce((a, b) => a + b, 0);
           }
           case 'avg': {
-            const nums = values.map((v) => Number(v) || 0);
+            const nums = values.map((v) => toNumericValue(v, column));
             return nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
           }
           case 'min': {
-            const nums = values.map((v) => Number(v)).filter((n) => !isNaN(n));
+            const nums = values.map((v) => toNumericValue(v, column)).filter((n) => !isNaN(n));
             return nums.length > 0 ? Math.min(...nums) : null;
           }
           case 'max': {
-            const nums = values.map((v) => Number(v)).filter((n) => !isNaN(n));
+            const nums = values.map((v) => toNumericValue(v, column)).filter((n) => !isNaN(n));
             return nums.length > 0 ? Math.max(...nums) : null;
           }
           default:
@@ -602,8 +631,8 @@ export async function executeJoins(
             if (hasMatches) {
               // Collect values from all matching items
               const values = matchingTargets!.map((item) => item.fields[config.columnName]);
-              // Apply aggregation
-              mergedFields[aliasName] = applyAggregation(values, config.aggregation);
+              // Apply aggregation (pass column for boolean handling)
+              mergedFields[aliasName] = applyAggregation(values, config.aggregation, col);
             } else {
               mergedFields[aliasName] = null;
             }

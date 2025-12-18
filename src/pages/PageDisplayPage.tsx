@@ -3,7 +3,6 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
 import {
   makeStyles,
-  mergeClasses,
   tokens,
   Text,
   Title1,
@@ -15,11 +14,9 @@ import {
   MessageBar,
   MessageBarBody,
 } from '@fluentui/react-components';
-import { DocumentTextRegular, SettingsRegular } from '@fluentui/react-icons';
+import { SettingsRegular } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
-import { useTheme } from '../contexts/ThemeContext';
 import { getListItems, type GraphListColumn, type GraphListItem } from '../auth/graphClient';
-import SearchPanel from '../components/PageDisplay/SearchPanel';
 import TableView from '../components/PageDisplay/TableView';
 import ItemDetailModal from '../components/PageDisplay/ItemDetailModal';
 import ReportPageCanvas from '../components/PageDisplay/ReportPageCanvas';
@@ -52,36 +49,6 @@ const useStyles = makeStyles({
   },
   mainContent: {
     height: 'calc(100% - 4rem)',
-  },
-  twoPanelLayout: {
-    display: 'flex',
-    gap: '24px',
-    height: 'calc(100% - 4rem)',
-  },
-  searchPanelContainer: {
-    width: '320px',
-    flexShrink: 0,
-  },
-  detailPanelContainer: {
-    flex: 1,
-    overflow: 'auto',
-  },
-  emptyState: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '12px',
-    color: tokens.colorNeutralForeground2,
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderRadius: '8px',
-  },
-  emptyStateDark: {
-    backgroundColor: '#1a1a1a',
-  },
-  emptyIcon: {
-    opacity: 0.3,
   },
   reportContainer: {
     display: 'flex',
@@ -125,7 +92,6 @@ const useStyles = makeStyles({
 
 function PageDisplayPage() {
   const styles = useStyles();
-  const { theme } = useTheme();
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
   const { instance, accounts } = useMsal();
@@ -242,14 +208,6 @@ function PageDisplayPage() {
     },
     [page, savePage]
   );
-
-  // Handle item selection from SearchPanel (for inline mode)
-  const handleSelectItem = useCallback((itemId: string | null) => {
-    if (itemId) {
-      const item = items.find(i => i.id === itemId);
-      if (item) setModalItem(item);
-    }
-  }, [items]);
 
   // Loading state for pages
   if (pages.length === 0) {
@@ -436,48 +394,21 @@ function PageDisplayPage() {
       {/* Main Content */}
       {!loading && !error && (
         <>
-          {page.searchConfig?.displayMode === 'table' ? (
-            /* Table View */
-            <div className={styles.mainContent}>
-              <TableView
-                page={page}
-                columns={columns}
-                items={filteredItems}
-                filters={filters}
-                searchText={searchText}
-                onFilterChange={setFilters}
-                onSearchChange={setSearchText}
-                spClient={spClient}
-                onPageUpdate={handlePageUpdate}
-              />
-            </div>
-          ) : (
-            /* Inline View - Two Panel Layout */
-            <div className={styles.twoPanelLayout}>
-              {/* Search Panel */}
-              <div className={styles.searchPanelContainer}>
-                <SearchPanel
-                  page={page}
-                  columns={columns}
-                  items={filteredItems}
-                  filters={filters}
-                  searchText={searchText}
-                  selectedItemId={null}
-                  onFilterChange={setFilters}
-                  onSearchChange={setSearchText}
-                  onSelectItem={handleSelectItem}
-                />
-              </div>
+          <div className={styles.mainContent}>
+            <TableView
+              page={page}
+              columns={columns}
+              items={filteredItems}
+              filters={filters}
+              searchText={searchText}
+              onFilterChange={setFilters}
+              onSearchChange={setSearchText}
+              spClient={spClient}
+              onPageUpdate={handlePageUpdate}
+            />
+          </div>
 
-              {/* Empty State (click an item to open details) */}
-              <div className={mergeClasses(styles.emptyState, theme === 'dark' && styles.emptyStateDark)}>
-                <DocumentTextRegular fontSize={48} className={styles.emptyIcon} />
-                <Text>Select an item to view details</Text>
-              </div>
-            </div>
-          )}
-
-          {/* Item Detail Modal (for both modes) */}
+          {/* Item Detail Modal */}
           {modalItem && page && (
             <ItemDetailModal
               page={page}

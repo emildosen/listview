@@ -53,13 +53,8 @@ export interface PageColumn {
   editable?: boolean;                 // Allow editing (default: true for non-readonly)
 }
 
-export type DisplayMode = 'inline' | 'table';
-
 export interface SearchConfig {
-  displayMode: DisplayMode;           // 'inline' = side panel, 'table' = full table view
-  titleColumn: string;                // Main column to display in search results (inline mode)
-  subtitleColumns?: string[];         // Secondary columns shown below title (inline mode)
-  tableColumns?: PageColumn[];        // Columns shown in table view (table mode)
+  tableColumns?: PageColumn[];        // Columns shown in table view
   textSearchColumns: string[];        // Columns to search with text input
   filterColumns: FilterColumn[];      // Dropdown filter columns
 }

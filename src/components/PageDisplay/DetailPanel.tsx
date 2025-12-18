@@ -272,7 +272,10 @@ function DetailPanel({ page, columns, item, spClient }: DetailPanelProps) {
     );
   }
 
-  const titleColumn = page.searchConfig?.titleColumn || 'Title';
+  // Get the title column - first table column, first display column, or fallback to Title
+  const titleColumn = page.searchConfig?.tableColumns?.[0]?.internalName
+    || page.displayColumns[0]?.internalName
+    || 'Title';
   const titleValue = getDisplayValue(titleColumn);
 
   return (

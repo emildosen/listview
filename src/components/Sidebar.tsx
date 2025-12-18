@@ -145,7 +145,6 @@ const useStyles = makeStyles({
   },
   sectionContent: {
     marginLeft: '20px',
-    borderLeft: `1px solid ${tokens.colorNeutralStroke1}`,
     paddingLeft: '4px',
   },
   sectionLink: {

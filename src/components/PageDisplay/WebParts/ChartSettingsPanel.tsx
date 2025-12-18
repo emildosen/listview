@@ -78,7 +78,8 @@ const AGGREGATION_OPTIONS: { value: ChartAggregation; label: string }[] = [
 ];
 
 function isNumericColumn(column: GraphListColumn): boolean {
-  return !!column.number;
+  // Boolean columns can be aggregated as 1/0 (Yes=1, No=0)
+  return !!column.number || !!column.boolean;
 }
 
 interface ChartSettingsPanelProps {

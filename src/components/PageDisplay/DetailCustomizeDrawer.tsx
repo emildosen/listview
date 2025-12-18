@@ -137,8 +137,11 @@ interface DetailCustomizeDrawerProps {
 function DetailCustomizeDrawer({ page, open, onClose, onSave }: DetailCustomizeDrawerProps) {
   const styles = useStyles();
 
-  // Get the title column name (always shown in header, excluded from customization)
-  const titleColumn = page.searchConfig?.titleColumn || 'Title';
+  // Get the title column - first table column, first display column, or fallback to Title
+  // This column is always shown in header, excluded from customization
+  const titleColumn = page.searchConfig?.tableColumns?.[0]?.internalName
+    || page.displayColumns[0]?.internalName
+    || 'Title';
 
   // Initialize column settings from existing config or defaults (excluding title column)
   const [columnSettings, setColumnSettings] = useState<DetailColumnSetting[]>(() => {
