@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useMsal } from '@azure/msal-react';
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Input,
   Dropdown,
@@ -12,6 +13,7 @@ import {
 import { SearchRegular, DismissRegular } from '@fluentui/react-icons';
 import type { GraphListColumn, GraphListItem } from '../../auth/graphClient';
 import type { PageDefinition } from '../../types/page';
+import { useTheme } from '../../contexts/ThemeContext';
 
 interface SearchPanelProps {
   page: PageDefinition;
@@ -33,13 +35,29 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground2,
     borderRadius: tokens.borderRadiusMedium,
   },
+  containerDark: {
+    backgroundColor: '#1a1a1a',
+  },
   filtersSection: {
     padding: '16px',
     borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
   },
+  filtersTitleRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '12px',
+  },
   filtersTitle: {
     fontWeight: tokens.fontWeightMedium,
-    marginBottom: '12px',
+  },
+  clearFiltersLink: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorBrandForeground1,
+    cursor: 'pointer',
+    ':hover': {
+      textDecoration: 'underline',
+    },
   },
   filterList: {
     display: 'flex',
@@ -49,6 +67,7 @@ const useStyles = makeStyles({
   },
   searchContainer: {
     position: 'relative',
+    marginBottom: '8px',
   },
   searchIcon: {
     position: 'absolute',
@@ -137,6 +156,7 @@ function SearchPanel({
   onSelectItem,
 }: SearchPanelProps) {
   const styles = useStyles();
+  const { theme } = useTheme();
   const { accounts } = useMsal();
   const [filterOptions, setFilterOptions] = useState<Record<string, string[]>>({});
   const [loadingOptions, setLoadingOptions] = useState(false);
@@ -205,10 +225,23 @@ function SearchPanel({
   };
 
   return (
-    <div className={styles.container}>
+    <div className={mergeClasses(styles.container, theme === 'dark' && styles.containerDark)}>
       {/* Filters Section */}
       <div className={styles.filtersSection}>
-        <Text className={styles.filtersTitle}>Filters</Text>
+        <div className={styles.filtersTitleRow}>
+          <Text className={styles.filtersTitle}>Filters</Text>
+          {(searchText || Object.values(filters).some(v => v)) && (
+            <Text
+              className={styles.clearFiltersLink}
+              onClick={() => {
+                onFilterChange({});
+                onSearchChange('');
+              }}
+            >
+              Clear filters
+            </Text>
+          )}
+        </div>
 
         {/* Dropdown Filters */}
         {page.searchConfig?.filterColumns.length > 0 && (

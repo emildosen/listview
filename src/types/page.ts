@@ -12,12 +12,15 @@ export interface DetailColumnSetting {
   displayStyle: 'stat' | 'list';  // 'stat' = badge at top, 'list' = detail grid
 }
 
+export type PageType = 'lookup' | 'report';
+
 export interface PageDefinition {
   id?: string;                        // SharePoint item ID
   name: string;                       // Display name (e.g., "Student Details")
   description?: string;               // Optional description
+  pageType: PageType;                 // Type of page: lookup (data view) or report (dashboard)
 
-  // Primary entity configuration
+  // Primary entity configuration (not used for report pages)
   primarySource: PageSource;          // Main list (e.g., Students)
   displayColumns: PageColumn[];       // Columns shown in detail view
 

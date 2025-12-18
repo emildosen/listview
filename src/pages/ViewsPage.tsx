@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Button,
-  Card,
   Text,
   Title2,
   Badge,
@@ -28,6 +28,7 @@ import {
   ArrowLeftRegular,
 } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 const useStyles = makeStyles({
   container: {
@@ -54,6 +55,20 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground2,
     marginTop: '4px',
   },
+  // Azure style: sharp edges, subtle shadow
+  card: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: '2px',
+    border: '1px solid transparent',
+    borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
+    overflow: 'hidden',
+  },
+  cardDark: {
+    backgroundColor: '#1a1a1a',
+    borderImage: 'none',
+    border: '1px solid #333333',
+  },
   cardBody: {
     padding: '48px',
     display: 'flex',
@@ -79,10 +94,24 @@ const useStyles = makeStyles({
     paddingTop: '24px',
     borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
   },
+  tableHeader: {
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  tableHeaderCell: {
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+    textTransform: 'uppercase',
+    letterSpacing: '0.02em',
+  },
   tableRow: {
     cursor: 'pointer',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     ':hover': {
-      backgroundColor: tokens.colorNeutralBackground3,
+      backgroundColor: tokens.colorNeutralBackground1Hover,
+    },
+    ':last-child': {
+      borderBottom: 'none',
     },
   },
   viewDescription: {
@@ -108,6 +137,7 @@ const useStyles = makeStyles({
 
 function ViewsPage() {
   const styles = useStyles();
+  const { theme } = useTheme();
   const { views, removeView } = useSettings();
   const navigate = useNavigate();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -157,7 +187,7 @@ function ViewsPage() {
 
         {/* Empty State */}
         {views.length === 0 && (
-          <Card>
+          <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)}>
             <div className={styles.cardBody}>
               <TableRegular fontSize={48} className={styles.emptyIcon} />
               <Text className={styles.emptyText}>No views created yet</Text>
@@ -168,19 +198,19 @@ function ViewsPage() {
                 Create your first view
               </Button>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* Views List */}
         {views.length > 0 && (
-          <Card>
+          <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)}>
             <Table>
-              <TableHeader>
+              <TableHeader className={styles.tableHeader}>
                 <TableRow>
-                  <TableHeaderCell>Name</TableHeaderCell>
-                  <TableHeaderCell>Mode</TableHeaderCell>
-                  <TableHeaderCell>Sources</TableHeaderCell>
-                  <TableHeaderCell style={{ width: '96px' }}>Actions</TableHeaderCell>
+                  <TableHeaderCell className={styles.tableHeaderCell}>Name</TableHeaderCell>
+                  <TableHeaderCell className={styles.tableHeaderCell}>Mode</TableHeaderCell>
+                  <TableHeaderCell className={styles.tableHeaderCell}>Sources</TableHeaderCell>
+                  <TableHeaderCell className={styles.tableHeaderCell} style={{ width: '96px' }}>Actions</TableHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -240,7 +270,7 @@ function ViewsPage() {
                 ))}
               </TableBody>
             </Table>
-          </Card>
+          </div>
         )}
 
         {/* Back Button */}

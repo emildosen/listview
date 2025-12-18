@@ -3,9 +3,41 @@ import type { ReactNode } from 'react';
 import {
   FluentProvider,
   webLightTheme,
-  webDarkTheme,
   type Theme,
+  type BrandVariants,
+  createDarkTheme,
 } from '@fluentui/react-components';
+
+// Custom brand colors (using the default blue brand)
+const brandColors: BrandVariants = {
+  10: '#061724',
+  20: '#082338',
+  30: '#0a2e4a',
+  40: '#0c3b5e',
+  50: '#0e4775',
+  60: '#0f548c',
+  70: '#115ea3',
+  80: '#0f6cbd',
+  90: '#2886de',
+  100: '#479ef5',
+  110: '#62abf5',
+  120: '#77b7f7',
+  130: '#96c6fa',
+  140: '#b4d6fa',
+  150: '#cfe4fa',
+  160: '#ebf3fc',
+};
+
+// Custom dark theme with darker backgrounds
+const customDarkTheme: Theme = {
+  ...createDarkTheme(brandColors),
+  colorNeutralBackground1: '#1a1a1a',  // Main page background - dark gray
+  colorNeutralBackground2: '#121212',  // Sidebar background - almost black
+  colorNeutralBackground3: '#252525',  // Hover states
+  colorNeutralBackground4: '#2a2a2a',
+  colorNeutralBackground5: '#303030',
+  colorNeutralBackground6: '#383838',
+};
 
 type ThemeMode = 'light' | 'dark';
 
@@ -40,7 +72,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme]);
 
   const fluentTheme = useMemo(
-    () => (theme === 'dark' ? webDarkTheme : webLightTheme),
+    () => (theme === 'dark' ? customDarkTheme : webLightTheme),
     [theme]
   );
 

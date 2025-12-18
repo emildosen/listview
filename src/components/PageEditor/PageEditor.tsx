@@ -39,22 +39,32 @@ import type {
   FilterColumn,
   RelatedSection,
   DisplayMode,
+  PageType,
 } from '../../types/page';
 
 interface PageEditorProps {
   initialPage?: PageDefinition;
-  onSave: (page: PageDefinition) => Promise<void>;
+  onSave: (page: PageDefinition) => Promise<PageDefinition>;
   onCancel: () => void;
 }
 
-type Step = 'basic' | 'primary' | 'columns' | 'search' | 'related' | 'review';
+type Step = 'basic' | 'type' | 'primary' | 'columns' | 'search' | 'related' | 'review';
 
-const STEPS: { key: Step; label: string }[] = [
+// All steps for Lookup pages
+const LOOKUP_STEPS: { key: Step; label: string }[] = [
   { key: 'basic', label: 'Basic Info' },
+  { key: 'type', label: 'Page Type' },
   { key: 'primary', label: 'Primary List' },
   { key: 'columns', label: 'Display Columns' },
   { key: 'search', label: 'Search & Filters' },
   { key: 'related', label: 'Related Lists' },
+  { key: 'review', label: 'Review' },
+];
+
+// Simplified steps for Report pages (just basic info, type, and review)
+const REPORT_STEPS: { key: Step; label: string }[] = [
+  { key: 'basic', label: 'Basic Info' },
+  { key: 'type', label: 'Page Type' },
   { key: 'review', label: 'Review' },
 ];
 
@@ -298,6 +308,7 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
   // Page state
   const [name, setName] = useState(initialPage?.name || '');
   const [description, setDescription] = useState(initialPage?.description || '');
+  const [pageType, setPageType] = useState<PageType>(initialPage?.pageType || 'lookup');
   const [primarySource, setPrimarySource] = useState<PageSource | null>(
     initialPage?.primarySource || null
   );
@@ -479,12 +490,16 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
     setRelatedSections((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  // Get steps based on page type
+  const STEPS = pageType === 'report' ? REPORT_STEPS : LOOKUP_STEPS;
   const currentStepIndex = STEPS.findIndex((s) => s.key === currentStep);
 
   const canProceed = (): boolean => {
     switch (currentStep) {
       case 'basic':
         return name.trim().length > 0;
+      case 'type':
+        return true; // Page type is always valid (has default)
       case 'primary':
         return primarySource !== null;
       case 'columns':
@@ -519,7 +534,8 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
   };
 
   const handleSave = async () => {
-    if (!primarySource) return;
+    // For lookup pages, primarySource is required
+    if (pageType === 'lookup' && !primarySource) return;
 
     setSaving(true);
     setError(null);
@@ -529,7 +545,8 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
         id: initialPage?.id,
         name,
         description,
-        primarySource,
+        pageType,
+        primarySource: primarySource || { siteId: '', listId: '', listName: '' },
         displayColumns,
         searchConfig,
         relatedSections,
@@ -616,6 +633,106 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
                 onChange={(_e, data) => setDescription(data.value)}
               />
             </Field>
+          </div>
+        )}
+
+        {/* Page Type Step */}
+        {currentStep === 'type' && (
+          <div className={styles.formSection}>
+            <Text className={styles.sectionTitle}>Choose Page Type</Text>
+            <Text className={styles.helperText}>
+              Select the type of page you want to create.
+            </Text>
+
+            <div className={styles.displayModeGrid}>
+              {/* Lookup Type */}
+              <div
+                className={`${styles.displayModeOption} ${
+                  pageType === 'lookup' ? styles.displayModeOptionSelected : ''
+                }`}
+                onClick={() => setPageType('lookup')}
+              >
+                <svg viewBox="0 0 120 80" style={{ width: '100%', height: '80px' }} fill="none" xmlns="http://www.w3.org/2000/svg">
+                  {/* Filter panel on left */}
+                  <rect x="2" y="2" width="28" height="76" rx="2" fill={tokens.colorNeutralBackground3} stroke={tokens.colorNeutralStroke1} strokeWidth="1"/>
+                  <rect x="5" y="6" width="22" height="5" rx="1" fill={tokens.colorNeutralForeground3}/>
+                  <rect x="5" y="14" width="22" height="4" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  <rect x="5" y="21" width="22" height="4" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  {/* Table on right */}
+                  <rect x="34" y="2" width="84" height="76" rx="2" fill={tokens.colorNeutralBackground3} stroke={tokens.colorNeutralStroke1} strokeWidth="1"/>
+                  <rect x="38" y="6" width="76" height="8" rx="1" fill={tokens.colorNeutralForeground3}/>
+                  <line x1="38" y1="18" x2="114" y2="18" stroke={tokens.colorNeutralStroke1} strokeWidth="1"/>
+                  <rect x="38" y="22" width="20" height="3" rx="1" fill={tokens.colorBrandBackground}/>
+                  <rect x="62" y="22" width="25" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  <rect x="91" y="22" width="20" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  <line x1="38" y1="29" x2="114" y2="29" stroke={tokens.colorNeutralStroke2} strokeWidth="1"/>
+                  <rect x="38" y="33" width="20" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  <rect x="62" y="33" width="25" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  <rect x="91" y="33" width="20" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  <line x1="38" y1="40" x2="114" y2="40" stroke={tokens.colorNeutralStroke2} strokeWidth="1"/>
+                  <rect x="38" y="44" width="20" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  <rect x="62" y="44" width="25" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  <rect x="91" y="44" width="20" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                </svg>
+                <div className={styles.displayModeLabel}>
+                  <Text weight="medium" size={200}>Lookup</Text>
+                  <Text size={100} style={{ color: tokens.colorNeutralForeground2, display: 'block' }}>Browse and filter data</Text>
+                </div>
+              </div>
+
+              {/* Report Type */}
+              <div
+                className={`${styles.displayModeOption} ${
+                  pageType === 'report' ? styles.displayModeOptionSelected : ''
+                }`}
+                onClick={() => setPageType('report')}
+              >
+                <svg viewBox="0 0 120 80" style={{ width: '100%', height: '80px' }} fill="none" xmlns="http://www.w3.org/2000/svg">
+                  {/* Main container */}
+                  <rect x="2" y="2" width="116" height="76" rx="2" fill={tokens.colorNeutralBackground3} stroke={tokens.colorNeutralStroke1} strokeWidth="1"/>
+
+                  {/* Two charts on top */}
+                  {/* Left chart box */}
+                  <rect x="6" y="6" width="52" height="32" rx="2" fill={tokens.colorNeutralBackground4} stroke={tokens.colorNeutralStroke2} strokeWidth="0.5"/>
+                  {/* Left chart line */}
+                  <polyline
+                    points="10,30 18,24 26,26 34,18 42,20 50,12"
+                    stroke={tokens.colorBrandBackground}
+                    strokeWidth="2"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+
+                  {/* Right chart box */}
+                  <rect x="62" y="6" width="52" height="32" rx="2" fill={tokens.colorNeutralBackground4} stroke={tokens.colorNeutralStroke2} strokeWidth="0.5"/>
+                  {/* Right chart line */}
+                  <polyline
+                    points="66,22 74,28 82,20 90,24 98,16 106,18"
+                    stroke={tokens.colorPaletteGreenBackground3}
+                    strokeWidth="2"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+
+                  {/* List below */}
+                  <rect x="6" y="42" width="108" height="6" rx="1" fill={tokens.colorNeutralForeground3}/>
+                  <line x1="6" y1="52" x2="114" y2="52" stroke={tokens.colorNeutralStroke2} strokeWidth="0.5"/>
+                  <rect x="6" y="56" width="30" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  <rect x="40" y="56" width="40" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  <rect x="84" y="56" width="24" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  <line x1="6" y1="63" x2="114" y2="63" stroke={tokens.colorNeutralStroke2} strokeWidth="0.5"/>
+                  <rect x="6" y="67" width="30" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  <rect x="40" y="67" width="40" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                  <rect x="84" y="67" width="24" height="3" rx="1" fill={tokens.colorNeutralBackground4}/>
+                </svg>
+                <div className={styles.displayModeLabel}>
+                  <Text weight="medium" size={200}>Report</Text>
+                  <Text size={100} style={{ color: tokens.colorNeutralForeground2, display: 'block' }}>Charts and dashboards</Text>
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1023,59 +1140,78 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
                     <strong>Description:</strong> {description}
                   </Text>
                 )}
-              </Card>
-
-              <Card className={styles.reviewCard}>
-                <Text className={styles.reviewCardTitle}>Primary List</Text>
-                <Text size={200}>{primarySource?.listName || 'Not selected'}</Text>
-              </Card>
-
-              <Card className={styles.reviewCard}>
-                <Text className={styles.reviewCardTitle}>Display Columns</Text>
-                <Text size={200}>{displayColumns.length} columns selected</Text>
-                <div className={styles.badgeWrap} style={{ marginTop: '8px' }}>
-                  {displayColumns.map((col) => (
-                    <Badge key={col.internalName} appearance="outline" size="small">
-                      {col.displayName}
-                    </Badge>
-                  ))}
-                </div>
-              </Card>
-
-              <Card className={styles.reviewCard}>
-                <Text className={styles.reviewCardTitle}>Search Configuration</Text>
                 <Text size={200} style={{ display: 'block' }}>
-                  <strong>Display Mode:</strong>{' '}
-                  {searchConfig.displayMode === 'inline' ? 'Inline (List + Detail)' : 'Table (Full Table)'}
-                </Text>
-                {searchConfig.displayMode === 'inline' ? (
-                  <Text size={200} style={{ display: 'block' }}>
-                    <strong>Title:</strong>{' '}
-                    {displayColumns.find((c) => c.internalName === searchConfig.titleColumn)
-                      ?.displayName || 'Not set'}
-                  </Text>
-                ) : (
-                  <Text size={200} style={{ display: 'block' }}>
-                    <strong>Table columns:</strong> {searchConfig.tableColumns?.length || 0}
-                  </Text>
-                )}
-                <Text size={200} style={{ display: 'block' }}>
-                  <strong>Search columns:</strong> {searchConfig.textSearchColumns.length}
-                </Text>
-                <Text size={200} style={{ display: 'block' }}>
-                  <strong>Filter columns:</strong> {searchConfig.filterColumns.length}
+                  <strong>Type:</strong> {pageType === 'lookup' ? 'Lookup' : 'Report'}
                 </Text>
               </Card>
 
-              <Card className={styles.reviewCard}>
-                <Text className={styles.reviewCardTitle}>Related Sections</Text>
-                <Text size={200}>{relatedSections.length} related list(s)</Text>
-                {relatedSections.map((section) => (
-                  <Text key={section.id} size={200} style={{ color: tokens.colorNeutralForeground2, display: 'block' }}>
-                    - {section.title}: {section.source.listName || 'Not configured'}
+              {/* Lookup-specific review cards */}
+              {pageType === 'lookup' && (
+                <>
+                  <Card className={styles.reviewCard}>
+                    <Text className={styles.reviewCardTitle}>Primary List</Text>
+                    <Text size={200}>{primarySource?.listName || 'Not selected'}</Text>
+                  </Card>
+
+                  <Card className={styles.reviewCard}>
+                    <Text className={styles.reviewCardTitle}>Display Columns</Text>
+                    <Text size={200}>{displayColumns.length} columns selected</Text>
+                    <div className={styles.badgeWrap} style={{ marginTop: '8px' }}>
+                      {displayColumns.map((col) => (
+                        <Badge key={col.internalName} appearance="outline" size="small">
+                          {col.displayName}
+                        </Badge>
+                      ))}
+                    </div>
+                  </Card>
+
+                  <Card className={styles.reviewCard}>
+                    <Text className={styles.reviewCardTitle}>Search Configuration</Text>
+                    <Text size={200} style={{ display: 'block' }}>
+                      <strong>Display Mode:</strong>{' '}
+                      {searchConfig.displayMode === 'inline' ? 'Inline (List + Detail)' : 'Table (Full Table)'}
+                    </Text>
+                    {searchConfig.displayMode === 'inline' ? (
+                      <Text size={200} style={{ display: 'block' }}>
+                        <strong>Title:</strong>{' '}
+                        {displayColumns.find((c) => c.internalName === searchConfig.titleColumn)
+                          ?.displayName || 'Not set'}
+                      </Text>
+                    ) : (
+                      <Text size={200} style={{ display: 'block' }}>
+                        <strong>Table columns:</strong> {searchConfig.tableColumns?.length || 0}
+                      </Text>
+                    )}
+                    <Text size={200} style={{ display: 'block' }}>
+                      <strong>Search columns:</strong> {searchConfig.textSearchColumns.length}
+                    </Text>
+                    <Text size={200} style={{ display: 'block' }}>
+                      <strong>Filter columns:</strong> {searchConfig.filterColumns.length}
+                    </Text>
+                  </Card>
+
+                  <Card className={styles.reviewCard}>
+                    <Text className={styles.reviewCardTitle}>Related Sections</Text>
+                    <Text size={200}>{relatedSections.length} related list(s)</Text>
+                    {relatedSections.map((section) => (
+                      <Text key={section.id} size={200} style={{ color: tokens.colorNeutralForeground2, display: 'block' }}>
+                        - {section.title}: {section.source.listName || 'Not configured'}
+                      </Text>
+                    ))}
+                  </Card>
+                </>
+              )}
+
+              {/* Report-specific review - just shows that it's a report page */}
+              {pageType === 'report' && (
+                <Card className={styles.reviewCard}>
+                  <Text className={styles.reviewCardTitle}>Page Type</Text>
+                  <Text size={200}>Report pages display charts and dashboards.</Text>
+                  <Text size={200} style={{ display: 'block', marginTop: '8px', color: tokens.colorNeutralForeground2 }}>
+                    You can configure the report content after creating the page.
                   </Text>
-                ))}
-              </Card>
+                </Card>
+              )}
             </div>
           </div>
         )}

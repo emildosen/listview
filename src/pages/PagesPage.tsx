@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Button,
   Card,
@@ -29,8 +30,11 @@ import {
   ArrowLeftRegular,
   SearchRegular,
   FilterRegular,
+  DataPieRegular,
+  TableRegular,
 } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 const useStyles = makeStyles({
   container: {
@@ -54,6 +58,7 @@ const useStyles = makeStyles({
     marginBottom: '24px',
   },
   description: {
+    display: 'block',
     color: tokens.colorNeutralForeground2,
     marginTop: '4px',
   },
@@ -134,6 +139,12 @@ const useStyles = makeStyles({
     border: '1px solid transparent',
     borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
   },
+  // Dark theme card background
+  cardDark: {
+    backgroundColor: '#1a1a1a !important',
+    borderImage: 'none',
+    border: '1px solid #333333',
+  },
   cardBody: {
     padding: '48px',
     display: 'flex',
@@ -178,11 +189,20 @@ const useStyles = makeStyles({
   deleteButton: {
     color: tokens.colorPaletteRedForeground1,
   },
+  typeCell: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  typeIcon: {
+    color: tokens.colorNeutralForeground3,
+  },
 });
 
 function PagesPage() {
   const styles = useStyles();
   const { pages, removePage } = useSettings();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -239,7 +259,7 @@ function PagesPage() {
 
         {/* Empty State */}
         {pages.length === 0 && (
-          <Card className={styles.emptyCard}>
+          <Card className={mergeClasses(styles.emptyCard, theme === 'dark' && styles.cardDark)}>
             <div className={styles.cardBody}>
               <DocumentTextRegular fontSize={48} className={styles.emptyIcon} />
               <Text className={styles.emptyText}>No custom pages created yet</Text>
@@ -255,7 +275,7 @@ function PagesPage() {
 
         {/* Pages List */}
         {pages.length > 0 && (
-          <div className={styles.tableCard}>
+          <div className={mergeClasses(styles.tableCard, theme === 'dark' && styles.cardDark)}>
             {/* Search bar - full width */}
             <div className={styles.searchBar}>
               <Input
@@ -287,6 +307,7 @@ function PagesPage() {
                 <TableHeader className={styles.tableHeader}>
                   <TableRow>
                     <TableHeaderCell className={styles.tableHeaderCell}>Name</TableHeaderCell>
+                    <TableHeaderCell className={styles.tableHeaderCell} style={{ width: '120px' }}>Type</TableHeaderCell>
                     <TableHeaderCell className={styles.tableHeaderCell}>Primary List</TableHeaderCell>
                     <TableHeaderCell className={styles.tableHeaderCell}>Related Sections</TableHeaderCell>
                     <TableHeaderCell className={styles.tableHeaderCell} style={{ width: '96px' }}>Actions</TableHeaderCell>
@@ -312,14 +333,32 @@ function PagesPage() {
                         </TableCellLayout>
                       </TableCell>
                       <TableCell className={styles.tableCell}>
+                        <div className={styles.typeCell}>
+                          {page.pageType === 'report' ? (
+                            <>
+                              <DataPieRegular className={styles.typeIcon} />
+                              <Text className={styles.sourceInfo}>Report</Text>
+                            </>
+                          ) : (
+                            <>
+                              <TableRegular className={styles.typeIcon} />
+                              <Text className={styles.sourceInfo}>Lookup</Text>
+                            </>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className={styles.tableCell}>
                         <Text className={styles.sourceInfo}>
-                          {page.primarySource?.listName || 'Not configured'}
+                          {page.pageType === 'report'
+                            ? '—'
+                            : page.primarySource?.listName || 'Not configured'}
                         </Text>
                       </TableCell>
                       <TableCell className={styles.tableCell}>
                         <Text className={styles.sourceInfo}>
-                          {page.relatedSections?.length || 0} section
-                          {(page.relatedSections?.length || 0) !== 1 ? 's' : ''}
+                          {page.pageType === 'report'
+                            ? '—'
+                            : `${page.relatedSections?.length || 0} section${(page.relatedSections?.length || 0) !== 1 ? 's' : ''}`}
                         </Text>
                       </TableCell>
                       <TableCell className={styles.tableCell} onClick={(e) => e.stopPropagation()}>

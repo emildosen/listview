@@ -1,10 +1,9 @@
 import { Link, useNavigate } from 'react-router-dom';
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Button,
-  Card,
-  CardHeader,
   Text,
   Title2,
   Badge,
@@ -19,6 +18,7 @@ import {
   ArrowLeftRegular,
 } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 const useStyles = makeStyles({
   container: {
@@ -38,19 +38,41 @@ const useStyles = makeStyles({
   title: {
     marginBottom: '24px',
   },
+  // Azure style: sharp edges, subtle shadow
   card: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: '2px',
+    border: '1px solid transparent',
+    borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
     marginBottom: '24px',
+  },
+  cardDark: {
+    backgroundColor: '#1a1a1a',
+    borderImage: 'none',
+    border: '1px solid #333333',
   },
   cardHeader: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
+    padding: '16px',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  cardTitle: {
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase200,
+    textTransform: 'uppercase',
+    letterSpacing: '0.02em',
+    color: tokens.colorNeutralForeground2,
+  },
+  cardBody: {
+    padding: '16px',
   },
   settingsGrid: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
-    marginTop: '16px',
+    gap: '12px',
   },
   settingRow: {
     display: 'flex',
@@ -58,7 +80,10 @@ const useStyles = makeStyles({
     justifyContent: 'space-between',
     padding: '12px',
     backgroundColor: tokens.colorNeutralBackground3,
-    borderRadius: tokens.borderRadiusMedium,
+    borderRadius: '2px',
+  },
+  settingRowDark: {
+    backgroundColor: '#252525',
   },
   settingLabel: {
     fontWeight: tokens.fontWeightMedium,
@@ -75,15 +100,12 @@ const useStyles = makeStyles({
     marginTop: '16px',
     padding: '32px',
     border: `2px dashed ${tokens.colorNeutralStroke1}`,
-    borderRadius: tokens.borderRadiusMedium,
+    borderRadius: '2px',
     textAlign: 'center',
     color: tokens.colorNeutralForeground3,
   },
   backButton: {
     marginTop: '24px',
-  },
-  cardBody: {
-    padding: '16px',
   },
   placeholderText: {
     color: tokens.colorNeutralForeground2,
@@ -94,6 +116,7 @@ const useStyles = makeStyles({
 
 function SettingsPage() {
   const styles = useStyles();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const {
     site,
@@ -128,18 +151,14 @@ function SettingsPage() {
         <Title2 as="h1" className={styles.title}>Settings</Title2>
 
         {/* Site Configuration Card */}
-        <Card className={styles.card}>
-          <CardHeader
-            header={
-              <div className={styles.cardHeader}>
-                <FolderRegular fontSize={20} />
-                <Text weight="semibold" size={400}>SharePoint Site</Text>
-              </div>
-            }
-          />
+        <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)}>
+          <div className={styles.cardHeader}>
+            <FolderRegular fontSize={16} />
+            <Text className={styles.cardTitle}>SharePoint Site</Text>
+          </div>
           <div className={styles.cardBody}>
             <div className={styles.settingsGrid}>
-              <div className={styles.settingRow}>
+              <div className={mergeClasses(styles.settingRow, theme === 'dark' && styles.settingRowDark)}>
                 <div>
                   <Text className={styles.settingLabel}>Connected Site</Text>
                   <Text as="p" className={styles.settingValue}>
@@ -160,7 +179,7 @@ function SettingsPage() {
                 </Button>
               </div>
 
-              <div className={styles.settingRow}>
+              <div className={mergeClasses(styles.settingRow, theme === 'dark' && styles.settingRowDark)}>
                 <div>
                   <Text className={styles.settingLabel}>Site Path</Text>
                   <Text as="p" className={styles.settingValue}>
@@ -174,7 +193,7 @@ function SettingsPage() {
                 )}
               </div>
 
-              <div className={styles.settingRow}>
+              <div className={mergeClasses(styles.settingRow, theme === 'dark' && styles.settingRowDark)}>
                 <div>
                   <Text className={styles.settingLabel}>Settings List</Text>
                   <Text as="p" className={styles.settingValue}>
@@ -197,18 +216,14 @@ function SettingsPage() {
               </div>
             )}
           </div>
-        </Card>
+        </div>
 
         {/* App Settings Card */}
-        <Card className={styles.card}>
-          <CardHeader
-            header={
-              <div className={styles.cardHeader}>
-                <OptionsRegular fontSize={20} />
-                <Text weight="semibold" size={400}>Application Settings</Text>
-              </div>
-            }
-          />
+        <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)}>
+          <div className={styles.cardHeader}>
+            <OptionsRegular fontSize={16} />
+            <Text className={styles.cardTitle}>Application Settings</Text>
+          </div>
           <div className={styles.cardBody}>
             <Text className={styles.placeholderText}>
               App-specific settings will appear here as features are added.
@@ -217,7 +232,7 @@ function SettingsPage() {
               No settings configured yet
             </div>
           </div>
-        </Card>
+        </div>
 
         {/* Back to app */}
         <div className={styles.backButton}>

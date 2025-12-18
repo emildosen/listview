@@ -3,9 +3,9 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Button,
-  Card,
   Text,
   Title2,
   Spinner,
@@ -29,6 +29,7 @@ import {
   DatabaseRegular,
   ArrowLeftRegular,
 } from '@fluentui/react-icons';
+import { useTheme } from '../contexts/ThemeContext';
 import {
   getListById,
   getListItems,
@@ -53,6 +54,10 @@ const useStyles = makeStyles({
   breadcrumb: {
     marginBottom: '24px',
   },
+  breadcrumbLink: {
+    textDecoration: 'none',
+    color: 'inherit',
+  },
   content: {
     flex: 1,
     display: 'flex',
@@ -68,6 +73,19 @@ const useStyles = makeStyles({
   description: {
     color: tokens.colorNeutralForeground2,
     marginTop: '4px',
+  },
+  // Azure style: sharp edges, subtle shadow
+  card: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: '2px',
+    border: '1px solid transparent',
+    borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
+  },
+  cardDark: {
+    backgroundColor: '#1a1a1a',
+    borderImage: 'none',
+    border: '1px solid #333333',
   },
   cardBody: {
     padding: '48px',
@@ -90,6 +108,13 @@ const useStyles = makeStyles({
     paddingTop: '24px',
     borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
   },
+  tableCard: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+  },
   gridWrapper: {
     flex: 1,
     minHeight: 0,
@@ -100,10 +125,14 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground2,
     marginTop: '8px',
   },
+  messageBar: {
+    marginBottom: '16px',
+  },
 });
 
 function ListViewPage() {
   const styles = useStyles();
+  const { theme } = useTheme();
   const { siteId, listId } = useParams<{ siteId: string; listId: string }>();
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
@@ -227,13 +256,13 @@ function ListViewPage() {
       {/* Breadcrumb */}
       <Breadcrumb className={styles.breadcrumb}>
         <BreadcrumbItem>
-          <Link to="/app" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link to="/app" className={styles.breadcrumbLink}>
             Home
           </Link>
         </BreadcrumbItem>
         <BreadcrumbDivider />
         <BreadcrumbItem>
-          <Link to="/app/lists" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link to="/app/lists" className={styles.breadcrumbLink}>
             Lists
           </Link>
         </BreadcrumbItem>
@@ -259,19 +288,19 @@ function ListViewPage() {
 
         {/* Loading State */}
         {loading && (
-          <Card style={{ flex: 1 }}>
+          <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)} style={{ flex: 1 }}>
             <div className={styles.cardBody}>
               <Spinner size="large" />
               <Text className={styles.emptyText} style={{ marginTop: '16px' }}>
                 Loading list data...
               </Text>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* Error State */}
         {error && !loading && (
-          <MessageBar intent="error" style={{ marginBottom: '16px' }}>
+          <MessageBar intent="error" className={styles.messageBar}>
             <MessageBarBody>
               <WarningRegular /> {error}
             </MessageBarBody>
@@ -280,45 +309,50 @@ function ListViewPage() {
 
         {/* Empty State */}
         {!loading && !error && items.length === 0 && (
-          <Card style={{ flex: 1 }}>
+          <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)} style={{ flex: 1 }}>
             <div className={styles.cardBody}>
               <DatabaseRegular fontSize={48} className={styles.emptyIcon} />
               <Text className={styles.emptyText}>No items in this list</Text>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* Fluent UI DataGrid */}
         {!loading && !error && items.length > 0 && (
-          <div className={styles.gridWrapper}>
-            <DataGrid
-              items={rowData}
-              columns={columnDefs}
-              sortable
-              resizableColumns
-              getRowId={(item) => item._id}
-            >
-              <DataGridHeader>
-                <DataGridRow>
-                  {({ renderHeaderCell }) => (
-                    <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
-                  )}
-                </DataGridRow>
-              </DataGridHeader>
-              <DataGridBody<RowData>>
-                {({ item, rowId }) => (
-                  <DataGridRow<RowData> key={rowId}>
-                    {({ renderCell }) => (
-                      <DataGridCell>{renderCell(item)}</DataGridCell>
+          <div className={mergeClasses(styles.card, styles.tableCard, theme === 'dark' && styles.cardDark)}>
+            <div className={styles.gridWrapper}>
+              <DataGrid
+                items={rowData}
+                columns={columnDefs}
+                sortable
+                resizableColumns
+                getRowId={(item) => item._id}
+              >
+                <DataGridHeader>
+                  <DataGridRow>
+                    {({ renderHeaderCell }) => (
+                      <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
                     )}
                   </DataGridRow>
-                )}
-              </DataGridBody>
-            </DataGrid>
-            <Text className={styles.rowCount}>
-              {items.length} row{items.length !== 1 ? 's' : ''} total
-            </Text>
+                </DataGridHeader>
+                <DataGridBody<RowData>>
+                  {({ item, rowId }) => (
+                    <DataGridRow<RowData> key={rowId}>
+                      {({ renderCell }) => (
+                        <DataGridCell>{renderCell(item)}</DataGridCell>
+                      )}
+                    </DataGridRow>
+                  )}
+                </DataGridBody>
+              </DataGrid>
+            </div>
           </div>
+        )}
+
+        {!loading && !error && items.length > 0 && (
+          <Text className={styles.rowCount}>
+            {items.length} row{items.length !== 1 ? 's' : ''} total
+          </Text>
         )}
 
         {/* Back Button */}

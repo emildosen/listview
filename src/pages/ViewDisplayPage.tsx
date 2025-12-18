@@ -3,13 +3,13 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Text,
   Title2,
   Badge,
   Button,
   Spinner,
-  Card,
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbDivider,
@@ -32,6 +32,7 @@ import {
   ArrowLeftRegular,
 } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { getListItems, type GraphListItem, type GraphListColumn } from '../auth/graphClient';
 
 import type { ViewDefinition, ViewFilter, FilterOperator, ViewSorting } from '../types/view';
@@ -97,6 +98,19 @@ const useStyles = makeStyles({
     fontSize: '14px',
     color: tokens.colorNeutralForeground2,
   },
+  // Azure style: sharp edges, subtle shadow
+  card: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: '2px',
+    border: '1px solid transparent',
+    borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
+  },
+  cardDark: {
+    backgroundColor: '#1a1a1a',
+    borderImage: 'none',
+    border: '1px solid #333333',
+  },
   loadingCard: {
     flex: '1',
     display: 'flex',
@@ -108,6 +122,7 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     alignItems: 'center',
     gap: '16px',
+    padding: '48px',
   },
   emptyCard: {
     flex: '1',
@@ -120,12 +135,16 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     alignItems: 'center',
     gap: '8px',
+    padding: '48px',
     color: tokens.colorNeutralForeground3,
   },
   emptyIcon: {
     fontSize: '48px',
     marginBottom: '8px',
     color: tokens.colorNeutralForeground4,
+  },
+  tableCard: {
+    overflow: 'hidden',
   },
   dataGrid: {
     minWidth: '100%',
@@ -150,6 +169,7 @@ const useStyles = makeStyles({
 
 function ViewDisplayPage() {
   const styles = useStyles();
+  const { theme } = useTheme();
   const { viewId } = useParams<{ viewId: string }>();
   const navigate = useNavigate();
   const { instance, accounts } = useMsal();
@@ -661,12 +681,12 @@ function ViewDisplayPage() {
 
         {/* Loading State */}
         {loading && (
-          <Card className={styles.loadingCard}>
+          <div className={mergeClasses(styles.card, styles.loadingCard, theme === 'dark' && styles.cardDark)}>
             <div className={styles.loadingContent}>
               <Spinner size="large" />
               <Text className={styles.description}>Loading data from sources...</Text>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* Error State */}
@@ -681,7 +701,7 @@ function ViewDisplayPage() {
 
         {/* No Data */}
         {!loading && !error && processedData.length === 0 && (
-          <Card className={styles.emptyCard}>
+          <div className={mergeClasses(styles.card, styles.emptyCard, theme === 'dark' && styles.cardDark)}>
             <div className={styles.emptyContent}>
               <DatabaseRegular className={styles.emptyIcon} />
               <Text>No data found</Text>
@@ -691,36 +711,38 @@ function ViewDisplayPage() {
                   : 'The source lists may be empty'}
               </Text>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* DataGrid Data Table */}
         {!loading && !error && processedData.length > 0 && (
           <div>
-            <DataGrid
-              items={processedData}
-              columns={columnDefs}
-              sortable
-              resizableColumns
-              className={styles.dataGrid}
-            >
-              <DataGridHeader>
-                <DataGridRow>
-                  {({ renderHeaderCell }) => (
-                    <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
-                  )}
-                </DataGridRow>
-              </DataGridHeader>
-              <DataGridBody<Record<string, unknown>>>
-                {({ item, rowId }) => (
-                  <DataGridRow<Record<string, unknown>> key={rowId}>
-                    {({ renderCell }) => (
-                      <DataGridCell>{renderCell(item)}</DataGridCell>
+            <div className={mergeClasses(styles.card, styles.tableCard, theme === 'dark' && styles.cardDark)}>
+              <DataGrid
+                items={processedData}
+                columns={columnDefs}
+                sortable
+                resizableColumns
+                className={styles.dataGrid}
+              >
+                <DataGridHeader>
+                  <DataGridRow>
+                    {({ renderHeaderCell }) => (
+                      <DataGridHeaderCell>{renderHeaderCell()}</DataGridHeaderCell>
                     )}
                   </DataGridRow>
-                )}
-              </DataGridBody>
-            </DataGrid>
+                </DataGridHeader>
+                <DataGridBody<Record<string, unknown>>>
+                  {({ item, rowId }) => (
+                    <DataGridRow<Record<string, unknown>> key={rowId}>
+                      {({ renderCell }) => (
+                        <DataGridCell>{renderCell(item)}</DataGridCell>
+                      )}
+                    </DataGridRow>
+                  )}
+                </DataGridBody>
+              </DataGrid>
+            </div>
             <Text className={styles.rowCount}>
               {processedData.length} row{processedData.length !== 1 ? 's' : ''} total
             </Text>

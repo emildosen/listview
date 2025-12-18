@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { SPFI } from '@pnp/sp';
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Input,
   Dropdown,
@@ -21,6 +22,7 @@ import { SearchRegular, DismissRegular, DocumentRegular } from '@fluentui/react-
 import type { GraphListColumn, GraphListItem } from '../../auth/graphClient';
 import type { PageDefinition } from '../../types/page';
 import ItemDetailModal from './ItemDetailModal';
+import { useTheme } from '../../contexts/ThemeContext';
 
 // URL regex pattern
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
@@ -131,19 +133,32 @@ const useStyles = makeStyles({
     padding: '12px',
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
   },
+  filterTitleRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 12px 8px',
+  },
   filterTitle: {
     fontWeight: tokens.fontWeightSemibold,
     fontSize: tokens.fontSizeBase200,
     textTransform: 'uppercase',
     letterSpacing: '0.02em',
     color: tokens.colorNeutralForeground2,
-    padding: '12px 12px 8px',
+  },
+  clearFiltersLink: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorBrandForeground1,
+    cursor: 'pointer',
+    ':hover': {
+      textDecoration: 'underline',
+    },
   },
   filterList: {
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
-    padding: '0 12px 12px',
+    padding: '0 12px 20px',
     flex: 1,
     overflow: 'auto',
   },
@@ -204,6 +219,12 @@ const useStyles = makeStyles({
       borderBottom: 'none',
     },
   },
+  // Dark theme styles
+  panelDark: {
+    backgroundColor: '#1a1a1a',
+    borderImage: 'none',
+    border: '1px solid #333333',
+  },
 });
 
 function TableView({
@@ -218,6 +239,7 @@ function TableView({
   onPageUpdate,
 }: TableViewProps) {
   const styles = useStyles();
+  const { theme } = useTheme();
   const [selectedItem, setSelectedItem] = useState<GraphListItem | null>(null);
   const [filterOptions, setFilterOptions] = useState<Record<string, string[]>>({});
 
@@ -279,7 +301,7 @@ function TableView({
       <div className={styles.container}>
         {/* Filter Panel */}
         <div className={styles.filterPanel}>
-          <div className={styles.filterPanelInner}>
+          <div className={mergeClasses(styles.filterPanelInner, theme === 'dark' && styles.panelDark)}>
             {/* Search at top - full width */}
             <div className={styles.searchSection}>
               <Input
@@ -302,7 +324,20 @@ function TableView({
             </div>
 
             {/* Filter section */}
-            <Text className={styles.filterTitle}>Filters</Text>
+            <div className={styles.filterTitleRow}>
+              <Text className={styles.filterTitle}>Filters</Text>
+              {(searchText || Object.values(filters).some(v => v)) && (
+                <Text
+                  className={styles.clearFiltersLink}
+                  onClick={() => {
+                    onFilterChange({});
+                    onSearchChange('');
+                  }}
+                >
+                  Clear filters
+                </Text>
+              )}
+            </div>
 
             {/* Dropdown Filters */}
             {page.searchConfig?.filterColumns.length > 0 && (
@@ -341,7 +376,7 @@ function TableView({
 
         {/* Table */}
         <div className={styles.tableContainer}>
-          <div className={styles.tableWrapper}>
+          <div className={mergeClasses(styles.tableWrapper, theme === 'dark' && styles.panelDark)}>
             {items.length === 0 ? (
               <div className={styles.emptyTable}>
                 <Text>No items found</Text>

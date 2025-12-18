@@ -13,7 +13,10 @@ function Logo({ size = 32, className }: LogoProps) {
       width={size}
       height={size}
       className={className}
-      style={{ objectFit: 'contain' }}
+      style={{
+        objectFit: 'contain',
+        filter: 'drop-shadow(0 2px 4px rgba(26, 147, 26, 0.5))',
+      }}
     />
   );
 }

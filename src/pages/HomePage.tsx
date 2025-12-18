@@ -1,22 +1,38 @@
 import { useNavigate } from 'react-router-dom';
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Button,
   Text,
   Title2,
 } from '@fluentui/react-components';
 import { WrenchScrewdriverRegular } from '@fluentui/react-icons';
+import { useTheme } from '../contexts/ThemeContext';
 
 const useStyles = makeStyles({
   container: {
     padding: '32px',
     flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  content: {
+  // Azure style: sharp edges, subtle shadow
+  card: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: '2px',
+    border: '1px solid transparent',
+    borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
+    padding: '48px',
     maxWidth: '448px',
-    margin: '0 auto',
     textAlign: 'center',
+  },
+  cardDark: {
+    backgroundColor: '#1a1a1a',
+    borderImage: 'none',
+    border: '1px solid #333333',
   },
   iconWrapper: {
     width: '64px',
@@ -43,21 +59,20 @@ const useStyles = makeStyles({
 
 function HomePage() {
   const styles = useStyles();
+  const { theme } = useTheme();
   const navigate = useNavigate();
 
   return (
     <div className={styles.container}>
-      <div className={styles.content}>
-        <div>
-          <div className={styles.iconWrapper}>
-            <WrenchScrewdriverRegular fontSize={32} className={styles.icon} />
-          </div>
-          <Title2 as="h1" className={styles.title}>Coming soon</Title2>
-          <Text className={styles.description}>
-            The app is currently under development. Check back soon for
-            SharePoint list management features.
-          </Text>
+      <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)}>
+        <div className={styles.iconWrapper}>
+          <WrenchScrewdriverRegular fontSize={32} className={styles.icon} />
         </div>
+        <Title2 as="h1" className={styles.title}>Coming soon</Title2>
+        <Text className={styles.description}>
+          The app is currently under development. Check back soon for
+          SharePoint list management features.
+        </Text>
         <Button appearance="outline" onClick={() => navigate('/')}>
           Back to home
         </Button>

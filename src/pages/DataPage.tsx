@@ -3,9 +3,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Button,
-  Card,
   Text,
   Title2,
   Badge,
@@ -33,6 +33,7 @@ import {
   ArrowLeftRegular,
 } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
+import { useTheme } from '../contexts/ThemeContext';
 import {
   getAllSites,
   getSiteLists,
@@ -59,6 +60,10 @@ const useStyles = makeStyles({
   breadcrumb: {
     marginBottom: '24px',
   },
+  breadcrumbLink: {
+    textDecoration: 'none',
+    color: 'inherit',
+  },
   content: {
     maxWidth: '896px',
   },
@@ -79,8 +84,20 @@ const useStyles = makeStyles({
   searchInput: {
     width: '100%',
   },
+  // Azure style: sharp edges, subtle shadow
   card: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: '2px',
+    border: '1px solid transparent',
+    borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
     marginBottom: '16px',
+    overflow: 'hidden',
+  },
+  cardDark: {
+    backgroundColor: '#1a1a1a',
+    borderImage: 'none',
+    border: '1px solid #333333',
   },
   cardBody: {
     padding: '48px',
@@ -118,8 +135,25 @@ const useStyles = makeStyles({
     color: tokens.colorPaletteYellowForeground1,
     fontSize: tokens.fontSizeBase200,
   },
+  tableHeader: {
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  tableHeaderCell: {
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+    textTransform: 'uppercase',
+    letterSpacing: '0.02em',
+  },
   tableRow: {
     cursor: 'pointer',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground1Hover,
+    },
+    ':last-child': {
+      borderBottom: 'none',
+    },
   },
   tableRowSelected: {
     backgroundColor: tokens.colorBrandBackground2,
@@ -127,10 +161,14 @@ const useStyles = makeStyles({
   siteName: {
     color: tokens.colorNeutralForeground2,
   },
+  messageBar: {
+    marginBottom: '16px',
+  },
 });
 
 function DataPage() {
   const styles = useStyles();
+  const { theme } = useTheme();
   const { instance, accounts } = useMsal();
   const navigate = useNavigate();
   const { getSetting, updateSetting } = useSettings();
@@ -274,7 +312,7 @@ function DataPage() {
       {/* Breadcrumb */}
       <Breadcrumb className={styles.breadcrumb}>
         <BreadcrumbItem>
-          <Link to="/app" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <Link to="/app" className={styles.breadcrumbLink}>
             Home
           </Link>
         </BreadcrumbItem>
@@ -324,19 +362,19 @@ function DataPage() {
 
         {/* Loading State */}
         {loading && (
-          <Card className={styles.card}>
+          <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)}>
             <div className={styles.cardBody}>
               <Spinner size="large" />
               <Text className={styles.emptyText} style={{ marginTop: '16px' }}>
                 Loading sites and lists...
               </Text>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* Error State */}
         {error && !loading && (
-          <MessageBar intent="error" style={{ marginBottom: '16px' }}>
+          <MessageBar intent="error" className={styles.messageBar}>
             <MessageBarBody>
               <WarningRegular /> {error}
             </MessageBarBody>
@@ -345,7 +383,7 @@ function DataPage() {
 
         {/* No Lists */}
         {!loading && !error && lists.length === 0 && (
-          <Card className={styles.card}>
+          <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)}>
             <div className={styles.cardBody}>
               <DatabaseRegular fontSize={48} className={styles.emptyIcon} />
               <Text className={styles.emptyText}>No lists found</Text>
@@ -353,12 +391,12 @@ function DataPage() {
                 No SharePoint lists available
               </Text>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* No Search Results */}
         {!loading && lists.length > 0 && filteredLists.length === 0 && searchQuery && (
-          <Card className={styles.card}>
+          <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)}>
             <div className={styles.cardBody}>
               <SearchRegular fontSize={48} className={styles.emptyIcon} />
               <Text className={styles.emptyText}>No lists match "{searchQuery}"</Text>
@@ -371,14 +409,14 @@ function DataPage() {
                 Clear search
               </Button>
             </div>
-          </Card>
+          </div>
         )}
 
         {/* Lists Table */}
         {!loading && filteredLists.length > 0 && (
-          <Card>
+          <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)}>
             <Table>
-              <TableHeader>
+              <TableHeader className={styles.tableHeader}>
                 <TableRow>
                   <TableHeaderCell style={{ width: '48px' }}>
                     <Checkbox
@@ -386,8 +424,8 @@ function DataPage() {
                       onChange={handleSelectAll}
                     />
                   </TableHeaderCell>
-                  <TableHeaderCell>List Name</TableHeaderCell>
-                  <TableHeaderCell>Site</TableHeaderCell>
+                  <TableHeaderCell className={styles.tableHeaderCell}>List Name</TableHeaderCell>
+                  <TableHeaderCell className={styles.tableHeaderCell}>Site</TableHeaderCell>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -397,7 +435,7 @@ function DataPage() {
                   return (
                     <TableRow
                       key={key}
-                      className={`${styles.tableRow} ${isSelected ? styles.tableRowSelected : ''}`}
+                      className={mergeClasses(styles.tableRow, isSelected && styles.tableRowSelected)}
                       onClick={() => handleToggleList(list.siteId, list.listId)}
                     >
                       <TableCell>
@@ -420,7 +458,7 @@ function DataPage() {
                 })}
               </TableBody>
             </Table>
-          </Card>
+          </div>
         )}
 
         {/* Action Buttons */}

@@ -631,16 +631,31 @@ export async function getPages(sp: SPFI): Promise<PageDefinition[]> {
 
     return items.map((item) => {
       try {
-        const config = JSON.parse(item.PageConfig || '{}') as Omit<PageDefinition, 'id' | 'name'>;
+        const config = JSON.parse(item.PageConfig || '{}') as Partial<Omit<PageDefinition, 'id' | 'name'>>;
         return {
-          ...config,
           id: String(item.Id),
           name: item.Title,
+          // Default pageType for backwards compatibility with existing pages
+          pageType: config.pageType || 'lookup',
+          primarySource: config.primarySource || { siteId: '', listId: '', listName: '' },
+          displayColumns: config.displayColumns || [],
+          searchConfig: config.searchConfig || {
+            displayMode: 'inline' as const,
+            titleColumn: '',
+            textSearchColumns: [],
+            filterColumns: [],
+          },
+          relatedSections: config.relatedSections || [],
+          detailLayout: config.detailLayout,
+          description: config.description,
+          createdAt: config.createdAt,
+          updatedAt: config.updatedAt,
         };
       } catch {
         return {
           id: String(item.Id),
           name: item.Title,
+          pageType: 'lookup' as const,
           primarySource: { siteId: '', listId: '', listName: '' },
           displayColumns: [],
           searchConfig: {

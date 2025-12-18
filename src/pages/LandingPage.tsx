@@ -1,6 +1,5 @@
 import { useMsal, useIsAuthenticated } from '@azure/msal-react';
 import { useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
 import {
   FluentProvider,
   makeStyles,
@@ -297,12 +296,6 @@ function LandingPage() {
   const isAuthenticated = useIsAuthenticated();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/app');
-    }
-  }, [isAuthenticated, navigate]);
-
   const handleSignIn = async () => {
     try {
       await instance.loginPopup(loginRequest);
@@ -330,9 +323,12 @@ function LandingPage() {
               in SharePoint lists.
             </p>
             <div className={styles.heroButtons}>
-              <button onClick={handleSignIn} className={styles.primaryButton}>
-                <MicrosoftIcon />
-                Sign in with Microsoft
+              <button
+                onClick={isAuthenticated ? () => navigate('/app') : handleSignIn}
+                className={styles.primaryButton}
+              >
+                {!isAuthenticated && <MicrosoftIcon />}
+                {isAuthenticated ? 'Launch App' : 'Sign in with Microsoft'}
               </button>
               <a
                 href="https://github.com/emildosen/listview"
@@ -434,9 +430,12 @@ function LandingPage() {
             <p className={styles.sectionSubtitle}>
               Free and open source. Start managing your SharePoint lists today.
             </p>
-            <button onClick={handleSignIn} className={styles.primaryButton}>
-              <MicrosoftIcon />
-              Sign in with Microsoft
+            <button
+              onClick={isAuthenticated ? () => navigate('/app') : handleSignIn}
+              className={styles.primaryButton}
+            >
+              {!isAuthenticated && <MicrosoftIcon />}
+              {isAuthenticated ? 'Launch App' : 'Sign in with Microsoft'}
             </button>
           </div>
         </section>

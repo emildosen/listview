@@ -3,7 +3,10 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
 import {
   makeStyles,
+  mergeClasses,
+  tokens,
   Text,
+  Title1,
   Spinner,
   Button,
   Breadcrumb,
@@ -12,8 +15,9 @@ import {
   MessageBar,
   MessageBarBody,
 } from '@fluentui/react-components';
-import { DocumentTextRegular } from '@fluentui/react-icons';
+import { DocumentTextRegular, DataPieRegular } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { getListItems, type GraphListColumn, type GraphListItem } from '../auth/graphClient';
 import SearchPanel from '../components/PageDisplay/SearchPanel';
 import TableView from '../components/PageDisplay/TableView';
@@ -67,17 +71,41 @@ const useStyles = makeStyles({
     alignItems: 'center',
     justifyContent: 'center',
     gap: '12px',
-    color: '#6b7280',
-    backgroundColor: '#f9fafb',
+    color: tokens.colorNeutralForeground2,
+    backgroundColor: tokens.colorNeutralBackground2,
     borderRadius: '8px',
+  },
+  emptyStateDark: {
+    backgroundColor: '#1a1a1a',
   },
   emptyIcon: {
     opacity: 0.3,
+  },
+  reportContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 'calc(100vh - 200px)',
+    gap: '16px',
+  },
+  reportIcon: {
+    color: tokens.colorNeutralForeground3,
+    opacity: 0.5,
+  },
+  reportTitle: {
+    color: tokens.colorNeutralForeground1,
+    textAlign: 'center',
+  },
+  reportSubtitle: {
+    color: tokens.colorNeutralForeground3,
+    textAlign: 'center',
   },
 });
 
 function PageDisplayPage() {
   const styles = useStyles();
+  const { theme } = useTheme();
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
   const { instance, accounts } = useMsal();
@@ -214,8 +242,8 @@ function PageDisplayPage() {
     );
   }
 
-  // Page not configured
-  if (!page.primarySource?.siteId || !page.primarySource?.listId) {
+  // Page not configured (only applies to lookup pages)
+  if (page.pageType === 'lookup' && (!page.primarySource?.siteId || !page.primarySource?.listId)) {
     return (
       <div className={styles.container}>
         <Breadcrumb className={styles.breadcrumb}>
@@ -244,6 +272,41 @@ function PageDisplayPage() {
           <Button appearance="primary" onClick={() => navigate(`/app/pages/${page.id}/edit`)}>
             Configure Page
           </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Report page display
+  if (page.pageType === 'report') {
+    return (
+      <div className={styles.container}>
+        {/* Breadcrumb */}
+        <Breadcrumb className={styles.breadcrumb}>
+          <BreadcrumbItem>
+            <Link to="/app" className={styles.breadcrumbLink}>
+              Home
+            </Link>
+          </BreadcrumbItem>
+          <BreadcrumbDivider />
+          <BreadcrumbItem>
+            <Link to="/app/pages" className={styles.breadcrumbLink}>
+              Pages
+            </Link>
+          </BreadcrumbItem>
+          <BreadcrumbDivider />
+          <BreadcrumbItem>
+            <Text weight="semibold">{page.name}</Text>
+          </BreadcrumbItem>
+        </Breadcrumb>
+
+        {/* Report Page Content */}
+        <div className={styles.reportContainer}>
+          <DataPieRegular fontSize={64} className={styles.reportIcon} />
+          <Title1 className={styles.reportTitle}>{page.name}</Title1>
+          {page.description && (
+            <Text className={styles.reportSubtitle}>{page.description}</Text>
+          )}
         </div>
       </div>
     );
@@ -321,7 +384,7 @@ function PageDisplayPage() {
               </div>
 
               {/* Empty State (click an item to open details) */}
-              <div className={styles.emptyState}>
+              <div className={mergeClasses(styles.emptyState, theme === 'dark' && styles.emptyStateDark)}>
                 <DocumentTextRegular fontSize={48} className={styles.emptyIcon} />
                 <Text>Select an item to view details</Text>
               </div>

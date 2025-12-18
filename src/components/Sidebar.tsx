@@ -56,6 +56,22 @@ const useStyles = makeStyles({
     padding: '16px',
     overflowY: 'auto',
   },
+  navDark: {
+    scrollbarColor: '#333 #121212',
+    '&::-webkit-scrollbar': {
+      width: '8px',
+    },
+    '&::-webkit-scrollbar-track': {
+      background: '#121212',
+    },
+    '&::-webkit-scrollbar-thumb': {
+      background: '#333',
+      borderRadius: '4px',
+    },
+    '&::-webkit-scrollbar-thumb:hover': {
+      background: '#444',
+    },
+  },
   menuList: {
     listStyle: 'none',
     margin: 0,
@@ -186,6 +202,9 @@ const useStyles = makeStyles({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
+  profileNameDark: {
+    color: '#ffffff',
+  },
   profileEmail: {
     display: 'block',
     fontSize: tokens.fontSizeBase100,
@@ -230,14 +249,14 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    padding: '12px',
+    padding: '10px 12px',
     width: '100%',
     border: 'none',
     background: 'none',
     cursor: 'pointer',
     textDecoration: 'none',
     color: tokens.colorNeutralForeground1,
-    fontSize: tokens.fontSizeBase300,
+    fontSize: tokens.fontSizeBase200,
     transitionProperty: 'background-color',
     transitionDuration: tokens.durationNormal,
     ':hover': {
@@ -360,7 +379,7 @@ function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className={styles.nav}>
+      <nav className={mergeClasses(styles.nav, theme === 'dark' && styles.navDark)}>
         <ul className={styles.menuList}>
           <li>
             <Link
@@ -564,7 +583,7 @@ function Sidebar() {
               color="brand"
             />
             <div className={styles.profileInfo}>
-              <Text className={styles.profileName}>
+              <Text className={mergeClasses(styles.profileName, theme === 'dark' && styles.profileNameDark)}>
                 {account?.name || 'User'}
               </Text>
               <Text className={styles.profileEmail}>
@@ -617,7 +636,7 @@ function Sidebar() {
                   className={styles.dropdownItem}
                   onClick={() => setDropdownOpen(false)}
                 >
-                  <SettingsRegular fontSize={20} />
+                  <SettingsRegular fontSize={16} />
                   Settings
                 </Link>
               )}
@@ -627,7 +646,7 @@ function Sidebar() {
                 onClick={handleSignOut}
                 className={mergeClasses(styles.dropdownItem, styles.signOutItem)}
               >
-                <SignOutRegular fontSize={20} />
+                <SignOutRegular fontSize={16} />
                 Sign out
               </button>
             </div>

@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   makeStyles,
+  mergeClasses,
   tokens,
   Text,
   Title2,
@@ -15,6 +16,7 @@ import {
 } from '@fluentui/react-components';
 import { ArrowLeftRegular } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
+import { useTheme } from '../contexts/ThemeContext';
 import PageEditor from '../components/PageEditor/PageEditor';
 import type { PageDefinition } from '../types/page';
 
@@ -40,7 +42,21 @@ const useStyles = makeStyles({
     marginBottom: '4px',
   },
   description: {
+    display: 'block',
     color: tokens.colorNeutralForeground2,
+  },
+  // Azure style: sharp edges, subtle shadow
+  card: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: '2px',
+    border: '1px solid transparent',
+    borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
+  },
+  cardDark: {
+    backgroundColor: '#1a1a1a',
+    borderImage: 'none',
+    border: '1px solid #333333',
   },
   loadingContainer: {
     display: 'flex',
@@ -58,6 +74,7 @@ const useStyles = makeStyles({
 
 function PageEditorPage() {
   const styles = useStyles();
+  const { theme } = useTheme();
   const { pageId } = useParams<{ pageId?: string }>();
   const navigate = useNavigate();
   const { pages, savePage } = useSettings();
@@ -73,8 +90,10 @@ function PageEditorPage() {
   const loading = isEditMode && pages.length === 0;
 
   const handleSave = async (page: PageDefinition) => {
-    await savePage(page);
-    navigate('/app/pages');
+    const savedPage = await savePage(page);
+    // Navigate to the new/updated page
+    navigate(`/app/pages/${savedPage.id}`);
+    return savedPage;
   };
 
   const handleCancel = () => {
@@ -84,8 +103,10 @@ function PageEditorPage() {
   if (loading) {
     return (
       <div className={styles.container}>
-        <div className={styles.loadingContainer}>
-          <Spinner size="large" />
+        <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)}>
+          <div className={styles.loadingContainer}>
+            <Spinner size="large" />
+          </div>
         </div>
       </div>
     );
