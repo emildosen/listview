@@ -30,7 +30,7 @@ import {
   AddRegular,
 } from '@fluentui/react-icons';
 import { getListItems, type GraphListColumn, type GraphListItem } from '../../auth/graphClient';
-import { createListItem, updateListItem, deleteListItem, createSPClient, getColumnFormatting, parseColumnFormattingForLink } from '../../services/sharepoint';
+import { createListItem, updateListItem, deleteListItem, createSPClient, getColumnFormatting, parseColumnFormattingForLink, getListColumnOrder } from '../../services/sharepoint';
 import type { PageDefinition, RelatedSection } from '../../types/page';
 import { useSettings } from '../../contexts/SettingsContext';
 import ItemFormModal from './ItemFormModal';
@@ -343,6 +343,9 @@ function RelatedSectionComponent({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  // Column order from SharePoint default view
+  const [columnOrder, setColumnOrder] = useState<string[]>([]);
+
   // Get siteUrl - from section source or look up from enabledLists for backwards compat
   const siteUrl = useMemo(() => {
     if (section.source.siteUrl) {
@@ -375,6 +378,22 @@ function RelatedSectionComponent({
 
     initClient();
   }, [instance, account, siteUrl]);
+
+  // Fetch column order from SharePoint default view
+  useEffect(() => {
+    if (!spClientReady || !spClientRef.current || !section.source.listId) return;
+
+    const fetchColumnOrder = async () => {
+      try {
+        const order = await getListColumnOrder(spClientRef.current!, section.source.listId);
+        setColumnOrder(order);
+      } catch (err) {
+        console.error('Failed to fetch column order:', err);
+      }
+    };
+
+    fetchColumnOrder();
+  }, [spClientReady, section.source.listId]);
 
   // Load related items
   const loadRelatedItems = useCallback(async () => {
@@ -662,9 +681,17 @@ function RelatedSectionComponent({
       {modalOpen && (
         <ItemFormModal
           mode={modalMode}
-          columns={columns.filter((c) =>
-            section.displayColumns.some((dc) => dc.internalName === c.name)
-          )}
+          columns={columns
+            .filter((c) => section.displayColumns.some((dc) => dc.internalName === c.name))
+            .sort((a, b) => {
+              const aIndex = columnOrder.indexOf(a.name);
+              const bIndex = columnOrder.indexOf(b.name);
+              // Columns not in columnOrder go to the end
+              if (aIndex === -1 && bIndex === -1) return 0;
+              if (aIndex === -1) return 1;
+              if (bIndex === -1) return -1;
+              return aIndex - bIndex;
+            })}
           initialValues={editingItem?.fields || {}}
           saving={saving}
           onSave={handleSave}

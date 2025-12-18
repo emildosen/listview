@@ -834,6 +834,31 @@ export function parseColumnFormattingForLink(customFormatter: string | null): bo
   }
 }
 
+/**
+ * Get column order from the default view of a list
+ * Returns array of internal column names in display order
+ */
+export async function getListColumnOrder(
+  sp: SPFI,
+  listId: string
+): Promise<string[]> {
+  try {
+    const views = await sp.web.lists.getById(listId).views.filter("DefaultView eq true")();
+
+    if (views.length === 0) {
+      return [];
+    }
+
+    const defaultViewId = views[0].Id;
+    const viewFields = await sp.web.lists.getById(listId).views.getById(defaultViewId).fields();
+
+    return viewFields.Items || [];
+  } catch (error) {
+    console.warn('[SharePoint] Could not get column order:', error);
+    return [];
+  }
+}
+
 // ============================================
 // Generic List Item CRUD Operations
 // ============================================

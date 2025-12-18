@@ -32,10 +32,21 @@ const useStyles = makeStyles({
   dialogSurface: {
     maxWidth: '500px',
   },
+  dialogBody: {
+    display: 'block',
+    paddingBottom: '24px',
+  },
   formFields: {
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
+  },
+  dateInput: {
+    width: '180px',
+  },
+  dropdown: {
+    width: 'fit-content',
+    minWidth: '120px',
   },
 });
 
@@ -137,6 +148,7 @@ function ItemFormModal({
             onOptionSelect={(_e, data) => handleChange(column.name, data.optionValue)}
             disabled={column.readOnly}
             size="small"
+            className={styles.dropdown}
           >
             <Option value="">Select...</Option>
             {column.choice.choices.map((choice) => (
@@ -204,6 +216,7 @@ function ItemFormModal({
             onChange={(_e, data) => handleChange(column.name, data.value)}
             disabled={column.readOnly}
             size="small"
+            className={styles.dateInput}
           />
         </Field>
       );
@@ -244,7 +257,7 @@ function ItemFormModal({
           <DialogTitle>
             {mode === 'create' ? 'Add New Item' : 'Edit Item'}
           </DialogTitle>
-          <DialogBody>
+          <DialogBody className={styles.dialogBody}>
             {error && (
               <MessageBar intent="error" style={{ marginBottom: '16px' }}>
                 <MessageBarBody>{error}</MessageBarBody>
