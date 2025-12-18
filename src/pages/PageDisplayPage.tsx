@@ -15,14 +15,16 @@ import {
   MessageBar,
   MessageBarBody,
 } from '@fluentui/react-components';
-import { DocumentTextRegular, DataPieRegular } from '@fluentui/react-icons';
+import { DocumentTextRegular, SettingsRegular } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { getListItems, type GraphListColumn, type GraphListItem } from '../auth/graphClient';
 import SearchPanel from '../components/PageDisplay/SearchPanel';
 import TableView from '../components/PageDisplay/TableView';
 import ItemDetailModal from '../components/PageDisplay/ItemDetailModal';
-import type { PageDefinition } from '../types/page';
+import ReportPageCanvas from '../components/PageDisplay/ReportPageCanvas';
+import ReportCustomizeDrawer from '../components/PageDisplay/ReportCustomizeDrawer';
+import type { PageDefinition, ReportLayoutConfig, AnyWebPartConfig } from '../types/page';
 
 const useStyles = makeStyles({
   container: {
@@ -101,6 +103,24 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     textAlign: 'center',
   },
+  reportHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: '24px',
+  },
+  reportHeaderInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+  },
+  reportHeaderTitle: {
+    margin: 0,
+  },
+  reportHeaderDescription: {
+    color: tokens.colorNeutralForeground3,
+    margin: 0,
+  },
 });
 
 function PageDisplayPage() {
@@ -118,6 +138,7 @@ function PageDisplayPage() {
   const [modalItem, setModalItem] = useState<GraphListItem | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [searchText, setSearchText] = useState('');
+  const [customizeDrawerOpen, setCustomizeDrawerOpen] = useState(false);
 
   // Find page config
   const page = useMemo((): PageDefinition | undefined => {
@@ -189,6 +210,38 @@ function PageDisplayPage() {
   const handlePageUpdate = useCallback(async (updatedPage: PageDefinition) => {
     await savePage(updatedPage);
   }, [savePage]);
+
+  // Handle report layout save
+  const handleReportLayoutSave = useCallback(async (layout: ReportLayoutConfig) => {
+    if (!page) return;
+    const updatedPage = { ...page, reportLayout: layout };
+    await savePage(updatedPage);
+  }, [page, savePage]);
+
+  // Handle web part config change
+  const handleWebPartConfigChange = useCallback(
+    async (sectionId: string, columnId: string, config: AnyWebPartConfig) => {
+      if (!page?.reportLayout) return;
+
+      const updatedSections = page.reportLayout.sections.map((section) => {
+        if (section.id !== sectionId) return section;
+        return {
+          ...section,
+          columns: section.columns.map((column) => {
+            if (column.id !== columnId) return column;
+            return { ...column, webPart: config };
+          }),
+        };
+      });
+
+      const updatedPage = {
+        ...page,
+        reportLayout: { ...page.reportLayout, sections: updatedSections },
+      };
+      await savePage(updatedPage);
+    },
+    [page, savePage]
+  );
 
   // Handle item selection from SearchPanel (for inline mode)
   const handleSelectItem = useCallback((itemId: string | null) => {
@@ -279,6 +332,17 @@ function PageDisplayPage() {
 
   // Report page display
   if (page.pageType === 'report') {
+    // Default layout: one full-width empty section
+    const defaultLayout: ReportLayoutConfig = {
+      sections: [{
+        id: 'default-section',
+        layout: 'one-column',
+        columns: [{ id: 'default-col', webPart: null }],
+      }],
+    };
+
+    const currentLayout = page.reportLayout || defaultLayout;
+
     return (
       <div className={styles.container}>
         {/* Breadcrumb */}
@@ -300,14 +364,36 @@ function PageDisplayPage() {
           </BreadcrumbItem>
         </Breadcrumb>
 
-        {/* Report Page Content */}
-        <div className={styles.reportContainer}>
-          <DataPieRegular fontSize={64} className={styles.reportIcon} />
-          <Title1 className={styles.reportTitle}>{page.name}</Title1>
-          {page.description && (
-            <Text className={styles.reportSubtitle}>{page.description}</Text>
-          )}
+        {/* Report Page Header */}
+        <div className={styles.reportHeader}>
+          <div className={styles.reportHeaderInfo}>
+            <Title1 className={styles.reportHeaderTitle}>{page.name}</Title1>
+            {page.description && (
+              <Text className={styles.reportHeaderDescription}>{page.description}</Text>
+            )}
+          </div>
+          <Button
+            appearance="subtle"
+            icon={<SettingsRegular />}
+            onClick={() => setCustomizeDrawerOpen(true)}
+          >
+            Customize
+          </Button>
         </div>
+
+        {/* Report Page Canvas */}
+        <ReportPageCanvas
+          layout={currentLayout}
+          onWebPartConfigChange={handleWebPartConfigChange}
+        />
+
+        {/* Customize Drawer */}
+        <ReportCustomizeDrawer
+          page={page}
+          open={customizeDrawerOpen}
+          onClose={() => setCustomizeDrawerOpen(false)}
+          onSave={handleReportLayoutSave}
+        />
       </div>
     );
   }

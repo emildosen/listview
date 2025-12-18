@@ -12,6 +12,7 @@
   "dependencies": {
     "@azure/msal-browser": "^4.27.0",
     "@azure/msal-react": "^3.0.23",
+    "@fluentui/react-charts": "^9.3.8",
     "@fluentui/react-components": "^9.72.9",
     "@fluentui/react-icons": "^2.0.263",
     "@microsoft/microsoft-graph-client": "^3.0.7",

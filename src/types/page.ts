@@ -33,6 +33,9 @@ export interface PageDefinition {
   // Detail modal layout configuration
   detailLayout?: DetailLayoutConfig;
 
+  // Report page layout configuration (only used when pageType === 'report')
+  reportLayout?: ReportLayoutConfig;
+
   createdAt?: string;
   updatedAt?: string;
 }
@@ -89,4 +92,179 @@ export interface PageItem {
   Id: number;
   Title: string;
   PageConfig: string;                 // JSON stringified PageDefinition
+}
+
+// ===== REPORT PAGE LAYOUT TYPES =====
+
+/**
+ * Layout options for sections - mirrors SharePoint's section layouts
+ */
+export type SectionLayout =
+  | 'one-column'          // Full width
+  | 'two-column'          // 50/50
+  | 'three-column'        // 33/33/33
+  | 'one-third-left'      // 1/3 + 2/3
+  | 'one-third-right';    // 2/3 + 1/3
+
+/**
+ * Column width percentages for each layout type
+ */
+export const LAYOUT_COLUMN_WIDTHS: Record<SectionLayout, number[]> = {
+  'one-column': [100],
+  'two-column': [50, 50],
+  'three-column': [33.33, 33.33, 33.33],
+  'one-third-left': [33.33, 66.67],
+  'one-third-right': [66.67, 33.33],
+};
+
+/**
+ * Available WebPart types - extensible for future additions
+ */
+export type WebPartType = 'list-items' | 'chart';
+
+/**
+ * Base WebPart configuration
+ */
+export interface WebPartConfig {
+  id: string;
+  type: WebPartType;
+  title?: string;
+}
+
+/**
+ * Data source configuration for a web part
+ */
+export interface WebPartDataSource {
+  siteId: string;
+  siteUrl?: string;
+  listId: string;
+  listName: string;
+}
+
+/**
+ * Filter operators for web part data
+ */
+export type WebPartFilterOperator =
+  | 'equals'
+  | 'notEquals'
+  | 'contains'
+  | 'startsWith'
+  | 'greaterThan'
+  | 'lessThan'
+  | 'isEmpty'
+  | 'isNotEmpty';
+
+/**
+ * Filter condition for web part data
+ */
+export interface WebPartFilter {
+  id: string;
+  column: string;
+  operator: WebPartFilterOperator;
+  value: string | number | boolean;
+  conjunction: 'and' | 'or'; // How this filter combines with previous
+}
+
+/**
+ * Join configuration to link with another list
+ */
+export interface WebPartJoin {
+  id: string;
+  targetSource: WebPartDataSource; // The list to join with
+  sourceColumn: string; // Column in primary list (lookup or ID)
+  targetColumn: string; // Column in target list to match
+  joinType: 'inner' | 'left'; // Inner = only matching, Left = all primary + matching
+  columnsToInclude: string[]; // Which columns to pull from joined list
+  alias?: string; // Prefix for joined columns (e.g., "Contact.")
+}
+
+/**
+ * Sort configuration
+ */
+export interface WebPartSort {
+  column: string;
+  direction: 'asc' | 'desc';
+}
+
+/**
+ * Display column configuration for web parts
+ */
+export interface WebPartDisplayColumn {
+  internalName: string;
+  displayName: string;
+  width?: number; // Column width in px
+  format?: 'text' | 'number' | 'date' | 'currency' | 'boolean' | 'lookup';
+}
+
+/**
+ * Chart aggregation types
+ */
+export type ChartAggregation = 'count' | 'sum' | 'average' | 'min' | 'max';
+
+/**
+ * List Items WebPart - displays a table of data
+ */
+export interface ListItemsWebPartConfig extends WebPartConfig {
+  type: 'list-items';
+  dataSource?: WebPartDataSource;
+  displayColumns?: WebPartDisplayColumn[]; // Columns to show in table
+  filters?: WebPartFilter[];
+  joins?: WebPartJoin[];
+  sort?: WebPartSort;
+  maxItems?: number; // Limit rows (default: 50)
+  showSearch?: boolean; // Enable text search
+  searchColumns?: string[]; // Columns to search
+}
+
+/**
+ * Chart WebPart - displays a visualization
+ */
+export interface ChartWebPartConfig extends WebPartConfig {
+  type: 'chart';
+  chartType?: 'bar' | 'donut' | 'line' | 'horizontal-bar';
+  dataSource?: WebPartDataSource;
+  filters?: WebPartFilter[];
+  joins?: WebPartJoin[];
+
+  // Chart-specific settings
+  groupByColumn?: string; // Column to group by (X-axis / segments)
+  valueColumn?: string; // Column to aggregate (Y-axis / values)
+  aggregation?: ChartAggregation; // How to aggregate values
+
+  // Display options
+  showLegend?: boolean;
+  showLabels?: boolean;
+  maxGroups?: number; // Limit number of groups (default: 10)
+  sortBy?: 'label' | 'value';
+  sortDirection?: 'asc' | 'desc';
+  colorPalette?: string[]; // Custom colors
+}
+
+/**
+ * Union type for all WebPart configurations
+ */
+export type AnyWebPartConfig = ListItemsWebPartConfig | ChartWebPartConfig;
+
+/**
+ * A column within a section - contains a single WebPart (or empty)
+ */
+export interface ReportColumn {
+  id: string;
+  webPart: AnyWebPartConfig | null;
+}
+
+/**
+ * A horizontal section with a specific layout
+ */
+export interface ReportSection {
+  id: string;
+  layout: SectionLayout;
+  columns: ReportColumn[];
+}
+
+/**
+ * Complete report page layout configuration
+ */
+export interface ReportLayoutConfig {
+  sections: ReportSection[];
 }

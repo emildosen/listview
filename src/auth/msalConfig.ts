@@ -42,7 +42,7 @@ export const loginRequest = {
 };
 
 // Scopes for different APIs (tokens acquired silently after login)
-export const graphScopes = ['User.Read', 'Sites.Read.All'];
+export const graphScopes = ['User.Read', 'Sites.ReadWrite.All'];
 
 export const getSharePointScopes = (hostname: string) => [
   `https://${hostname}/AllSites.Manage`,
