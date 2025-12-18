@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { makeStyles } from '@fluentui/react-components';
-import type { ReportSection as ReportSectionType, SectionLayout, AnyWebPartConfig } from '../../types/page';
+import type { ReportSection as ReportSectionType, SectionLayout, SectionHeight, AnyWebPartConfig } from '../../types/page';
 import WebPart from './WebPart';
 
 /**
@@ -23,11 +23,37 @@ function getGridColumns(layout: SectionLayout): string {
   }
 }
 
+/**
+ * Get height value based on section height setting
+ * Base height is 400px (100%)
+ */
+function getSectionHeight(height: SectionHeight | undefined): string {
+  const baseHeight = 400; // Base height in pixels for 100%
+  switch (height) {
+    case 'half':
+      return `${baseHeight * 0.5}px`; // 50% = 200px
+    case 'medium':
+      return `${baseHeight * 0.75}px`; // 75% = 300px
+    case 'big':
+      return `${baseHeight * 1.25}px`; // 125% = 500px
+    case 'full':
+    default:
+      return `${baseHeight}px`; // 100% = 400px
+  }
+}
+
 const useStyles = makeStyles({
   section: {
     display: 'grid',
     gap: '16px',
     marginBottom: '16px',
+    alignItems: 'stretch',
+  },
+  webPartWrapper: {
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    height: '100%',
   },
 });
 
@@ -46,17 +72,23 @@ export default function ReportSection({ section, onWebPartConfigChange }: Report
     [onWebPartConfigChange]
   );
 
+  const sectionHeight = getSectionHeight(section.height);
+
   return (
     <div
       className={styles.section}
-      style={{ gridTemplateColumns: getGridColumns(section.layout) }}
+      style={{
+        gridTemplateColumns: getGridColumns(section.layout),
+        height: sectionHeight,
+      }}
     >
       {section.columns.map((column) => (
-        <WebPart
-          key={column.id}
-          config={column.webPart}
-          onConfigChange={handleConfigChange(column.id)}
-        />
+        <div key={column.id} className={styles.webPartWrapper}>
+          <WebPart
+            config={column.webPart}
+            onConfigChange={handleConfigChange(column.id)}
+          />
+        </div>
       ))}
     </div>
   );

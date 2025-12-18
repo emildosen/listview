@@ -4,9 +4,9 @@ import {
   Dropdown,
   Option,
   Field,
-  Switch,
   SpinButton,
   ToggleButton,
+  Switch,
 } from '@fluentui/react-components';
 import {
   DataBarVerticalRegular,
@@ -14,7 +14,7 @@ import {
   DataLineRegular,
   DataBarHorizontalRegular,
 } from '@fluentui/react-icons';
-import type { ChartAggregation } from '../../../types/page';
+import type { ChartAggregation, LegendPosition, XAxisLabelStyle } from '../../../types/page';
 import type { GraphListColumn } from '../../../auth/graphClient';
 
 const useStyles = makeStyles({
@@ -86,15 +86,21 @@ interface ChartSettingsPanelProps {
   groupByColumn?: string;
   valueColumn?: string;
   aggregation: ChartAggregation;
-  showLegend: boolean;
+  legendPosition: LegendPosition;
   maxGroups: number;
+  xAxisLabelStyle: XAxisLabelStyle;
+  sortBy: 'label' | 'value';
+  sortDirection: 'asc' | 'desc';
   columns: GraphListColumn[];
   onChartTypeChange: (type: 'bar' | 'donut' | 'line' | 'horizontal-bar') => void;
   onGroupByColumnChange: (column: string | undefined) => void;
   onValueColumnChange: (column: string | undefined) => void;
   onAggregationChange: (agg: ChartAggregation) => void;
-  onShowLegendChange: (show: boolean) => void;
+  onLegendPositionChange: (position: LegendPosition) => void;
   onMaxGroupsChange: (max: number) => void;
+  onXAxisLabelStyleChange: (style: XAxisLabelStyle) => void;
+  onSortByChange: (sortBy: 'label' | 'value') => void;
+  onSortDirectionChange: (direction: 'asc' | 'desc') => void;
 }
 
 export default function ChartSettingsPanel({
@@ -102,15 +108,21 @@ export default function ChartSettingsPanel({
   groupByColumn,
   valueColumn,
   aggregation,
-  showLegend,
+  legendPosition,
   maxGroups,
+  xAxisLabelStyle,
+  sortBy,
+  sortDirection,
   columns,
   onChartTypeChange,
   onGroupByColumnChange,
   onValueColumnChange,
   onAggregationChange,
-  onShowLegendChange,
+  onLegendPositionChange,
   onMaxGroupsChange,
+  onXAxisLabelStyleChange,
+  onSortByChange,
+  onSortDirectionChange,
 }: ChartSettingsPanelProps) {
   const styles = useStyles();
 
@@ -147,6 +159,20 @@ export default function ChartSettingsPanel({
           ))}
         </div>
       </Field>
+
+      {/* X-Axis Label Style (only for bar charts) */}
+      {(chartType === 'bar' || chartType === 'horizontal-bar') && (
+        <Field label="X-Axis Labels">
+          <Dropdown
+            value={xAxisLabelStyle === 'angled' ? 'Angled (show all)' : 'Normal'}
+            selectedOptions={[xAxisLabelStyle]}
+            onOptionSelect={(_, data) => onXAxisLabelStyleChange(data.optionValue as XAxisLabelStyle)}
+          >
+            <Option value="normal">Normal</Option>
+            <Option value="angled">Angled (show all)</Option>
+          </Dropdown>
+        </Field>
+      )}
 
       {/* Group By Column */}
       <div className={styles.fieldRow}>
@@ -216,8 +242,35 @@ export default function ChartSettingsPanel({
             onChange={(_, data) => onMaxGroupsChange(data.value || 10)}
           />
         </Field>
-        <Field label="Show legend">
-          <Switch checked={showLegend} onChange={(_, data) => onShowLegendChange(data.checked)} />
+        <Field label="Legend">
+          <Switch
+            checked={legendPosition === 'on'}
+            onChange={(_, data) => onLegendPositionChange(data.checked ? 'on' : 'off')}
+          />
+        </Field>
+      </div>
+
+      {/* Sort Options */}
+      <div className={styles.fieldRow}>
+        <Field label="Sort by" className={styles.fieldHalf}>
+          <Dropdown
+            value={sortBy === 'value' ? 'Value' : 'Label'}
+            selectedOptions={[sortBy]}
+            onOptionSelect={(_, data) => onSortByChange(data.optionValue as 'label' | 'value')}
+          >
+            <Option value="label">Label</Option>
+            <Option value="value">Value</Option>
+          </Dropdown>
+        </Field>
+        <Field label="Direction" className={styles.fieldHalf}>
+          <Dropdown
+            value={sortDirection === 'desc' ? 'Descending' : 'Ascending'}
+            selectedOptions={[sortDirection]}
+            onOptionSelect={(_, data) => onSortDirectionChange(data.optionValue as 'asc' | 'desc')}
+          >
+            <Option value="asc">Ascending</Option>
+            <Option value="desc">Descending</Option>
+          </Dropdown>
         </Field>
       </div>
     </div>

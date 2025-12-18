@@ -299,6 +299,7 @@ function LandingPage() {
   const handleSignIn = async () => {
     try {
       await instance.loginPopup(loginRequest);
+      navigate('/app');
     } catch (error) {
       console.error('Login failed:', error);
     }

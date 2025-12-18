@@ -26,8 +26,13 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '4px',
-    maxHeight: '300px',
+    maxHeight: '200px',
     overflowY: 'auto',
+  },
+  selectedColumnList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
   },
   columnItem: {
     display: 'flex',
@@ -214,7 +219,7 @@ export default function ColumnSelector({
           <Text className={styles.sectionLabel}>
             Selected Columns ({selectedColumns.length})
           </Text>
-          <div className={styles.columnList}>
+          <div className={styles.selectedColumnList}>
             {selectedColumns.map((column, index) => {
               const sourceColumn = availableColumns.find(
                 (c) => c.name === column.internalName

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   makeStyles,
   tokens,
@@ -23,6 +23,7 @@ import type {
   ReportSection,
   ReportColumn,
   SectionLayout,
+  SectionHeight,
   WebPartType,
   AnyWebPartConfig,
 } from '../../types/page';
@@ -124,6 +125,27 @@ const useStyles = makeStyles({
   webPartTitle: {
     flex: 1,
   },
+  heightContainer: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap',
+  },
+  heightButton: {
+    minWidth: '70px',
+    padding: '4px 8px',
+    fontSize: tokens.fontSizeBase200,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground1,
+    color: tokens.colorNeutralForeground1,
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  },
+  heightButtonSelected: {
+    backgroundColor: tokens.colorBrandBackground,
+    color: tokens.colorNeutralForegroundOnBrand,
+    border: `1px solid ${tokens.colorBrandBackground}`,
+  },
   emptySection: {
     textAlign: 'center',
     padding: '24px',
@@ -203,6 +225,17 @@ export default function ReportCustomizeDrawer({
     return [createSection('one-column')];
   });
 
+  // Sync sections state when drawer opens or page changes
+  useEffect(() => {
+    if (open) {
+      if (page.reportLayout?.sections && page.reportLayout.sections.length > 0) {
+        setSections([...page.reportLayout.sections]);
+      } else {
+        setSections([createSection('one-column')]);
+      }
+    }
+  }, [open, page.reportLayout]);
+
   // Drag state
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -235,6 +268,18 @@ export default function ReportCustomizeDrawer({
         ...section,
         layout,
         columns: newColumns,
+      };
+      return updated;
+    });
+  }, []);
+
+  // Update section height
+  const handleHeightChange = useCallback((index: number, height: SectionHeight) => {
+    setSections(prev => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index],
+        height,
       };
       return updated;
     });
@@ -417,6 +462,30 @@ export default function ReportCustomizeDrawer({
                       value={section.layout}
                       onChange={(layout) => handleLayoutChange(sectionIndex, layout)}
                     />
+                  </div>
+
+                  {/* Height Picker */}
+                  <div>
+                    <Text className={styles.layoutLabel}>Height</Text>
+                    <div className={styles.heightContainer}>
+                      {([
+                        { value: 'half', label: 'Half', percent: '50%' },
+                        { value: 'medium', label: 'Medium', percent: '75%' },
+                        { value: 'full', label: 'Full', percent: '100%' },
+                        { value: 'big', label: 'Big', percent: '125%' },
+                      ] as const).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`${styles.heightButton} ${
+                            (section.height || 'full') === option.value ? styles.heightButtonSelected : ''
+                          }`}
+                          onClick={() => handleHeightChange(sectionIndex, option.value)}
+                        >
+                          {option.percent}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {/* Column WebPart Pickers */}

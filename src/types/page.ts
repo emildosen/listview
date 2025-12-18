@@ -166,6 +166,20 @@ export interface WebPartFilter {
 }
 
 /**
+ * Aggregation options for joined columns
+ */
+export type JoinColumnAggregation = 'first' | 'count' | 'sum' | 'avg' | 'min' | 'max';
+
+/**
+ * Configuration for a column included in a join
+ */
+export interface JoinColumnConfig {
+  columnName: string; // Internal column name from joined list
+  displayName?: string; // Custom display name (optional)
+  aggregation: JoinColumnAggregation; // How to aggregate when multiple matches
+}
+
+/**
  * Join configuration to link with another list
  */
 export interface WebPartJoin {
@@ -174,7 +188,8 @@ export interface WebPartJoin {
   sourceColumn: string; // Column in primary list (lookup or ID)
   targetColumn: string; // Column in target list to match
   joinType: 'inner' | 'left'; // Inner = only matching, Left = all primary + matching
-  columnsToInclude: string[]; // Which columns to pull from joined list
+  columnsToInclude: string[]; // Legacy: simple column names (kept for backward compat)
+  columnConfigs?: JoinColumnConfig[]; // Enhanced column configuration with aggregation
   alias?: string; // Prefix for joined columns (e.g., "Contact.")
 }
 
@@ -200,6 +215,16 @@ export interface WebPartDisplayColumn {
  * Chart aggregation types
  */
 export type ChartAggregation = 'count' | 'sum' | 'average' | 'min' | 'max';
+
+/**
+ * Legend visibility options for charts
+ */
+export type LegendPosition = 'on' | 'off';
+
+/**
+ * X-axis label style for bar charts
+ */
+export type XAxisLabelStyle = 'normal' | 'angled';
 
 /**
  * List Items WebPart - displays a table of data
@@ -232,12 +257,13 @@ export interface ChartWebPartConfig extends WebPartConfig {
   aggregation?: ChartAggregation; // How to aggregate values
 
   // Display options
-  showLegend?: boolean;
+  legendPosition?: LegendPosition;
   showLabels?: boolean;
   maxGroups?: number; // Limit number of groups (default: 10)
   sortBy?: 'label' | 'value';
   sortDirection?: 'asc' | 'desc';
   colorPalette?: string[]; // Custom colors
+  xAxisLabelStyle?: XAxisLabelStyle; // Bar chart: 'normal' or 'angled' (shows all labels)
 }
 
 /**
@@ -254,12 +280,18 @@ export interface ReportColumn {
 }
 
 /**
+ * Section height options
+ */
+export type SectionHeight = 'half' | 'medium' | 'full' | 'big';
+
+/**
  * A horizontal section with a specific layout
  */
 export interface ReportSection {
   id: string;
   layout: SectionLayout;
   columns: ReportColumn[];
+  height?: SectionHeight; // Default is 'full' (100%)
 }
 
 /**

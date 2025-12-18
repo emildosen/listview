@@ -23,7 +23,7 @@ const useStyles = makeStyles({
     alignItems: 'center',
     justifyContent: 'center',
     gap: '12px',
-    minHeight: '150px',
+    height: '100%',
   },
   emptyContainerDark: {
     backgroundColor: '#1a1a1a',

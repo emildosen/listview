@@ -11,6 +11,8 @@ import type {
   WebPartFilter,
   WebPartJoin,
   ChartAggregation,
+  JoinColumnConfig,
+  JoinColumnAggregation,
 } from '../types/page';
 
 export interface WebPartDataResult {
@@ -57,6 +59,29 @@ function matchesFilter(
   }
 
   const filterValue = filter.value;
+  const filterValueLower = String(filterValue).toLowerCase();
+
+  // Helper for choice column comparison - handles both single and multi-value
+  const choiceMatches = (operator: 'equals' | 'notEquals' | 'contains'): boolean => {
+    // Choice columns can be arrays (multi-value) or strings (single-value)
+    const values = Array.isArray(compareValue)
+      ? compareValue.map((v) => String(v).toLowerCase())
+      : [String(compareValue || '').toLowerCase()];
+
+    switch (operator) {
+      case 'equals':
+        // For equals, check if any value in the array matches exactly
+        return values.some((v) => v === filterValueLower);
+      case 'notEquals':
+        // For notEquals, ensure none of the values match
+        return !values.some((v) => v === filterValueLower);
+      case 'contains':
+        // For contains, check if any value contains the filter
+        return values.some((v) => v.includes(filterValueLower));
+      default:
+        return false;
+    }
+  };
 
   switch (filter.operator) {
     case 'equals':
@@ -66,7 +91,11 @@ function matchesFilter(
         const filterBool = filterValue === 'Yes' || filterValue === true;
         return boolValue === filterBool;
       }
-      return String(compareValue || '').toLowerCase() === String(filterValue).toLowerCase();
+      // Handle choice columns (both single and multi-value)
+      if (column?.choice || Array.isArray(compareValue)) {
+        return choiceMatches('equals');
+      }
+      return String(compareValue || '').toLowerCase() === filterValueLower;
 
     case 'notEquals':
       if (column?.boolean) {
@@ -75,17 +104,25 @@ function matchesFilter(
         const filterBool = filterValue === 'Yes' || filterValue === true;
         return boolValue !== filterBool;
       }
-      return String(compareValue || '').toLowerCase() !== String(filterValue).toLowerCase();
+      // Handle choice columns (both single and multi-value)
+      if (column?.choice || Array.isArray(compareValue)) {
+        return choiceMatches('notEquals');
+      }
+      return String(compareValue || '').toLowerCase() !== filterValueLower;
 
     case 'contains':
+      // Handle choice columns (both single and multi-value)
+      if (column?.choice || Array.isArray(compareValue)) {
+        return choiceMatches('contains');
+      }
       return String(compareValue || '')
         .toLowerCase()
-        .includes(String(filterValue).toLowerCase());
+        .includes(filterValueLower);
 
     case 'startsWith':
       return String(compareValue || '')
         .toLowerCase()
-        .startsWith(String(filterValue).toLowerCase());
+        .startsWith(filterValueLower);
 
     case 'greaterThan':
       if (column?.dateTime) {
@@ -210,11 +247,18 @@ export async function fetchListWebPartData(
   // Fetch items and columns
   const result = await getListItems(instance, account, siteId, listId);
   let { items } = result;
-  const { columns } = result;
+  let { columns } = result;
 
   // Apply filters
   if (config.filters && config.filters.length > 0) {
     items = applyFilters(items, config.filters, columns);
+  }
+
+  // Execute joins if configured
+  if (config.joins && config.joins.length > 0) {
+    const joinResult = await executeJoins(instance, account, items, config.joins, columns);
+    items = joinResult.items;
+    columns = joinResult.columns;
   }
 
   const totalCount = items.length;
@@ -406,7 +450,7 @@ export async function executeJoins(
   }
 
   let resultItems = [...primaryItems];
-  let resultColumns = [...primaryColumns];
+  const resultColumns = [...primaryColumns];
 
   for (const join of joins) {
     if (!join.targetSource?.siteId || !join.targetSource?.listId) {
@@ -427,31 +471,55 @@ export async function executeJoins(
 
       // Get the source column definition to determine if it's a lookup
       const sourceColumn = primaryColumns.find((c) => c.name === join.sourceColumn);
+      // Get the target column definition to determine if it's a lookup (for reverse joins)
+      const targetColumn = targetColumns.find((c) => c.name === join.targetColumn);
 
       // Build a map of target items by the join column
-      const targetMap = new Map<string, GraphListItem>();
+      // For reverse joins, we may have multiple target items per key (one-to-many)
+      const targetMap = new Map<string, GraphListItem[]>();
       for (const targetItem of targetItems) {
-        const keyValue = join.targetColumn === 'id'
-          ? targetItem.id
-          : targetItem.fields[join.targetColumn];
+        let keyValue: unknown;
+
+        if (join.targetColumn === 'id') {
+          keyValue = targetItem.id;
+        } else if (targetColumn?.lookup) {
+          // For lookup columns in target, get the LookupId
+          const lookupIdField = `${join.targetColumn}LookupId`;
+          keyValue = targetItem.fields[lookupIdField];
+        } else {
+          keyValue = targetItem.fields[join.targetColumn];
+        }
 
         if (keyValue !== null && keyValue !== undefined) {
-          targetMap.set(String(keyValue), targetItem);
+          const key = String(keyValue);
+          if (!targetMap.has(key)) {
+            targetMap.set(key, []);
+          }
+          targetMap.get(key)!.push(targetItem);
         }
       }
 
-      // Add target columns to result columns (with alias prefix if specified)
-      const columnsToAdd = targetColumns.filter((c) =>
-        join.columnsToInclude.includes(c.name)
-      );
+      // Build column configs - use columnConfigs if available, otherwise create from columnsToInclude
+      const columnConfigs: JoinColumnConfig[] = join.columnConfigs?.length
+        ? join.columnConfigs
+        : join.columnsToInclude.map((name) => ({
+            columnName: name,
+            displayName: targetColumns.find((c) => c.name === name)?.displayName || name,
+            aggregation: 'first' as JoinColumnAggregation,
+          }));
 
-      for (const col of columnsToAdd) {
+      // Add target columns to result columns (with alias prefix if specified)
+      for (const config of columnConfigs) {
+        const col = targetColumns.find((c) => c.name === config.columnName);
+        if (!col) continue;
+
         const aliasName = join.alias
           ? `${join.alias}${col.name}`
           : `${join.targetSource.listName}_${col.name}`;
-        const aliasDisplayName = join.alias
-          ? `${join.alias}${col.displayName}`
-          : `${join.targetSource.listName} - ${col.displayName}`;
+
+        // Use custom display name from config, or generate default
+        const aliasDisplayName = config.displayName
+          || (join.alias ? `${join.alias}${col.displayName}` : `${join.targetSource.listName} - ${col.displayName}`);
 
         resultColumns.push({
           ...col,
@@ -460,6 +528,36 @@ export async function executeJoins(
         });
       }
 
+      // Helper to apply aggregation to values
+      const applyAggregation = (values: unknown[], aggregation: JoinColumnAggregation): unknown => {
+        if (values.length === 0) return null;
+
+        switch (aggregation) {
+          case 'first':
+            return values[0];
+          case 'count':
+            return values.filter((v) => v !== null && v !== undefined).length;
+          case 'sum': {
+            const nums = values.map((v) => Number(v) || 0);
+            return nums.reduce((a, b) => a + b, 0);
+          }
+          case 'avg': {
+            const nums = values.map((v) => Number(v) || 0);
+            return nums.length > 0 ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+          }
+          case 'min': {
+            const nums = values.map((v) => Number(v)).filter((n) => !isNaN(n));
+            return nums.length > 0 ? Math.min(...nums) : null;
+          }
+          case 'max': {
+            const nums = values.map((v) => Number(v)).filter((n) => !isNaN(n));
+            return nums.length > 0 ? Math.max(...nums) : null;
+          }
+          default:
+            return values[0];
+        }
+      };
+
       // Merge data
       const mergedItems: GraphListItem[] = [];
 
@@ -467,7 +565,10 @@ export async function executeJoins(
         // Get the join key from the primary item
         let joinKey: string | null = null;
 
-        if (sourceColumn?.lookup) {
+        if (join.sourceColumn === 'id') {
+          // For reverse joins, use the primary item's ID
+          joinKey = primaryItem.id;
+        } else if (sourceColumn?.lookup) {
           // For lookup columns, get the LookupId
           const lookupIdField = `${join.sourceColumn}LookupId`;
           const lookupId = primaryItem.fields[lookupIdField];
@@ -482,19 +583,29 @@ export async function executeJoins(
           }
         }
 
-        // Find matching target item
-        const targetItem = joinKey ? targetMap.get(joinKey) : null;
+        // Find matching target items (may be multiple for reverse joins)
+        const matchingTargets = joinKey ? targetMap.get(joinKey) : null;
+        const hasMatches = matchingTargets && matchingTargets.length > 0;
 
-        if (targetItem || join.joinType === 'left') {
-          // Merge the fields
+        if (hasMatches || join.joinType === 'left') {
+          // Merge the fields with aggregation
           const mergedFields = { ...primaryItem.fields };
 
-          if (targetItem) {
-            for (const col of columnsToAdd) {
-              const aliasName = join.alias
-                ? `${join.alias}${col.name}`
-                : `${join.targetSource.listName}_${col.name}`;
-              mergedFields[aliasName] = targetItem.fields[col.name];
+          for (const config of columnConfigs) {
+            const col = targetColumns.find((c) => c.name === config.columnName);
+            if (!col) continue;
+
+            const aliasName = join.alias
+              ? `${join.alias}${col.name}`
+              : `${join.targetSource.listName}_${col.name}`;
+
+            if (hasMatches) {
+              // Collect values from all matching items
+              const values = matchingTargets!.map((item) => item.fields[config.columnName]);
+              // Apply aggregation
+              mergedFields[aliasName] = applyAggregation(values, config.aggregation);
+            } else {
+              mergedFields[aliasName] = null;
             }
           }
 

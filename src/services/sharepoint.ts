@@ -647,6 +647,7 @@ export async function getPages(sp: SPFI): Promise<PageDefinition[]> {
           },
           relatedSections: config.relatedSections || [],
           detailLayout: config.detailLayout,
+          reportLayout: config.reportLayout,
           description: config.description,
           createdAt: config.createdAt,
           updatedAt: config.updatedAt,

@@ -1,4 +1,5 @@
-import { useIsAuthenticated } from '@azure/msal-react';
+import { useIsAuthenticated, useMsal } from '@azure/msal-react';
+import { InteractionStatus } from '@azure/msal-browser';
 import { useNavigate, Outlet } from 'react-router-dom';
 import { useEffect } from 'react';
 import { makeStyles, Spinner } from '@fluentui/react-components';
@@ -29,25 +30,36 @@ const useStyles = makeStyles({
 
 function AppShell() {
   const styles = useStyles();
+  const { inProgress } = useMsal();
   const isAuthenticated = useIsAuthenticated();
   const navigate = useNavigate();
   const { setupStatus } = useSettings();
 
+  const isLoading = inProgress !== InteractionStatus.None;
+
   useEffect(() => {
-    if (!isAuthenticated) {
+    // Only redirect when MSAL has finished initializing and user is not authenticated
+    if (!isLoading && !isAuthenticated) {
       navigate('/');
     }
-  }, [isAuthenticated, navigate]);
+  }, [isLoading, isAuthenticated, navigate]);
 
-  if (!isAuthenticated) {
-    return null;
+  // Show loading while MSAL is initializing
+  if (isLoading || !isAuthenticated) {
+    return (
+      <AppLayout>
+        <div className={styles.loadingContainer}>
+          <Spinner size="large" />
+        </div>
+      </AppLayout>
+    );
   }
 
   const isReady = setupStatus === 'ready';
-  const isLoading = setupStatus === 'loading';
+  const isSetupLoading = setupStatus === 'loading';
 
   // Show setup wizard if not ready
-  if (!isReady && !isLoading) {
+  if (!isReady && !isSetupLoading) {
     return (
       <AppLayout>
         <div className={styles.setupContainer}>
@@ -58,7 +70,7 @@ function AppShell() {
   }
 
   // Show loading state
-  if (isLoading) {
+  if (isSetupLoading) {
     return (
       <AppLayout>
         <div className={styles.loadingContainer}>

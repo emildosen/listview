@@ -24,6 +24,9 @@ const useStyles = makeStyles({
     borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
     boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
     overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
   },
   containerDark: {
     backgroundColor: '#1a1a1a',
@@ -34,7 +37,8 @@ const useStyles = makeStyles({
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    minHeight: '250px',
+    flex: 1,
+    minHeight: 0,
     padding: '16px',
   },
   emptyState: {
@@ -141,6 +145,7 @@ export default function ChartWebPart({ config, onConfigChange }: ChartWebPartPro
       x: dp.legend,
       y: dp.data,
       color: dp.color,
+      legend: dp.legend, // Required for the legend component
     })),
   [dataPoints]);
 
@@ -162,46 +167,61 @@ export default function ChartWebPart({ config, onConfigChange }: ChartWebPartPro
     if (dataPoints.length === 0) return null;
 
     const chartType = config.chartType || 'donut';
+    const legendPosition = config.legendPosition || 'on';
+    const hideLegend = legendPosition === 'off';
+    const useAngledLabels = config.xAxisLabelStyle === 'angled';
+    // Use negative bottom margin to reclaim space from rotated labels
+    const barChartMargins = useAngledLabels
+      ? { top: 20, bottom: 20, left: 20, right: 20 }
+      : { top: 20, bottom: 25, left: 20, right: 20 };
 
     switch (chartType) {
       case 'bar':
         return (
           <VerticalBarChart
+            key={`bar-${legendPosition}-${useAngledLabels}`}
             data={barChartData}
             height={250}
             width={350}
-            hideLegend={!config.showLegend}
+            hideLegend={hideLegend}
+            rotateXAxisLables={useAngledLabels}
+            margins={barChartMargins}
           />
         );
       case 'horizontal-bar':
         // Using vertical bar as fallback since HorizontalBarChart has different API
         return (
           <VerticalBarChart
+            key={`hbar-${legendPosition}-${useAngledLabels}`}
             data={barChartData}
             height={250}
             width={350}
-            hideLegend={!config.showLegend}
+            hideLegend={hideLegend}
+            rotateXAxisLables={useAngledLabels}
+            margins={barChartMargins}
           />
         );
       case 'line':
         return (
           <LineChart
+            key={`line-${legendPosition}`}
             data={{ lineChartData: lineChartData }}
             height={250}
             width={350}
-            hideLegend={!config.showLegend}
+            hideLegend={hideLegend}
           />
         );
       case 'donut':
       default:
         return (
           <DonutChart
+            key={`donut-${legendPosition}`}
             data={donutChartData}
             innerRadius={55}
             height={250}
             width={300}
             valueInsideDonut={String(Math.round(total))}
-            hideLegend={!config.showLegend}
+            hideLegend={hideLegend}
           />
         );
     }

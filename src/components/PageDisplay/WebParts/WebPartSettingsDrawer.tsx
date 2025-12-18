@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   makeStyles,
   tokens,
@@ -13,6 +13,8 @@ import {
   Field,
   Switch,
   SpinButton,
+  Dropdown,
+  Option,
 } from '@fluentui/react-components';
 import { DismissRegular } from '@fluentui/react-icons';
 import { useMsal } from '@azure/msal-react';
@@ -26,6 +28,8 @@ import type {
   WebPartJoin,
   WebPartSort,
   ChartAggregation,
+  LegendPosition,
+  XAxisLabelStyle,
 } from '../../../types/page';
 import type { GraphListColumn } from '../../../auth/graphClient';
 import { getListColumns } from '../../../auth/graphClient';
@@ -142,11 +146,20 @@ export default function WebPartSettingsDrawer({
   const [aggregation, setAggregation] = useState<ChartAggregation>(
     webPart.type === 'chart' ? (webPart as ChartWebPartConfig).aggregation || 'count' : 'count'
   );
-  const [showLegend, setShowLegend] = useState(
-    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).showLegend !== false : true
+  const [legendPosition, setLegendPosition] = useState<LegendPosition>(
+    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).legendPosition || 'on' : 'on'
   );
   const [maxGroups, setMaxGroups] = useState(
     webPart.type === 'chart' ? (webPart as ChartWebPartConfig).maxGroups || 10 : 10
+  );
+  const [xAxisLabelStyle, setXAxisLabelStyle] = useState<XAxisLabelStyle>(
+    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).xAxisLabelStyle || 'normal' : 'normal'
+  );
+  const [chartSortBy, setChartSortBy] = useState<'label' | 'value'>(
+    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).sortBy || 'label' : 'label'
+  );
+  const [chartSortDirection, setChartSortDirection] = useState<'asc' | 'desc'>(
+    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).sortDirection || 'asc' : 'asc'
   );
 
   const [saving, setSaving] = useState(false);
@@ -195,10 +208,102 @@ export default function WebPartSettingsDrawer({
       setGroupByColumn(config.groupByColumn);
       setValueColumn(config.valueColumn);
       setAggregation(config.aggregation || 'count');
-      setShowLegend(config.showLegend !== false);
+      setLegendPosition(config.legendPosition || 'on');
       setMaxGroups(config.maxGroups || 10);
+      setXAxisLabelStyle(config.xAxisLabelStyle || 'normal');
+      setChartSortBy(config.sortBy || 'label');
+      setChartSortDirection(config.sortDirection || 'asc');
     }
   }, [webPart]);
+
+  // Helper to get aggregation label
+  const getAggregationLabel = (agg: string): string => {
+    switch (agg) {
+      case 'count': return 'Count';
+      case 'sum': return 'Sum';
+      case 'avg': return 'Avg';
+      case 'min': return 'Min';
+      case 'max': return 'Max';
+      default: return '';
+    }
+  };
+
+  // Compute available columns including joined columns
+  const availableColumns = useMemo(() => {
+    const result = [...columns];
+
+    // Add columns from joins
+    for (const join of joins) {
+      if (!join.columnConfigs?.length && !join.columnsToInclude?.length) continue;
+
+      const configs = join.columnConfigs?.length
+        ? join.columnConfigs
+        : join.columnsToInclude.map((name) => ({
+            columnName: name,
+            displayName: name,
+            aggregation: 'first' as const,
+          }));
+
+      for (const config of configs) {
+        const aliasName = join.alias
+          ? `${join.alias}${config.columnName}`
+          : `${join.targetSource?.listName || 'Joined'}_${config.columnName}`;
+
+        // Generate display name based on list, column, and aggregation
+        const aggLabel = getAggregationLabel(config.aggregation);
+        const aliasDisplayName = aggLabel
+          ? `${join.targetSource?.listName || 'Joined'} - ${config.columnName} (${aggLabel})`
+          : `${join.targetSource?.listName || 'Joined'} - ${config.columnName}`;
+
+        // Add as a synthetic column
+        result.push({
+          id: aliasName,
+          name: aliasName,
+          displayName: aliasDisplayName,
+        });
+      }
+    }
+
+    return result;
+  }, [columns, joins]);
+
+  // Auto-add new join columns to displayColumns
+  useEffect(() => {
+    const joinColumnNames = new Set<string>();
+
+    for (const join of joins) {
+      const configs = join.columnConfigs?.length
+        ? join.columnConfigs
+        : join.columnsToInclude?.map((name) => ({ columnName: name })) || [];
+
+      for (const config of configs) {
+        const aliasName = join.alias
+          ? `${join.alias}${config.columnName}`
+          : `${join.targetSource?.listName || 'Joined'}_${config.columnName}`;
+        joinColumnNames.add(aliasName);
+      }
+    }
+
+    // Find join columns that aren't in displayColumns yet and add them
+    setDisplayColumns((prev) => {
+      const existingNames = new Set(prev.map((c) => c.internalName));
+      const newColumns: typeof prev = [];
+
+      for (const col of availableColumns) {
+        if (joinColumnNames.has(col.name) && !existingNames.has(col.name)) {
+          newColumns.push({
+            internalName: col.name,
+            displayName: col.displayName,
+          });
+        }
+      }
+
+      if (newColumns.length > 0) {
+        return [...prev, ...newColumns];
+      }
+      return prev;
+    });
+  }, [joins, availableColumns]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -228,8 +333,11 @@ export default function WebPartSettingsDrawer({
           groupByColumn,
           valueColumn,
           aggregation,
-          showLegend,
+          legendPosition,
           maxGroups,
+          xAxisLabelStyle,
+          sortBy: chartSortBy,
+          sortDirection: chartSortDirection,
         } as ChartWebPartConfig;
       }
 
@@ -252,8 +360,11 @@ export default function WebPartSettingsDrawer({
     groupByColumn,
     valueColumn,
     aggregation,
-    showLegend,
+    legendPosition,
     maxGroups,
+    xAxisLabelStyle,
+    chartSortBy,
+    chartSortDirection,
     onSave,
     onClose,
   ]);
@@ -317,7 +428,7 @@ export default function WebPartSettingsDrawer({
                   <div className={styles.section}>
                     <Text className={styles.sectionTitle}>Columns</Text>
                     <ColumnSelector
-                      availableColumns={columns}
+                      availableColumns={availableColumns}
                       selectedColumns={displayColumns}
                       onChange={setDisplayColumns}
                       loading={loadingColumns}
@@ -344,8 +455,53 @@ export default function WebPartSettingsDrawer({
                     <JoinBuilder
                       joins={joins}
                       primaryColumns={columns}
+                      primaryDataSource={dataSource}
                       onChange={setJoins}
                     />
+                  </div>
+
+                  <Divider />
+
+                  {/* Sort */}
+                  <div className={styles.section}>
+                    <Text className={styles.sectionTitle}>Sort</Text>
+                    <div className={styles.displayOptionsRow}>
+                      <Field label="Sort by" style={{ flex: 1 }}>
+                        <Dropdown
+                          placeholder="Select column"
+                          value={availableColumns.find((c) => c.name === sort?.column)?.displayName || ''}
+                          selectedOptions={sort?.column ? [sort.column] : []}
+                          onOptionSelect={(_, data) => {
+                            if (data.optionValue) {
+                              setSort({ column: data.optionValue as string, direction: sort?.direction || 'asc' });
+                            } else {
+                              setSort(undefined);
+                            }
+                          }}
+                        >
+                          <Option value="">None</Option>
+                          {availableColumns.map((col) => (
+                            <Option key={col.name} value={col.name}>
+                              {col.displayName}
+                            </Option>
+                          ))}
+                        </Dropdown>
+                      </Field>
+                      {sort?.column && (
+                        <Field label="Direction">
+                          <Dropdown
+                            value={sort.direction === 'desc' ? 'Descending' : 'Ascending'}
+                            selectedOptions={[sort.direction]}
+                            onOptionSelect={(_, data) =>
+                              setSort({ ...sort, direction: data.optionValue as 'asc' | 'desc' })
+                            }
+                          >
+                            <Option value="asc">Ascending</Option>
+                            <Option value="desc">Descending</Option>
+                          </Dropdown>
+                        </Field>
+                      )}
+                    </div>
                   </div>
 
                   <Divider />
@@ -384,15 +540,21 @@ export default function WebPartSettingsDrawer({
                       groupByColumn={groupByColumn}
                       valueColumn={valueColumn}
                       aggregation={aggregation}
-                      showLegend={showLegend}
+                      legendPosition={legendPosition}
                       maxGroups={maxGroups}
+                      xAxisLabelStyle={xAxisLabelStyle}
+                      sortBy={chartSortBy}
+                      sortDirection={chartSortDirection}
                       columns={columns}
                       onChartTypeChange={setChartType}
                       onGroupByColumnChange={setGroupByColumn}
                       onValueColumnChange={setValueColumn}
                       onAggregationChange={setAggregation}
-                      onShowLegendChange={setShowLegend}
+                      onLegendPositionChange={setLegendPosition}
                       onMaxGroupsChange={setMaxGroups}
+                      onXAxisLabelStyleChange={setXAxisLabelStyle}
+                      onSortByChange={setChartSortBy}
+                      onSortDirectionChange={setChartSortDirection}
                     />
                   </div>
 

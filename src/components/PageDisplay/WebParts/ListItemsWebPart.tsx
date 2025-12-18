@@ -29,6 +29,9 @@ const useStyles = makeStyles({
     borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
     boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
     overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
   },
   containerDark: {
     backgroundColor: '#1a1a1a',
@@ -37,8 +40,9 @@ const useStyles = makeStyles({
   },
   tableWrapper: {
     overflowX: 'auto',
-    maxHeight: '400px',
     overflowY: 'auto',
+    flex: 1,
+    minHeight: 0,
   },
   table: {
     minWidth: '100%',
