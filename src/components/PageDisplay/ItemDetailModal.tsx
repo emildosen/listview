@@ -12,6 +12,10 @@ import {
   MessageBar,
   MessageBarBody,
   Link,
+  Dialog,
+  DialogSurface,
+  DialogBody,
+  DialogTitle,
   DataGrid,
   DataGridHeader,
   DataGridRow,
@@ -23,61 +27,71 @@ import {
 } from '@fluentui/react-components';
 import type { TableColumnDefinition } from '@fluentui/react-components';
 import {
-  DocumentTextRegular,
-  OpenRegular,
+  DismissRegular,
+  SettingsRegular,
   EditRegular,
   DeleteRegular,
   AddRegular,
+  OpenRegular,
 } from '@fluentui/react-icons';
 import { getListItems, type GraphListColumn, type GraphListItem } from '../../auth/graphClient';
 import { createListItem, updateListItem, deleteListItem, createSPClient, getColumnFormatting, parseColumnFormattingForLink } from '../../services/sharepoint';
-import type { PageDefinition, RelatedSection } from '../../types/page';
+import type { PageDefinition, RelatedSection, DetailLayoutConfig } from '../../types/page';
 import { useSettings } from '../../contexts/SettingsContext';
 import ItemFormModal from './ItemFormModal';
+import StatBox from './StatBox';
+import DetailCustomizeDrawer from './DetailCustomizeDrawer';
 
 const MAX_TEXT_LENGTH = 200;
 
 const useStyles = makeStyles({
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    width: '100%',
-    minWidth: 0,
+  surface: {
+    maxWidth: '1000px',
+    width: '95vw',
+    maxHeight: '90vh',
   },
-  emptyState: {
-    height: '100%',
+  dialogTitle: {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '16px',
+  },
+  titleText: {
+    fontSize: tokens.fontSizeBase500,
+    fontWeight: tokens.fontWeightSemibold,
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  headerActions: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'column',
-    color: tokens.colorNeutralForeground2,
+    gap: '4px',
+    flexShrink: 0,
   },
-  emptyIcon: {
-    opacity: 0.3,
-    marginBottom: '12px',
-  },
-  header: {
-    paddingBottom: '16px',
-    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
-  },
-  headerTitle: {
-    fontSize: tokens.fontSizeBase500,
-    fontWeight: tokens.fontWeightBold,
-  },
-  content: {
-    paddingTop: '16px',
+  statBoxContainer: {
     display: 'flex',
-    flexDirection: 'column',
-    gap: '24px',
-    width: '100%',
-    minWidth: 0,
+    flexWrap: 'wrap',
+    gap: '8px',
+  },
+  body: {
+    display: 'block',
+    overflowY: 'auto',
+    maxHeight: 'calc(90vh - 80px)',
+    '& > *': {
+      marginBottom: '24px',
+    },
+    '& > *:last-child': {
+      marginBottom: 0,
+    },
   },
   cardBody: {
     padding: '16px',
     width: '100%',
     boxSizing: 'border-box',
-    minWidth: 0,
-    overflowX: 'auto',
   },
   cardTitle: {
     fontWeight: tokens.fontWeightMedium,
@@ -139,14 +153,58 @@ const useStyles = makeStyles({
   actionsCell: {
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'flex-end',
     gap: '4px',
+    width: '100%',
+  },
+  actionsColumn: {
+    width: '100px',
+    minWidth: '100px',
+    maxWidth: '100px',
   },
   dataGridWrapper: {
     width: '100%',
-    overflowX: 'auto',
+    '& [role="row"]': {
+      display: 'flex',
+      width: '100%',
+    },
+    // All cells get overflow handling
+    '& [role="columnheader"], & [role="gridcell"]': {
+      overflow: 'hidden',
+    },
+    // Data columns share available space
+    '& [role="columnheader"]:not(:last-child), & [role="gridcell"]:not(:last-child)': {
+      flex: '1 1 0',
+      minWidth: 0,
+    },
+    // Actions column fixed width
+    '& [role="columnheader"]:last-child, & [role="gridcell"]:last-child': {
+      flex: '0 0 100px',
+    },
   },
-  addButton: {
-    marginBottom: '12px',
+  cellText: {
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    maxWidth: '100%',
+  },
+  cellTextExpanded: {
+    display: 'block',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+  },
+  cellShowMore: {
+    color: tokens.colorBrandForeground1,
+    cursor: 'pointer',
+    fontSize: tokens.fontSizeBase200,
+    marginTop: '4px',
+    ':hover': {
+      textDecoration: 'underline',
+    },
   },
 });
 
@@ -173,20 +231,123 @@ function TruncatedText({ text, maxLength = MAX_TEXT_LENGTH }: { text: string; ma
   );
 }
 
-interface DetailPanelProps {
-  page: PageDefinition;
-  columns: GraphListColumn[];
-  item: GraphListItem | null;
-  spClient: SPFI | null;
+// Expandable cell text for DataGrid - shows 2 lines with "Show more" toggle
+function ExpandableCellText({ text }: { text: string }) {
+  const styles = useStyles();
+  const [expanded, setExpanded] = useState(false);
+  const textRef = useRef<HTMLDivElement>(null);
+  const [isTruncated, setIsTruncated] = useState(false);
+
+  useEffect(() => {
+    const el = textRef.current;
+    if (el) {
+      // Check if text is actually truncated (scrollHeight > clientHeight)
+      setIsTruncated(el.scrollHeight > el.clientHeight + 2);
+    }
+  }, [text]);
+
+  if (!text || typeof text !== 'string' || text.length < 50) {
+    return <>{text}</>;
+  }
+
+  return (
+    <div>
+      <div
+        ref={textRef}
+        className={expanded ? styles.cellTextExpanded : styles.cellText}
+      >
+        {text}
+      </div>
+      {(isTruncated || expanded) && (
+        <span
+          className={styles.cellShowMore}
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(!expanded);
+          }}
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </span>
+      )}
+    </div>
+  );
 }
 
-function DetailPanel({ page, columns, item, spClient }: DetailPanelProps) {
-  const styles = useStyles();
+// Helper to get default layout config
+function getDefaultLayoutConfig(page: PageDefinition): DetailLayoutConfig {
+  return {
+    columnSettings: page.displayColumns.map(col => ({
+      internalName: col.internalName,
+      visible: true,
+      displayStyle: 'list' as const,
+    })),
+    relatedSectionOrder: page.relatedSections.map(s => s.id),
+  };
+}
 
-  // Track which columns have link formatting (from custom formatter JSON)
+// Helper to merge existing config with defaults for new columns/sections
+function getEffectiveLayoutConfig(page: PageDefinition): DetailLayoutConfig {
+  const defaults = getDefaultLayoutConfig(page);
+
+  if (!page.detailLayout) {
+    return defaults;
+  }
+
+  // Merge column settings - preserve order from existing settings
+  const validColumnNames = new Set(page.displayColumns.map(c => c.internalName));
+  const existingNames = new Set(page.detailLayout.columnSettings.map(s => s.internalName));
+
+  // Keep existing settings in order, filtering out any that no longer exist
+  const existingSettings = page.detailLayout.columnSettings.filter(s =>
+    validColumnNames.has(s.internalName)
+  );
+
+  // Add new columns at the end with default settings
+  const newColumns = page.displayColumns
+    .filter(col => !existingNames.has(col.internalName))
+    .map(col => ({
+      internalName: col.internalName,
+      visible: true,
+      displayStyle: 'list' as const,
+    }));
+
+  const columnSettings = [...existingSettings, ...newColumns];
+
+  // Merge section order
+  let relatedSectionOrder: string[];
+  if (page.detailLayout.relatedSectionOrder) {
+    const existingOrder = page.detailLayout.relatedSectionOrder;
+    const allIds = new Set(page.relatedSections.map(s => s.id));
+    // Keep existing order for sections that still exist, add new ones at end
+    const orderedIds = existingOrder.filter(id => allIds.has(id));
+    const newIds = page.relatedSections
+      .map(s => s.id)
+      .filter(id => !existingOrder.includes(id));
+    relatedSectionOrder = [...orderedIds, ...newIds];
+  } else {
+    relatedSectionOrder = defaults.relatedSectionOrder!;
+  }
+
+  return { columnSettings, relatedSectionOrder };
+}
+
+interface ItemDetailModalProps {
+  page: PageDefinition;
+  columns: GraphListColumn[];
+  item: GraphListItem;
+  spClient: SPFI | null;
+  onClose: () => void;
+  onPageUpdate: (page: PageDefinition) => Promise<void>;
+}
+
+function ItemDetailModal({ page, columns, item, spClient, onClose, onPageUpdate }: ItemDetailModalProps) {
+  const styles = useStyles();
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+
+  // Track which columns have link formatting
   const [linkFormattedColumns, setLinkFormattedColumns] = useState<Set<string>>(new Set());
 
-  // Fetch column formatting when spClient and list are available
+  // Fetch column formatting
   useEffect(() => {
     if (!spClient || !page.primarySource?.listId) return;
 
@@ -208,7 +369,30 @@ function DetailPanel({ page, columns, item, spClient }: DetailPanelProps) {
     fetchFormatting();
   }, [spClient, page.primarySource?.listId]);
 
-  // Check if column should render as link (either hyperlinkOrPicture type or custom link formatting)
+  // Get effective layout configuration
+  const layoutConfig = useMemo(() => getEffectiveLayoutConfig(page), [page]);
+
+  // Separate visible columns by display style
+  const { statColumns, listColumns } = useMemo(() => {
+    const visible = layoutConfig.columnSettings.filter(c => c.visible);
+    const titleColumn = page.searchConfig?.titleColumn || 'Title';
+    // Exclude title column from both lists (it's shown in the header)
+    return {
+      statColumns: visible.filter(c => c.displayStyle === 'stat' && c.internalName !== titleColumn),
+      listColumns: visible.filter(c => c.displayStyle === 'list' && c.internalName !== titleColumn),
+    };
+  }, [layoutConfig, page.searchConfig?.titleColumn]);
+
+  // Order related sections
+  const orderedSections = useMemo(() => {
+    if (!layoutConfig.relatedSectionOrder) return page.relatedSections;
+    const sectionMap = new Map(page.relatedSections.map(s => [s.id, s]));
+    return layoutConfig.relatedSectionOrder
+      .map(id => sectionMap.get(id))
+      .filter((s): s is RelatedSection => s !== undefined);
+  }, [page.relatedSections, layoutConfig.relatedSectionOrder]);
+
+  // Check if column should render as link
   const isLinkColumn = useCallback((columnName: string): boolean => {
     const col = columns.find((c) => c.name === columnName);
     if (col?.hyperlinkOrPicture) return true;
@@ -216,7 +400,6 @@ function DetailPanel({ page, columns, item, spClient }: DetailPanelProps) {
   }, [columns, linkFormattedColumns]);
 
   const getDisplayValue = useCallback((columnName: string): string => {
-    if (!item) return '-';
     const value = item.fields[columnName];
     if (value === null || value === undefined) return '-';
     if (typeof value === 'object') {
@@ -232,13 +415,17 @@ function DetailPanel({ page, columns, item, spClient }: DetailPanelProps) {
       return value.toLocaleDateString();
     }
     return String(value);
-  }, [item]);
+  }, [item.fields]);
+
+  const getColumnDisplayName = useCallback((internalName: string): string => {
+    const col = page.displayColumns.find(c => c.internalName === internalName);
+    return col?.displayName || internalName;
+  }, [page.displayColumns]);
 
   const renderValue = useCallback((columnName: string) => {
     const value = getDisplayValue(columnName);
     if (value === '-') return value;
 
-    // Render link columns as clickable links
     if (isLinkColumn(columnName)) {
       return (
         <Link
@@ -255,58 +442,97 @@ function DetailPanel({ page, columns, item, spClient }: DetailPanelProps) {
     return <TruncatedText text={value} />;
   }, [getDisplayValue, isLinkColumn]);
 
-  // Early return for empty state (after all hooks)
-  if (!item) {
-    return (
-      <div className={styles.emptyState}>
-        <DocumentTextRegular fontSize={48} className={styles.emptyIcon} />
-        <Text>Select an item to view details</Text>
-      </div>
-    );
-  }
+  const handleSaveConfig = async (config: DetailLayoutConfig, relatedSections?: RelatedSection[]) => {
+    const updates: Partial<PageDefinition> = { detailLayout: config };
+    if (relatedSections) {
+      updates.relatedSections = relatedSections;
+    }
+    await onPageUpdate({ ...page, ...updates });
+    setCustomizeOpen(false);
+  };
 
   const titleColumn = page.searchConfig?.titleColumn || 'Title';
   const titleValue = getDisplayValue(titleColumn);
 
   return (
-    <div className={styles.container}>
-      {/* Header */}
-      <div className={styles.header}>
-        <Text className={styles.headerTitle}>{titleValue}</Text>
-      </div>
+    <>
+      <Dialog open onOpenChange={(_, data) => !data.open && onClose()}>
+        <DialogSurface className={styles.surface}>
+          <DialogTitle className={styles.dialogTitle}>
+            <Text className={styles.titleText}>{titleValue}</Text>
+            <div className={styles.headerActions}>
+              <Button
+                appearance="subtle"
+                icon={<SettingsRegular />}
+                onClick={() => setCustomizeOpen(true)}
+              >
+                Customize
+              </Button>
+              <Button
+                appearance="subtle"
+                icon={<DismissRegular />}
+                onClick={onClose}
+                aria-label="Close"
+              />
+            </div>
+          </DialogTitle>
 
-      {/* Content */}
-      <div className={styles.content}>
-        {/* Details Section */}
-        <Card className={styles.cardBody}>
-          <Text className={styles.cardTitle}>Details</Text>
-          <div className={styles.detailsGrid}>
-            {page.displayColumns
-              .filter((col) => col.internalName !== titleColumn)
-              .map((col) => (
-                <div key={col.internalName} className={styles.detailItem}>
-                  <Text className={styles.detailLabel}>{col.displayName}</Text>
-                  <Text className={styles.detailValue}>
-                    {renderValue(col.internalName)}
-                  </Text>
+          <DialogBody className={styles.body}>
+            {/* Stat Boxes */}
+            {statColumns.length > 0 && (
+              <div className={styles.statBoxContainer}>
+                {statColumns.map(col => (
+                  <StatBox
+                    key={col.internalName}
+                    label={getColumnDisplayName(col.internalName)}
+                    value={getDisplayValue(col.internalName)}
+                  />
+                ))}
+              </div>
+            )}
+            {/* Details Card */}
+            {listColumns.length > 0 && (
+              <Card className={styles.cardBody}>
+                <Text className={styles.cardTitle}>Details</Text>
+                <div className={styles.detailsGrid}>
+                  {listColumns.map(col => (
+                    <div key={col.internalName} className={styles.detailItem}>
+                      <Text className={styles.detailLabel}>
+                        {getColumnDisplayName(col.internalName)}
+                      </Text>
+                      <Text className={styles.detailValue}>
+                        {renderValue(col.internalName)}
+                      </Text>
+                    </div>
+                  ))}
                 </div>
-              ))}
-          </div>
-        </Card>
+              </Card>
+            )}
 
-        {/* Related Sections */}
-        {page.relatedSections?.map((section) => (
-          <RelatedSectionComponent
-            key={section.id}
-            section={section}
-            parentItem={item}
-          />
-        ))}
-      </div>
-    </div>
+            {/* Related Sections */}
+            {orderedSections.map(section => (
+              <RelatedSectionComponent
+                key={section.id}
+                section={section}
+                parentItem={item}
+              />
+            ))}
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+
+      {/* Customize Drawer */}
+      <DetailCustomizeDrawer
+        page={page}
+        open={customizeOpen}
+        onClose={() => setCustomizeOpen(false)}
+        onSave={handleSaveConfig}
+      />
+    </>
   );
 }
 
+// Related Section Component (extracted from DetailPanel)
 interface RowData {
   id: string;
   _item: GraphListItem;
@@ -332,30 +558,25 @@ function RelatedSectionComponent({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Site-specific SP client for this related list
   const spClientRef = useRef<SPFI | null>(null);
   const [spClientReady, setSpClientReady] = useState(false);
 
-  // Modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
   const [editingItem, setEditingItem] = useState<GraphListItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  // Get siteUrl - from section source or look up from enabledLists for backwards compat
   const siteUrl = useMemo(() => {
     if (section.source.siteUrl) {
       return section.source.siteUrl;
     }
-    // Backwards compatibility: look up from enabledLists
     const list = enabledLists.find(
       (l) => l.siteId === section.source.siteId && l.listId === section.source.listId
     );
     return list?.siteUrl;
   }, [section.source.siteUrl, section.source.siteId, section.source.listId, enabledLists]);
 
-  // Create site-specific SP client
   useEffect(() => {
     if (!account || !siteUrl) {
       setSpClientReady(false);
@@ -376,7 +597,6 @@ function RelatedSectionComponent({
     initClient();
   }, [instance, account, siteUrl]);
 
-  // Load related items
   const loadRelatedItems = useCallback(async () => {
     if (!account || !section.source.siteId || !section.source.listId) {
       setLoading(false);
@@ -394,26 +614,22 @@ function RelatedSectionComponent({
         section.source.listId
       );
 
-      // Filter items by lookup column matching parent item ID
       const parentId = parentItem.id;
       let filteredItems = result.items.filter((item) => {
         const lookupValue = item.fields[`${section.lookupColumn}LookupId`];
         return String(lookupValue) === parentId;
       });
 
-      // Sort items if defaultSort is configured
       if (section.defaultSort?.column) {
         const { column, direction } = section.defaultSort;
         filteredItems = [...filteredItems].sort((a, b) => {
           const aVal = a.fields[column];
           const bVal = b.fields[column];
 
-          // Handle null/undefined
           if (aVal == null && bVal == null) return 0;
           if (aVal == null) return direction === 'asc' ? 1 : -1;
           if (bVal == null) return direction === 'asc' ? -1 : 1;
 
-          // Compare values
           let comparison = 0;
           if (typeof aVal === 'string' && typeof bVal === 'string') {
             comparison = aVal.localeCompare(bVal);
@@ -474,8 +690,6 @@ function RelatedSectionComponent({
 
     setSaving(true);
     try {
-      // Add lookup field for parent relationship
-      // SharePoint REST API uses {FieldName}Id for setting lookup values
       const saveFields = {
         ...fields,
         [`${section.lookupColumn}Id`]: parseInt(parentItem.id, 10),
@@ -502,7 +716,6 @@ function RelatedSectionComponent({
     }
   };
 
-  // Format cell value for display
   const formatCellValue = useCallback((value: unknown): string => {
     if (value === null || value === undefined) return '-';
     if (typeof value === 'object') {
@@ -518,7 +731,6 @@ function RelatedSectionComponent({
     return String(value);
   }, []);
 
-  // Convert items to row data
   const rowData = useMemo((): RowData[] => {
     return items.map((item) => ({
       id: item.id,
@@ -527,7 +739,6 @@ function RelatedSectionComponent({
     }));
   }, [items]);
 
-  // Generate Fluent UI DataGrid column definitions
   const columnDefs = useMemo((): TableColumnDefinition<RowData>[] => {
     const cols: TableColumnDefinition<RowData>[] = section.displayColumns.map((col) =>
       createTableColumn<RowData>({
@@ -539,18 +750,19 @@ function RelatedSectionComponent({
         },
         renderHeaderCell: () => col.displayName,
         renderCell: (item) => (
-          <TableCellLayout truncate>
-            {formatCellValue(item[col.internalName])}
+          <TableCellLayout>
+            <ExpandableCellText text={formatCellValue(item[col.internalName])} />
           </TableCellLayout>
         ),
       })
     );
 
-    // Add actions column
     cols.push(
       createTableColumn<RowData>({
         columnId: '_actions',
-        renderHeaderCell: () => 'Actions',
+        renderHeaderCell: () => (
+          <span style={{ display: 'block', textAlign: 'right', width: '100%' }}>Actions</span>
+        ),
         renderCell: (item) => {
           const sharePointUrl = siteUrl
             ? `${siteUrl}/_layouts/15/listform.aspx?PageType=4&ListId=${encodeURIComponent(section.source.listId)}&ID=${item.id}`
@@ -658,7 +870,6 @@ function RelatedSectionComponent({
         </div>
       )}
 
-      {/* Item Form Modal */}
       {modalOpen && (
         <ItemFormModal
           mode={modalMode}
@@ -675,4 +886,4 @@ function RelatedSectionComponent({
   );
 }
 
-export default DetailPanel;
+export default ItemDetailModal;

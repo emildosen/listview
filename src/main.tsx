@@ -4,6 +4,7 @@ import { MsalProvider } from '@azure/msal-react';
 import './index.css';
 import App from './App.tsx';
 import { msalConfig } from './auth/msalConfig';
+import { TokenRefreshProvider } from './auth/TokenRefreshProvider';
 
 const msalInstance = new PublicClientApplication(msalConfig);
 
@@ -23,7 +24,9 @@ msalInstance.initialize().then(() => {
 
   createRoot(document.getElementById('root')!).render(
     <MsalProvider instance={msalInstance}>
-      <App />
+      <TokenRefreshProvider>
+        <App />
+      </TokenRefreshProvider>
     </MsalProvider>
   );
 });

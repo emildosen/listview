@@ -18,6 +18,8 @@ import {
   TableBody,
   TableCell,
   TableCellLayout,
+  Input,
+  shorthands,
 } from '@fluentui/react-components';
 import {
   AddRegular,
@@ -25,6 +27,8 @@ import {
   SettingsRegular,
   DeleteRegular,
   ArrowLeftRegular,
+  SearchRegular,
+  FilterRegular,
 } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
 
@@ -41,7 +45,7 @@ const useStyles = makeStyles({
     color: 'inherit',
   },
   content: {
-    maxWidth: '896px',
+    maxWidth: '1024px',
   },
   header: {
     display: 'flex',
@@ -52,6 +56,83 @@ const useStyles = makeStyles({
   description: {
     color: tokens.colorNeutralForeground2,
     marginTop: '4px',
+  },
+  // Azure style: sharp edges, subtle shadow, gradient border
+  tableCard: {
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
+    borderRadius: '2px',
+    overflow: 'hidden',
+    backgroundColor: tokens.colorNeutralBackground1,
+    border: '1px solid transparent',
+    borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
+  },
+  // Search bar at top - full width
+  searchBar: {
+    padding: '16px',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  searchInput: {
+    width: '100%',
+  },
+  // Filter toolbar below search
+  toolbar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 16px',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  toolbarLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  toolbarRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    paddingTop: '4px',
+  },
+  itemCount: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+  },
+  // Table styles
+  tableWrapper: {
+    overflow: 'auto',
+  },
+  table: {
+    minWidth: '100%',
+  },
+  tableHeader: {
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  tableHeaderCell: {
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase200,
+    textTransform: 'uppercase',
+    letterSpacing: '0.02em',
+  },
+  tableRow: {
+    cursor: 'pointer',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground1Hover,
+    },
+    ':last-child': {
+      borderBottom: 'none',
+    },
+  },
+  tableCell: {
+    ...shorthands.padding('12px', '16px'),
+  },
+  // Empty state card - Azure style with gradient border
+  emptyCard: {
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
+    borderRadius: '2px',
+    border: '1px solid transparent',
+    borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
   },
   cardBody: {
     padding: '48px',
@@ -77,12 +158,6 @@ const useStyles = makeStyles({
     marginTop: '32px',
     paddingTop: '24px',
     borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
-  },
-  tableRow: {
-    cursor: 'pointer',
-    ':hover': {
-      backgroundColor: tokens.colorNeutralBackground3,
-    },
   },
   pageDescription: {
     fontSize: tokens.fontSizeBase200,
@@ -110,6 +185,7 @@ function PagesPage() {
   const { pages, removePage } = useSettings();
   const navigate = useNavigate();
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this page?')) {
@@ -125,6 +201,13 @@ function PagesPage() {
       setDeletingId(null);
     }
   };
+
+  const filteredPages = pages.filter(
+    (page) =>
+      page.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      page.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      page.primarySource?.listName?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className={styles.container}>
@@ -156,7 +239,7 @@ function PagesPage() {
 
         {/* Empty State */}
         {pages.length === 0 && (
-          <Card>
+          <Card className={styles.emptyCard}>
             <div className={styles.cardBody}>
               <DocumentTextRegular fontSize={48} className={styles.emptyIcon} />
               <Text className={styles.emptyText}>No custom pages created yet</Text>
@@ -172,71 +255,99 @@ function PagesPage() {
 
         {/* Pages List */}
         {pages.length > 0 && (
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHeaderCell>Name</TableHeaderCell>
-                  <TableHeaderCell>Primary List</TableHeaderCell>
-                  <TableHeaderCell>Related Sections</TableHeaderCell>
-                  <TableHeaderCell style={{ width: '96px' }}>Actions</TableHeaderCell>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pages.map((page) => (
-                  <TableRow
-                    key={page.id}
-                    className={styles.tableRow}
-                    onClick={() => navigate(`/app/pages/${page.id}`)}
-                  >
-                    <TableCell>
-                      <TableCellLayout>
-                        <div>
-                          <Text weight="medium">{page.name}</Text>
-                          {page.description && (
-                            <div className={styles.pageDescription}>
-                              {page.description}
-                            </div>
-                          )}
-                        </div>
-                      </TableCellLayout>
-                    </TableCell>
-                    <TableCell>
-                      <Text className={styles.sourceInfo}>
-                        {page.primarySource?.listName || 'Not configured'}
-                      </Text>
-                    </TableCell>
-                    <TableCell>
-                      <Text className={styles.sourceInfo}>
-                        {page.relatedSections?.length || 0} section
-                        {(page.relatedSections?.length || 0) !== 1 ? 's' : ''}
-                      </Text>
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <div className={styles.actionsCell}>
-                        <Button
-                          appearance="subtle"
-                          size="small"
-                          icon={<SettingsRegular />}
-                          title="Edit page"
-                          onClick={() => navigate(`/app/pages/${page.id}/edit`)}
-                        />
-                        <Button
-                          appearance="subtle"
-                          size="small"
-                          icon={deletingId === page.id ? <Spinner size="tiny" /> : <DeleteRegular />}
-                          className={styles.deleteButton}
-                          onClick={() => page.id && handleDelete(page.id)}
-                          disabled={deletingId === page.id}
-                          title="Delete page"
-                        />
-                      </div>
-                    </TableCell>
+          <div className={styles.tableCard}>
+            {/* Search bar - full width */}
+            <div className={styles.searchBar}>
+              <Input
+                className={styles.searchInput}
+                contentBefore={<SearchRegular />}
+                placeholder="Search pages..."
+                value={searchQuery}
+                onChange={(_, data) => setSearchQuery(data.value)}
+              />
+            </div>
+
+            {/* Filter toolbar */}
+            <div className={styles.toolbar}>
+              <div className={styles.toolbarLeft}>
+                <Button appearance="subtle" icon={<FilterRegular />} size="small">
+                  Filter
+                </Button>
+              </div>
+              <div className={styles.toolbarRight}>
+                <Text className={styles.itemCount}>
+                  {filteredPages.length} {filteredPages.length === 1 ? 'item' : 'items'}
+                </Text>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className={styles.tableWrapper}>
+              <Table className={styles.table}>
+                <TableHeader className={styles.tableHeader}>
+                  <TableRow>
+                    <TableHeaderCell className={styles.tableHeaderCell}>Name</TableHeaderCell>
+                    <TableHeaderCell className={styles.tableHeaderCell}>Primary List</TableHeaderCell>
+                    <TableHeaderCell className={styles.tableHeaderCell}>Related Sections</TableHeaderCell>
+                    <TableHeaderCell className={styles.tableHeaderCell} style={{ width: '96px' }}>Actions</TableHeaderCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+                </TableHeader>
+                <TableBody>
+                  {filteredPages.map((page) => (
+                    <TableRow
+                      key={page.id}
+                      className={styles.tableRow}
+                      onClick={() => navigate(`/app/pages/${page.id}`)}
+                    >
+                      <TableCell className={styles.tableCell}>
+                        <TableCellLayout>
+                          <div>
+                            <Text weight="medium">{page.name}</Text>
+                            {page.description && (
+                              <div className={styles.pageDescription}>
+                                {page.description}
+                              </div>
+                            )}
+                          </div>
+                        </TableCellLayout>
+                      </TableCell>
+                      <TableCell className={styles.tableCell}>
+                        <Text className={styles.sourceInfo}>
+                          {page.primarySource?.listName || 'Not configured'}
+                        </Text>
+                      </TableCell>
+                      <TableCell className={styles.tableCell}>
+                        <Text className={styles.sourceInfo}>
+                          {page.relatedSections?.length || 0} section
+                          {(page.relatedSections?.length || 0) !== 1 ? 's' : ''}
+                        </Text>
+                      </TableCell>
+                      <TableCell className={styles.tableCell} onClick={(e) => e.stopPropagation()}>
+                        <div className={styles.actionsCell}>
+                          <Button
+                            appearance="subtle"
+                            size="small"
+                            icon={<SettingsRegular />}
+                            title="Edit page"
+                            onClick={() => navigate(`/app/pages/${page.id}/edit`)}
+                          />
+                          <Button
+                            appearance="subtle"
+                            size="small"
+                            icon={deletingId === page.id ? <Spinner size="tiny" /> : <DeleteRegular />}
+                            className={styles.deleteButton}
+                            onClick={() => page.id && handleDelete(page.id)}
+                            disabled={deletingId === page.id}
+                            title="Delete page"
+                          />
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         )}
 
         {/* Back Button */}

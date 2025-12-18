@@ -1,5 +1,17 @@
 // Page type definitions for the Custom Pages feature
 
+// Detail modal layout configuration (for customizable popup)
+export interface DetailLayoutConfig {
+  columnSettings: DetailColumnSetting[];
+  relatedSectionOrder?: string[];  // Array of RelatedSection.id values for ordering
+}
+
+export interface DetailColumnSetting {
+  internalName: string;
+  visible: boolean;
+  displayStyle: 'stat' | 'list';  // 'stat' = badge at top, 'list' = detail grid
+}
+
 export interface PageDefinition {
   id?: string;                        // SharePoint item ID
   name: string;                       // Display name (e.g., "Student Details")
@@ -14,6 +26,9 @@ export interface PageDefinition {
 
   // Related lists configuration
   relatedSections: RelatedSection[];  // Related lists to show (e.g., Correspondence)
+
+  // Detail modal layout configuration
+  detailLayout?: DetailLayoutConfig;
 
   createdAt?: string;
   updatedAt?: string;

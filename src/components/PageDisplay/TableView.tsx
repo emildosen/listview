@@ -14,17 +14,13 @@ import {
   TableHeaderCell,
   TableBody,
   TableCell,
-  Dialog,
-  DialogSurface,
-  DialogBody,
-  DialogTitle,
   Field,
   Link,
 } from '@fluentui/react-components';
 import { SearchRegular, DismissRegular, DocumentRegular } from '@fluentui/react-icons';
 import type { GraphListColumn, GraphListItem } from '../../auth/graphClient';
 import type { PageDefinition } from '../../types/page';
-import DetailPanel from './DetailPanel';
+import ItemDetailModal from './ItemDetailModal';
 
 // URL regex pattern
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
@@ -105,6 +101,7 @@ interface TableViewProps {
   onFilterChange: (filters: Record<string, string>) => void;
   onSearchChange: (text: string) => void;
   spClient: SPFI | null;
+  onPageUpdate: (page: PageDefinition) => Promise<void>;
 }
 
 const useStyles = makeStyles({
@@ -113,42 +110,68 @@ const useStyles = makeStyles({
     gap: '24px',
     height: '100%',
   },
+  // Filter panel - Azure style: sharp edges, subtle shadow
   filterPanel: {
-    width: '256px',
+    width: '280px',
     flexShrink: 0,
   },
   filterPanelInner: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderRadius: tokens.borderRadiusMedium,
-    padding: '16px',
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: '2px',
+    border: '1px solid transparent',
+    borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
     height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  // Search at top - full width
+  searchSection: {
+    padding: '12px',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
   },
   filterTitle: {
-    fontWeight: tokens.fontWeightMedium,
-    marginBottom: '16px',
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase200,
+    textTransform: 'uppercase',
+    letterSpacing: '0.02em',
+    color: tokens.colorNeutralForeground2,
+    padding: '12px 12px 8px',
   },
   filterList: {
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
-    marginBottom: '16px',
+    padding: '0 12px 12px',
+    flex: 1,
+    overflow: 'auto',
   },
   searchContainer: {
     position: 'relative',
   },
   resultsCount: {
-    marginTop: '16px',
+    padding: '12px',
+    paddingTop: '10px',
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
     fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground2,
+    color: tokens.colorNeutralForeground3,
   },
+  // Table container - Azure style: sharp edges, subtle shadow
   tableContainer: {
     flex: 1,
-    overflow: 'auto',
+    overflow: 'hidden',
   },
   tableWrapper: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: '2px',
+    border: '1px solid transparent',
+    borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
+    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
     height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
   },
   emptyTable: {
     display: 'flex',
@@ -159,22 +182,27 @@ const useStyles = makeStyles({
   },
   tableScrollContainer: {
     overflowX: 'auto',
-    height: '100%',
+    flex: 1,
+  },
+  tableHeader: {
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  tableHeaderCell: {
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground2,
+    textTransform: 'uppercase',
+    letterSpacing: '0.02em',
   },
   tableRow: {
     cursor: 'pointer',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     ':hover': {
-      backgroundColor: tokens.colorNeutralBackground3,
+      backgroundColor: tokens.colorNeutralBackground1Hover,
     },
-  },
-  dialogSurface: {
-    maxWidth: '1200px',
-    width: '100%',
-    height: '90vh',
-  },
-  dialogBody: {
-    height: '100%',
-    overflow: 'auto',
+    ':last-child': {
+      borderBottom: 'none',
+    },
   },
 });
 
@@ -187,6 +215,7 @@ function TableView({
   onFilterChange,
   onSearchChange,
   spClient,
+  onPageUpdate,
 }: TableViewProps) {
   const styles = useStyles();
   const [selectedItem, setSelectedItem] = useState<GraphListItem | null>(null);
@@ -251,6 +280,28 @@ function TableView({
         {/* Filter Panel */}
         <div className={styles.filterPanel}>
           <div className={styles.filterPanelInner}>
+            {/* Search at top - full width */}
+            <div className={styles.searchSection}>
+              <Input
+                placeholder="Search..."
+                value={searchText}
+                onChange={(_e, data) => onSearchChange(data.value)}
+                contentBefore={<SearchRegular />}
+                contentAfter={
+                  searchText ? (
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={<DismissRegular />}
+                      onClick={() => onSearchChange('')}
+                    />
+                  ) : undefined
+                }
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            {/* Filter section */}
             <Text className={styles.filterTitle}>Filters</Text>
 
             {/* Dropdown Filters */}
@@ -281,29 +332,6 @@ function TableView({
               </div>
             )}
 
-            {/* Text Search */}
-            <Field label="Search" size="small">
-              <div className={styles.searchContainer}>
-                <Input
-                  placeholder="Search..."
-                  value={searchText}
-                  onChange={(_e, data) => onSearchChange(data.value)}
-                  size="small"
-                  contentBefore={<SearchRegular />}
-                  contentAfter={
-                    searchText ? (
-                      <Button
-                        appearance="subtle"
-                        size="small"
-                        icon={<DismissRegular />}
-                        onClick={() => onSearchChange('')}
-                      />
-                    ) : undefined
-                  }
-                />
-              </div>
-            </Field>
-
             {/* Results count */}
             <Text className={styles.resultsCount}>
               {items.length} result{items.length !== 1 ? 's' : ''}
@@ -321,10 +349,10 @@ function TableView({
             ) : (
               <div className={styles.tableScrollContainer}>
                 <Table>
-                  <TableHeader>
+                  <TableHeader className={styles.tableHeader}>
                     <TableRow>
                       {(page.searchConfig?.tableColumns || page.displayColumns).map((col) => (
-                        <TableHeaderCell key={col.internalName}>
+                        <TableHeaderCell key={col.internalName} className={styles.tableHeaderCell}>
                           {col.displayName}
                         </TableHeaderCell>
                       ))}
@@ -353,34 +381,16 @@ function TableView({
       </div>
 
       {/* Detail Modal */}
-      <Dialog
-        open={selectedItem !== null}
-        onOpenChange={(_event, data) => {
-          if (!data.open) setSelectedItem(null);
-        }}
-      >
-        <DialogSurface className={styles.dialogSurface}>
-          <DialogTitle
-            action={
-              <Button
-                appearance="subtle"
-                icon={<DismissRegular />}
-                onClick={() => setSelectedItem(null)}
-              />
-            }
-          >
-            Item Details
-          </DialogTitle>
-          <DialogBody className={styles.dialogBody}>
-            <DetailPanel
-              page={page}
-              columns={columns}
-              item={selectedItem}
-              spClient={spClient}
-            />
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
+      {selectedItem && (
+        <ItemDetailModal
+          page={page}
+          columns={columns}
+          item={selectedItem}
+          spClient={spClient}
+          onClose={() => setSelectedItem(null)}
+          onPageUpdate={onPageUpdate}
+        />
+      )}
     </>
   );
 }

@@ -12,11 +12,12 @@ import {
   MessageBar,
   MessageBarBody,
 } from '@fluentui/react-components';
+import { DocumentTextRegular } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { getListItems, type GraphListColumn, type GraphListItem } from '../auth/graphClient';
 import SearchPanel from '../components/PageDisplay/SearchPanel';
-import DetailPanel from '../components/PageDisplay/DetailPanel';
 import TableView from '../components/PageDisplay/TableView';
+import ItemDetailModal from '../components/PageDisplay/ItemDetailModal';
 import type { PageDefinition } from '../types/page';
 
 const useStyles = makeStyles({
@@ -59,6 +60,20 @@ const useStyles = makeStyles({
     flex: 1,
     overflow: 'auto',
   },
+  emptyState: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '12px',
+    color: '#6b7280',
+    backgroundColor: '#f9fafb',
+    borderRadius: '8px',
+  },
+  emptyIcon: {
+    opacity: 0.3,
+  },
 });
 
 function PageDisplayPage() {
@@ -66,13 +81,13 @@ function PageDisplayPage() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
   const { instance, accounts } = useMsal();
-  const { pages, spClient } = useSettings();
+  const { pages, spClient, savePage } = useSettings();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<GraphListItem[]>([]);
   const [columns, setColumns] = useState<GraphListColumn[]>([]);
-  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [modalItem, setModalItem] = useState<GraphListItem | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [searchText, setSearchText] = useState('');
 
@@ -142,11 +157,18 @@ function PageDisplayPage() {
     });
   }, [items, filters, searchText, page?.searchConfig]);
 
-  // Selected item
-  const selectedItem = useMemo(() => {
-    if (!selectedItemId) return null;
-    return items.find((item) => item.id === selectedItemId) || null;
-  }, [items, selectedItemId]);
+  // Handle page configuration updates
+  const handlePageUpdate = useCallback(async (updatedPage: PageDefinition) => {
+    await savePage(updatedPage);
+  }, [savePage]);
+
+  // Handle item selection from SearchPanel (for inline mode)
+  const handleSelectItem = useCallback((itemId: string | null) => {
+    if (itemId) {
+      const item = items.find(i => i.id === itemId);
+      if (item) setModalItem(item);
+    }
+  }, [items]);
 
   // Loading state for pages
   if (pages.length === 0) {
@@ -277,6 +299,7 @@ function PageDisplayPage() {
                 onFilterChange={setFilters}
                 onSearchChange={setSearchText}
                 spClient={spClient}
+                onPageUpdate={handlePageUpdate}
               />
             </div>
           ) : (
@@ -290,23 +313,31 @@ function PageDisplayPage() {
                   items={filteredItems}
                   filters={filters}
                   searchText={searchText}
-                  selectedItemId={selectedItemId}
+                  selectedItemId={null}
                   onFilterChange={setFilters}
                   onSearchChange={setSearchText}
-                  onSelectItem={setSelectedItemId}
+                  onSelectItem={handleSelectItem}
                 />
               </div>
 
-              {/* Detail Panel */}
-              <div className={styles.detailPanelContainer}>
-                <DetailPanel
-                  page={page}
-                  columns={columns}
-                  item={selectedItem}
-                  spClient={spClient}
-                />
+              {/* Empty State (click an item to open details) */}
+              <div className={styles.emptyState}>
+                <DocumentTextRegular fontSize={48} className={styles.emptyIcon} />
+                <Text>Select an item to view details</Text>
               </div>
             </div>
+          )}
+
+          {/* Item Detail Modal (for both modes) */}
+          {modalItem && page && (
+            <ItemDetailModal
+              page={page}
+              columns={columns}
+              item={modalItem}
+              spClient={spClient}
+              onClose={() => setModalItem(null)}
+              onPageUpdate={handlePageUpdate}
+            />
           )}
         </>
       )}
