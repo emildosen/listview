@@ -36,7 +36,7 @@ import {
 } from '@fluentui/react-icons';
 import { getListItems, type GraphListColumn, type GraphListItem } from '../../auth/graphClient';
 import { createListItem, updateListItem, deleteListItem, createSPClient, getColumnFormatting, parseColumnFormattingForLink } from '../../services/sharepoint';
-import type { PageDefinition, RelatedSection, DetailLayoutConfig } from '../../types/page';
+import type { PageDefinition, PageColumn, RelatedSection, DetailLayoutConfig, ListDetailConfig } from '../../types/page';
 import { useSettings } from '../../contexts/SettingsContext';
 import ItemFormModal from './ItemFormModal';
 import StatBox from './StatBox';
@@ -277,37 +277,41 @@ function ExpandableCellText({ text }: { text: string }) {
   );
 }
 
-// Helper to get default layout config
-function getDefaultLayoutConfig(page: PageDefinition): DetailLayoutConfig {
+// Helper to get default layout config from display columns
+function getDefaultLayoutConfig(displayColumns: PageColumn[], relatedSections: RelatedSection[]): DetailLayoutConfig {
   return {
-    columnSettings: page.displayColumns.map(col => ({
+    columnSettings: displayColumns.map(col => ({
       internalName: col.internalName,
       visible: true,
       displayStyle: 'list' as const,
     })),
-    relatedSectionOrder: page.relatedSections.map(s => s.id),
+    relatedSectionOrder: relatedSections.map(s => s.id),
   };
 }
 
 // Helper to merge existing config with defaults for new columns/sections
-function getEffectiveLayoutConfig(page: PageDefinition): DetailLayoutConfig {
-  const defaults = getDefaultLayoutConfig(page);
+function getEffectiveLayoutConfig(
+  existingLayout: DetailLayoutConfig | undefined,
+  displayColumns: PageColumn[],
+  relatedSections: RelatedSection[]
+): DetailLayoutConfig {
+  const defaults = getDefaultLayoutConfig(displayColumns, relatedSections);
 
-  if (!page.detailLayout) {
+  if (!existingLayout) {
     return defaults;
   }
 
   // Merge column settings - preserve order from existing settings
-  const validColumnNames = new Set(page.displayColumns.map(c => c.internalName));
-  const existingNames = new Set(page.detailLayout.columnSettings.map(s => s.internalName));
+  const validColumnNames = new Set(displayColumns.map(c => c.internalName));
+  const existingNames = new Set(existingLayout.columnSettings.map(s => s.internalName));
 
   // Keep existing settings in order, filtering out any that no longer exist
-  const existingSettings = page.detailLayout.columnSettings.filter(s =>
+  const existingSettings = existingLayout.columnSettings.filter(s =>
     validColumnNames.has(s.internalName)
   );
 
   // Add new columns at the end with default settings
-  const newColumns = page.displayColumns
+  const newColumns = displayColumns
     .filter(col => !existingNames.has(col.internalName))
     .map(col => ({
       internalName: col.internalName,
@@ -319,12 +323,12 @@ function getEffectiveLayoutConfig(page: PageDefinition): DetailLayoutConfig {
 
   // Merge section order
   let relatedSectionOrder: string[];
-  if (page.detailLayout.relatedSectionOrder) {
-    const existingOrder = page.detailLayout.relatedSectionOrder;
-    const allIds = new Set(page.relatedSections.map(s => s.id));
+  if (existingLayout.relatedSectionOrder) {
+    const existingOrder = existingLayout.relatedSectionOrder;
+    const allIds = new Set(relatedSections.map(s => s.id));
     // Keep existing order for sections that still exist, add new ones at end
     const orderedIds = existingOrder.filter(id => allIds.has(id));
-    const newIds = page.relatedSections
+    const newIds = relatedSections
       .map(s => s.id)
       .filter(id => !existingOrder.includes(id));
     relatedSectionOrder = [...orderedIds, ...newIds];
@@ -335,29 +339,90 @@ function getEffectiveLayoutConfig(page: PageDefinition): DetailLayoutConfig {
   return { columnSettings, relatedSectionOrder };
 }
 
+// Helper to create default ListDetailConfig from columns
+function createDefaultListDetailConfigFromColumns(
+  listId: string,
+  listName: string,
+  siteId: string,
+  siteUrl: string | undefined,
+  columns: GraphListColumn[]
+): ListDetailConfig {
+  // Use all non-system columns as display columns
+  const displayColumns: PageColumn[] = columns
+    .filter(c => !c.readOnly && c.name !== 'ContentType' && c.name !== 'Attachments')
+    .map(c => ({
+      internalName: c.name,
+      displayName: c.displayName,
+      editable: !c.readOnly,
+    }));
+
+  return {
+    listId,
+    listName,
+    siteId,
+    siteUrl,
+    displayColumns,
+    detailLayout: getDefaultLayoutConfig(displayColumns, []),
+    relatedSections: [],
+  };
+}
+
 interface ItemDetailModalProps {
-  page: PageDefinition;
+  // List identification - required
+  listId: string;
+  listName: string;
+  siteId: string;
+  siteUrl?: string;
+  // Data
   columns: GraphListColumn[];
   item: GraphListItem;
   spClient: SPFI | null;
+  // Optional page for initial defaults (used by lookup pages)
+  page?: PageDefinition;
+  // Optional title column override
+  titleColumnOverride?: string;
+  // Callbacks
   onClose: () => void;
-  onPageUpdate: (page: PageDefinition) => Promise<void>;
 }
 
-function ItemDetailModal({ page, columns, item, spClient, onClose, onPageUpdate }: ItemDetailModalProps) {
+function ItemDetailModal({
+  listId,
+  listName,
+  siteId,
+  siteUrl,
+  columns,
+  item,
+  spClient,
+  page,
+  titleColumnOverride,
+  onClose
+}: ItemDetailModalProps) {
   const styles = useStyles();
+  const { getListDetailConfig, saveListDetailConfig } = useSettings();
   const [customizeOpen, setCustomizeOpen] = useState(false);
 
   // Track which columns have link formatting
   const [linkFormattedColumns, setLinkFormattedColumns] = useState<Set<string>>(new Set());
 
+  // Get or create list detail config - always uses list-level config, never page-specific
+  const listDetailConfig = useMemo((): ListDetailConfig => {
+    // First check if we have a saved config for this list
+    const savedConfig = getListDetailConfig(listId);
+    if (savedConfig) {
+      return savedConfig;
+    }
+
+    // No saved config - create default from columns (ignoring any page-specific config)
+    return createDefaultListDetailConfigFromColumns(listId, listName, siteId, siteUrl, columns);
+  }, [getListDetailConfig, listId, listName, siteId, siteUrl, columns]);
+
   // Fetch column formatting
   useEffect(() => {
-    if (!spClient || !page.primarySource?.listId) return;
+    if (!spClient || !listId) return;
 
     const fetchFormatting = async () => {
       try {
-        const formatting = await getColumnFormatting(spClient, page.primarySource.listId);
+        const formatting = await getColumnFormatting(spClient, listId);
         const linkCols = new Set<string>();
         for (const col of formatting) {
           if (parseColumnFormattingForLink(col.customFormatter)) {
@@ -371,17 +436,26 @@ function ItemDetailModal({ page, columns, item, spClient, onClose, onPageUpdate 
     };
 
     fetchFormatting();
-  }, [spClient, page.primarySource?.listId]);
+  }, [spClient, listId]);
 
   // Get effective layout configuration
-  const layoutConfig = useMemo(() => getEffectiveLayoutConfig(page), [page]);
+  const layoutConfig = useMemo(() =>
+    getEffectiveLayoutConfig(
+      listDetailConfig.detailLayout,
+      listDetailConfig.displayColumns,
+      listDetailConfig.relatedSections
+    ),
+    [listDetailConfig]
+  );
 
-  // Get the title column - first table column, first display column, or fallback to Title
+  // Get the title column - priority: override, first table column (from page), first display column, or Title
   const titleColumn = useMemo(() => {
-    return page.searchConfig?.tableColumns?.[0]?.internalName
-      || page.displayColumns[0]?.internalName
-      || 'Title';
-  }, [page.searchConfig?.tableColumns, page.displayColumns]);
+    if (titleColumnOverride) return titleColumnOverride;
+    if (page?.searchConfig?.tableColumns?.[0]?.internalName) {
+      return page.searchConfig.tableColumns[0].internalName;
+    }
+    return listDetailConfig.displayColumns[0]?.internalName || 'Title';
+  }, [titleColumnOverride, page, listDetailConfig.displayColumns]);
 
   // Separate visible columns by display style
   const { statColumns, listColumns } = useMemo(() => {
@@ -395,12 +469,12 @@ function ItemDetailModal({ page, columns, item, spClient, onClose, onPageUpdate 
 
   // Order related sections
   const orderedSections = useMemo(() => {
-    if (!layoutConfig.relatedSectionOrder) return page.relatedSections;
-    const sectionMap = new Map(page.relatedSections.map(s => [s.id, s]));
+    if (!layoutConfig.relatedSectionOrder) return listDetailConfig.relatedSections;
+    const sectionMap = new Map(listDetailConfig.relatedSections.map(s => [s.id, s]));
     return layoutConfig.relatedSectionOrder
       .map(id => sectionMap.get(id))
       .filter((s): s is RelatedSection => s !== undefined);
-  }, [page.relatedSections, layoutConfig.relatedSectionOrder]);
+  }, [listDetailConfig.relatedSections, layoutConfig.relatedSectionOrder]);
 
   // Check if column should render as link
   const isLinkColumn = useCallback((columnName: string): boolean => {
@@ -428,9 +502,9 @@ function ItemDetailModal({ page, columns, item, spClient, onClose, onPageUpdate 
   }, [item.fields]);
 
   const getColumnDisplayName = useCallback((internalName: string): string => {
-    const col = page.displayColumns.find(c => c.internalName === internalName);
+    const col = listDetailConfig.displayColumns.find(c => c.internalName === internalName);
     return col?.displayName || internalName;
-  }, [page.displayColumns]);
+  }, [listDetailConfig.displayColumns]);
 
   const renderValue = useCallback((columnName: string) => {
     const value = getDisplayValue(columnName);
@@ -458,11 +532,13 @@ function ItemDetailModal({ page, columns, item, spClient, onClose, onPageUpdate 
   }, [getDisplayValue, isLinkColumn]);
 
   const handleSaveConfig = async (config: DetailLayoutConfig, relatedSections?: RelatedSection[]) => {
-    const updates: Partial<PageDefinition> = { detailLayout: config };
-    if (relatedSections) {
-      updates.relatedSections = relatedSections;
-    }
-    await onPageUpdate({ ...page, ...updates });
+    // Save to list-level config
+    const updatedConfig: ListDetailConfig = {
+      ...listDetailConfig,
+      detailLayout: config,
+      relatedSections: relatedSections ?? listDetailConfig.relatedSections,
+    };
+    await saveListDetailConfig(updatedConfig);
     setCustomizeOpen(false);
   };
 
@@ -537,7 +613,8 @@ function ItemDetailModal({ page, columns, item, spClient, onClose, onPageUpdate 
 
       {/* Customize Drawer */}
       <DetailCustomizeDrawer
-        page={page}
+        listDetailConfig={listDetailConfig}
+        titleColumn={titleColumn}
         open={customizeOpen}
         onClose={() => setCustomizeOpen(false)}
         onSave={handleSaveConfig}

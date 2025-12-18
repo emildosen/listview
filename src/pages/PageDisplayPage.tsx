@@ -411,12 +411,15 @@ function PageDisplayPage() {
           {/* Item Detail Modal */}
           {modalItem && page && (
             <ItemDetailModal
-              page={page}
+              listId={page.primarySource.listId}
+              listName={page.primarySource.listName}
+              siteId={page.primarySource.siteId}
+              siteUrl={page.primarySource.siteUrl}
               columns={columns}
               item={modalItem}
               spClient={spClient}
+              page={page}
               onClose={() => setModalItem(null)}
-              onPageUpdate={handlePageUpdate}
             />
           )}
         </>

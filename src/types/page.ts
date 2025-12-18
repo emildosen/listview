@@ -12,6 +12,18 @@ export interface DetailColumnSetting {
   displayStyle: 'stat' | 'list';  // 'stat' = badge at top, 'list' = detail grid
 }
 
+// Per-list detail popup configuration
+// This is stored per list (by listId) so the same popup appears regardless of which page displays the list
+export interface ListDetailConfig {
+  listId: string;
+  listName: string;
+  siteId: string;
+  siteUrl?: string;
+  displayColumns: PageColumn[];        // Columns available in detail view
+  detailLayout: DetailLayoutConfig;    // How columns are displayed (stat/list, order, visibility)
+  relatedSections: RelatedSection[];   // Related lists to show in detail popup
+}
+
 export type PageType = 'lookup' | 'report';
 
 export interface PageDefinition {

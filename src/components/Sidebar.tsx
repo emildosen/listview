@@ -39,7 +39,6 @@ const useStyles = makeStyles({
   },
   logo: {
     padding: '16px',
-    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
   },
   logoLink: {
     display: 'flex',
@@ -170,7 +169,6 @@ const useStyles = makeStyles({
   },
   userProfile: {
     padding: '16px',
-    borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
   },
   profileButton: {
     width: '100%',

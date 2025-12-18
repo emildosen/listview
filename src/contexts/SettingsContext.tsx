@@ -37,7 +37,7 @@ import {
 } from '../services/sharepoint';
 import { getSharePointHostname } from '../auth/graphClient';
 import type { ViewDefinition } from '../types/view';
-import type { PageDefinition } from '../types/page';
+import type { PageDefinition, ListDetailConfig } from '../types/page';
 
 export interface EnabledList {
   siteId: string;
@@ -48,6 +48,7 @@ export interface EnabledList {
 }
 
 const ENABLED_LISTS_KEY = 'EnabledLists';
+const LIST_DETAIL_CONFIGS_KEY = 'ListDetailConfigs';
 
 const LOCAL_STORAGE_KEY = 'listview-settings-site-override';
 const HOSTNAME_STORAGE_KEY = 'listview-sharepoint-hostname';
@@ -96,6 +97,10 @@ interface SettingsContextValue extends SettingsState {
   loadPages: () => Promise<void>;
   savePage: (page: PageDefinition) => Promise<PageDefinition>;
   removePage: (id: string) => Promise<void>;
+  // List detail config operations (per-list popup settings)
+  listDetailConfigs: Record<string, ListDetailConfig>;
+  getListDetailConfig: (listId: string) => ListDetailConfig | undefined;
+  saveListDetailConfig: (config: ListDetailConfig) => Promise<void>;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -668,6 +673,56 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [state.settings]);
 
+  // Parse list detail configs from settings (per-list popup configurations)
+  const listDetailConfigs = useMemo((): Record<string, ListDetailConfig> => {
+    const json = state.settings[LIST_DETAIL_CONFIGS_KEY];
+    if (!json) return {};
+    try {
+      const parsed = JSON.parse(json);
+      if (typeof parsed === 'object' && parsed !== null) {
+        return parsed as Record<string, ListDetailConfig>;
+      }
+      return {};
+    } catch {
+      return {};
+    }
+  }, [state.settings]);
+
+  // Get list detail config by listId
+  const getListDetailConfig = useCallback(
+    (listId: string): ListDetailConfig | undefined => {
+      return listDetailConfigs[listId];
+    },
+    [listDetailConfigs]
+  );
+
+  // Save list detail config
+  const saveListDetailConfig = useCallback(
+    async (config: ListDetailConfig): Promise<void> => {
+      const sp = spClientRef.current;
+      if (!sp) {
+        throw new Error('SharePoint client not initialized');
+      }
+
+      // Get current configs and update
+      const currentConfigs = { ...listDetailConfigs };
+      currentConfigs[config.listId] = config;
+
+      // Save to settings
+      await setSetting(sp, LIST_DETAIL_CONFIGS_KEY, JSON.stringify(currentConfigs));
+
+      // Update local state
+      setState((prev) => ({
+        ...prev,
+        settings: {
+          ...prev.settings,
+          [LIST_DETAIL_CONFIGS_KEY]: JSON.stringify(currentConfigs),
+        },
+      }));
+    },
+    [listDetailConfigs]
+  );
+
   const contextValue: SettingsContextValue = {
     ...state,
     spClient: spClientRef.current,
@@ -686,6 +741,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     loadPages: loadPagesCallback,
     savePage: savePageCallback,
     removePage: removePageCallback,
+    listDetailConfigs,
+    getListDetailConfig,
+    saveListDetailConfig,
   };
 
   return (

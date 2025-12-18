@@ -244,7 +244,6 @@ function TableView({
   onFilterChange,
   onSearchChange,
   spClient,
-  onPageUpdate,
 }: TableViewProps) {
   const styles = useStyles();
   const { theme } = useTheme();
@@ -426,12 +425,15 @@ function TableView({
       {/* Detail Modal */}
       {selectedItem && (
         <ItemDetailModal
-          page={page}
+          listId={page.primarySource.listId}
+          listName={page.primarySource.listName}
+          siteId={page.primarySource.siteId}
+          siteUrl={page.primarySource.siteUrl}
           columns={columns}
           item={selectedItem}
           spClient={spClient}
+          page={page}
           onClose={() => setSelectedItem(null)}
-          onPageUpdate={onPageUpdate}
         />
       )}
     </>

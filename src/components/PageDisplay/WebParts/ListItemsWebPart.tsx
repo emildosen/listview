@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { SPFI } from '@pnp/sp';
 import {
   makeStyles,
   tokens,
@@ -15,11 +16,14 @@ import {
 import { TableRegular } from '@fluentui/react-icons';
 import { useMsal } from '@azure/msal-react';
 import { useTheme } from '../../../contexts/ThemeContext';
+import { useSettings } from '../../../contexts/SettingsContext';
 import type { ListItemsWebPartConfig, AnyWebPartConfig } from '../../../types/page';
 import type { GraphListColumn, GraphListItem } from '../../../auth/graphClient';
 import { fetchListWebPartData } from '../../../services/webPartData';
+import { createSPClient } from '../../../services/sharepoint';
 import WebPartHeader from './WebPartHeader';
 import WebPartSettingsDrawer from './WebPartSettingsDrawer';
+import ItemDetailModal from '../ItemDetailModal';
 import { SharePointLink } from '../../common/SharePointLink';
 import { isSharePointUrl } from '../../../auth/graphClient';
 
@@ -93,6 +97,12 @@ const useStyles = makeStyles({
   footerDark: {
     borderTop: '1px solid #333333',
   },
+  clickableRow: {
+    cursor: 'pointer',
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground1Hover,
+    },
+  },
 });
 
 interface ListItemsWebPartProps {
@@ -105,6 +115,7 @@ export default function ListItemsWebPart({ config, onConfigChange }: ListItemsWe
   const styles = useStyles();
   const { instance, accounts } = useMsal();
   const account = accounts[0];
+  const { enabledLists } = useSettings();
 
   const [items, setItems] = useState<GraphListItem[]>([]);
   const [columns, setColumns] = useState<GraphListColumn[]>([]);
@@ -112,8 +123,37 @@ export default function ListItemsWebPart({ config, onConfigChange }: ListItemsWe
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<GraphListItem | null>(null);
+
+  // SP client for the detail modal
+  const spClientRef = useRef<SPFI | null>(null);
 
   const isConfigured = Boolean(config.dataSource?.siteId && config.dataSource?.listId);
+
+  // Get site URL from dataSource or enabledLists
+  const siteUrl = config.dataSource?.siteUrl || enabledLists.find(
+    (l) => l.siteId === config.dataSource?.siteId && l.listId === config.dataSource?.listId
+  )?.siteUrl;
+
+  // Initialize SP client when siteUrl is available
+  useEffect(() => {
+    if (!account || !siteUrl) {
+      spClientRef.current = null;
+      return;
+    }
+
+    const initClient = async () => {
+      try {
+        const client = await createSPClient(instance, account, siteUrl);
+        spClientRef.current = client;
+      } catch (err) {
+        console.error('Failed to create SP client for list items web part:', err);
+        spClientRef.current = null;
+      }
+    };
+
+    initClient();
+  }, [instance, account, siteUrl]);
 
   // Load data when config changes
   useEffect(() => {
@@ -236,7 +276,11 @@ export default function ListItemsWebPart({ config, onConfigChange }: ListItemsWe
               </TableHeader>
               <TableBody>
                 {items.map((item) => (
-                  <TableRow key={item.id}>
+                  <TableRow
+                    key={item.id}
+                    className={styles.clickableRow}
+                    onClick={() => setSelectedItem(item)}
+                  >
                     {displayColumns.map((col) => {
                       const displayValue = getDisplayValue(item, col.internalName);
                       return (
@@ -267,6 +311,21 @@ export default function ListItemsWebPart({ config, onConfigChange }: ListItemsWe
         onClose={() => setSettingsOpen(false)}
         onSave={handleSettingsSave}
       />
+
+      {/* Detail Modal */}
+      {selectedItem && config.dataSource && (
+        <ItemDetailModal
+          listId={config.dataSource.listId}
+          listName={config.dataSource.listName}
+          siteId={config.dataSource.siteId}
+          siteUrl={siteUrl}
+          columns={columns}
+          item={selectedItem}
+          spClient={spClientRef.current}
+          titleColumnOverride={displayColumns[0]?.internalName}
+          onClose={() => setSelectedItem(null)}
+        />
+      )}
     </div>
   );
 }

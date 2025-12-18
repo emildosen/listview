@@ -20,7 +20,7 @@ import {
   EditRegular,
   DeleteRegular,
 } from '@fluentui/react-icons';
-import type { PageDefinition, DetailLayoutConfig, DetailColumnSetting, RelatedSection } from '../../types/page';
+import type { PageDefinition, PageColumn, DetailLayoutConfig, DetailColumnSetting, RelatedSection, ListDetailConfig } from '../../types/page';
 import RelatedSectionFlyout from './RelatedSectionFlyout';
 
 const useStyles = makeStyles({
@@ -128,29 +128,46 @@ const useStyles = makeStyles({
 });
 
 interface DetailCustomizeDrawerProps {
-  page: PageDefinition;
+  // Either provide a page (legacy lookup pages) or listDetailConfig (new per-list config)
+  page?: PageDefinition;
+  listDetailConfig?: ListDetailConfig;
+  // Optional title column override
+  titleColumn?: string;
   open: boolean;
   onClose: () => void;
   onSave: (config: DetailLayoutConfig, relatedSections?: RelatedSection[]) => Promise<void>;
 }
 
-function DetailCustomizeDrawer({ page, open, onClose, onSave }: DetailCustomizeDrawerProps) {
+function DetailCustomizeDrawer({ page, listDetailConfig, titleColumn: titleColumnProp, open, onClose, onSave }: DetailCustomizeDrawerProps) {
   const styles = useStyles();
+
+  // Get display columns from either source
+  const displayColumns: PageColumn[] = listDetailConfig?.displayColumns ?? page?.displayColumns ?? [];
+
+  // Get existing detail layout
+  const existingDetailLayout: DetailLayoutConfig | undefined = listDetailConfig?.detailLayout ?? page?.detailLayout;
+
+  // Get existing related sections
+  const existingRelatedSections: RelatedSection[] = listDetailConfig?.relatedSections ?? page?.relatedSections ?? [];
+
+  // Get primary list ID for related section flyout
+  const primaryListId = listDetailConfig?.listId ?? page?.primarySource?.listId ?? '';
 
   // Get the title column - first table column, first display column, or fallback to Title
   // This column is always shown in header, excluded from customization
-  const titleColumn = page.searchConfig?.tableColumns?.[0]?.internalName
-    || page.displayColumns[0]?.internalName
-    || 'Title';
+  const titleColumn = titleColumnProp
+    ?? page?.searchConfig?.tableColumns?.[0]?.internalName
+    ?? displayColumns[0]?.internalName
+    ?? 'Title';
 
   // Initialize column settings from existing config or defaults (excluding title column)
   const [columnSettings, setColumnSettings] = useState<DetailColumnSetting[]>(() => {
     // Filter out the title column from display columns
-    const nonTitleColumns = page.displayColumns.filter(col => col.internalName !== titleColumn);
+    const nonTitleColumns = displayColumns.filter(col => col.internalName !== titleColumn);
 
-    if (page.detailLayout?.columnSettings) {
+    if (existingDetailLayout?.columnSettings) {
       // Preserve existing order and merge with any new columns
-      const existingSettings = page.detailLayout.columnSettings.filter(
+      const existingSettings = existingDetailLayout.columnSettings.filter(
         s => s.internalName !== titleColumn
       );
       const existingNames = new Set(existingSettings.map(s => s.internalName));
@@ -181,20 +198,20 @@ function DetailCustomizeDrawer({ page, open, onClose, onSave }: DetailCustomizeD
 
   // Initialize related sections (for add/edit/remove)
   const [relatedSections, setRelatedSections] = useState<RelatedSection[]>(() => {
-    return [...page.relatedSections];
+    return [...existingRelatedSections];
   });
 
   // Initialize section order
   const [sectionOrder, setSectionOrder] = useState<string[]>(() => {
-    if (page.detailLayout?.relatedSectionOrder) {
+    if (existingDetailLayout?.relatedSectionOrder) {
       // Include any new sections at the end
-      const existingOrder = page.detailLayout.relatedSectionOrder;
-      const allIds = page.relatedSections.map(s => s.id);
+      const existingOrder = existingDetailLayout.relatedSectionOrder;
+      const allIds = existingRelatedSections.map(s => s.id);
       const orderedIds = existingOrder.filter(id => allIds.includes(id));
       const newIds = allIds.filter(id => !existingOrder.includes(id));
       return [...orderedIds, ...newIds];
     }
-    return page.relatedSections.map(s => s.id);
+    return existingRelatedSections.map(s => s.id);
   });
 
   // Drag state for columns and sections
@@ -278,7 +295,7 @@ function DetailCustomizeDrawer({ page, open, onClose, onSave }: DetailCustomizeD
 
   const handleSave = async () => {
     // Check if related sections changed
-    const sectionsChanged = JSON.stringify(relatedSections) !== JSON.stringify(page.relatedSections);
+    const sectionsChanged = JSON.stringify(relatedSections) !== JSON.stringify(existingRelatedSections);
     await onSave(
       {
         columnSettings,
@@ -290,7 +307,7 @@ function DetailCustomizeDrawer({ page, open, onClose, onSave }: DetailCustomizeD
 
   // Get display name for a column
   const getColumnDisplayName = (internalName: string): string => {
-    const col = page.displayColumns.find(c => c.internalName === internalName);
+    const col = displayColumns.find(c => c.internalName === internalName);
     return col?.displayName || internalName;
   };
 
@@ -470,7 +487,7 @@ function DetailCustomizeDrawer({ page, open, onClose, onSave }: DetailCustomizeD
     <RelatedSectionFlyout
       open={flyoutOpen}
       section={editingSection}
-      primaryListId={page.primarySource?.listId || ''}
+      primaryListId={primaryListId}
       onClose={() => setFlyoutOpen(false)}
       onSave={handleSaveSection}
     />
