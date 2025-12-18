@@ -23,6 +23,8 @@ import type { GraphListColumn, GraphListItem } from '../../auth/graphClient';
 import type { PageDefinition } from '../../types/page';
 import ItemDetailModal from './ItemDetailModal';
 import { useTheme } from '../../contexts/ThemeContext';
+import { SharePointLink } from '../common/SharePointLink';
+import { isSharePointUrl } from '../../auth/graphClient';
 
 // URL regex pattern
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
@@ -49,6 +51,12 @@ function getSharePointFileName(url: string): string | null {
 function TextWithLinks({ text }: { text: string }) {
   if (!text || typeof text !== 'string') {
     return <>{text}</>;
+  }
+
+  // If entire text starts with SharePoint URL, treat whole value as the URL
+  // (may contain spaces, so don't rely on regex that breaks at whitespace)
+  if (isSharePointUrl(text)) {
+    return <SharePointLink url={text} />;
   }
 
   const urlMatch = text.match(URL_REGEX);

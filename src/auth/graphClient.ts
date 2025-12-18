@@ -336,3 +336,170 @@ export async function getListItems(
     items: items.slice(0, 1000),
   };
 }
+
+// SharePoint URL resolution types and utilities
+
+export type SharePointResourceType = 'file' | 'page' | 'list-item' | 'folder' | 'generic';
+
+export interface SharePointUrlInfo {
+  displayName: string;
+  type: SharePointResourceType;
+  resolved: boolean; // true if resolved via Graph API, false if parsed from URL
+}
+
+/**
+ * Check if a string value starts with a SharePoint URL
+ */
+export function isSharePointUrl(value: string): boolean {
+  return typeof value === 'string' &&
+    /^https:\/\/[^/]+\.sharepoint\.com/i.test(value.trim());
+}
+
+/**
+ * Parse a SharePoint URL to extract display info without making API calls
+ */
+export function parseSharePointUrl(url: string): SharePointUrlInfo {
+  try {
+    const urlObj = new URL(url.trim());
+    const path = decodeURIComponent(urlObj.pathname);
+    const searchParams = urlObj.searchParams;
+
+    // Check for list item display form: /Lists/{ListName}/DispForm.aspx?ID=X
+    const listItemMatch = path.match(/\/Lists\/([^/]+)\/(?:DispForm|EditForm|NewForm)\.aspx/i);
+    if (listItemMatch) {
+      const listName = listItemMatch[1].replace(/%20/g, ' ');
+      const itemId = searchParams.get('ID');
+      return {
+        displayName: itemId ? `${listName} #${itemId}` : listName,
+        type: 'list-item',
+        resolved: false,
+      };
+    }
+
+    // Check for SitePages: /sites/{site}/SitePages/{PageName}.aspx
+    const pageMatch = path.match(/\/SitePages\/([^/]+)\.aspx$/i);
+    if (pageMatch) {
+      // Convert hyphens to spaces and clean up
+      const pageName = pageMatch[1]
+        .replace(/-/g, ' ')
+        .replace(/%20/g, ' ');
+      return {
+        displayName: pageName,
+        type: 'page',
+        resolved: false,
+      };
+    }
+
+    // Check for files in document libraries (has file extension)
+    const fileExtMatch = path.match(/\/([^/]+\.[a-zA-Z0-9]{2,5})$/);
+    if (fileExtMatch) {
+      return {
+        displayName: fileExtMatch[1],
+        type: 'file',
+        resolved: false,
+      };
+    }
+
+    // Check for folders in Shared Documents or other libraries
+    const folderMatch = path.match(/\/(Shared%20Documents|Documents|[^/]+)\/([^/]+)\/?$/);
+    if (folderMatch && !folderMatch[2].includes('.')) {
+      return {
+        displayName: folderMatch[2].replace(/%20/g, ' '),
+        type: 'folder',
+        resolved: false,
+      };
+    }
+
+    // Generic: use last path segment
+    const segments = path.split('/').filter(Boolean);
+    const lastSegment = segments[segments.length - 1] || url;
+    return {
+      displayName: lastSegment.replace(/%20/g, ' '),
+      type: 'generic',
+      resolved: false,
+    };
+  } catch {
+    // If URL parsing fails, return the original URL
+    return {
+      displayName: url,
+      type: 'generic',
+      resolved: false,
+    };
+  }
+}
+
+// Cache for resolved SharePoint URLs
+const resolvedUrlCache = new Map<string, SharePointUrlInfo>();
+
+/**
+ * Resolve a SharePoint URL to get display info via Graph API
+ * Falls back to URL parsing if API call fails
+ */
+export async function resolveSharePointUrl(
+  msalInstance: IPublicClientApplication,
+  account: AccountInfo,
+  url: string
+): Promise<SharePointUrlInfo> {
+  const trimmedUrl = url.trim();
+
+  // Check cache first
+  const cached = resolvedUrlCache.get(trimmedUrl);
+  if (cached) {
+    return cached;
+  }
+
+  // Parse URL first to get immediate result and determine type
+  const parsed = parseSharePointUrl(trimmedUrl);
+
+  // Only attempt Graph API resolution for files
+  if (parsed.type === 'file') {
+    try {
+      const urlObj = new URL(trimmedUrl);
+      const hostname = urlObj.hostname;
+      const path = decodeURIComponent(urlObj.pathname);
+
+      // Extract site path: /sites/{siteName} or just the root
+      const siteMatch = path.match(/^(\/sites\/[^/]+)/);
+      const sitePath = siteMatch ? siteMatch[1] : '';
+
+      // Extract file path after document library
+      // Common patterns: /Shared Documents/, /Documents/, /sites/{site}/{library}/
+      const docLibMatch = path.match(/(?:\/Shared%20Documents|\/Documents|\/sites\/[^/]+\/[^/]+)(\/.*)/);
+      if (docLibMatch) {
+        const filePath = docLibMatch[1];
+
+        const client = createGraphClient(msalInstance, account);
+
+        // Get site ID
+        const siteResponse = await client
+          .api(`/sites/${hostname}:${sitePath || '/'}`)
+          .select('id')
+          .get();
+
+        if (siteResponse?.id) {
+          // Try to get file metadata
+          const driveItem = await client
+            .api(`/sites/${siteResponse.id}/drive/root:${filePath}`)
+            .select('name')
+            .get();
+
+          if (driveItem?.name) {
+            const result: SharePointUrlInfo = {
+              displayName: driveItem.name,
+              type: 'file',
+              resolved: true,
+            };
+            resolvedUrlCache.set(trimmedUrl, result);
+            return result;
+          }
+        }
+      }
+    } catch {
+      // API call failed, fall back to parsed result
+    }
+  }
+
+  // Cache and return the parsed result
+  resolvedUrlCache.set(trimmedUrl, parsed);
+  return parsed;
+}

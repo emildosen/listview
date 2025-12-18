@@ -41,6 +41,8 @@ import { useSettings } from '../../contexts/SettingsContext';
 import ItemFormModal from './ItemFormModal';
 import StatBox from './StatBox';
 import DetailCustomizeDrawer from './DetailCustomizeDrawer';
+import { SharePointLink } from '../common/SharePointLink';
+import { isSharePointUrl } from '../../auth/graphClient';
 
 const MAX_TEXT_LENGTH = 200;
 
@@ -55,7 +57,7 @@ const useStyles = makeStyles({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '16px',
+    gap: '16px'
   },
   titleText: {
     fontSize: tokens.fontSizeBase500,
@@ -76,6 +78,7 @@ const useStyles = makeStyles({
     display: 'flex',
     flexWrap: 'wrap',
     gap: '8px',
+    marginTop: '10px'
   },
   body: {
     display: 'block',
@@ -425,6 +428,11 @@ function ItemDetailModal({ page, columns, item, spClient, onClose, onPageUpdate 
   const renderValue = useCallback((columnName: string) => {
     const value = getDisplayValue(columnName);
     if (value === '-') return value;
+
+    // Check if value starts with SharePoint URL - treat entire value as URL
+    if (isSharePointUrl(value)) {
+      return <SharePointLink url={value} stopPropagation={false} />;
+    }
 
     if (isLinkColumn(columnName)) {
       return (

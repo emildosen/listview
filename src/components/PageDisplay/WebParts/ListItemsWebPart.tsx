@@ -20,6 +20,8 @@ import type { GraphListColumn, GraphListItem } from '../../../auth/graphClient';
 import { fetchListWebPartData } from '../../../services/webPartData';
 import WebPartHeader from './WebPartHeader';
 import WebPartSettingsDrawer from './WebPartSettingsDrawer';
+import { SharePointLink } from '../../common/SharePointLink';
+import { isSharePointUrl } from '../../../auth/graphClient';
 
 const useStyles = makeStyles({
   container: {
@@ -235,11 +237,18 @@ export default function ListItemsWebPart({ config, onConfigChange }: ListItemsWe
               <TableBody>
                 {items.map((item) => (
                   <TableRow key={item.id}>
-                    {displayColumns.map((col) => (
-                      <TableCell key={col.internalName}>
-                        {getDisplayValue(item, col.internalName)}
-                      </TableCell>
-                    ))}
+                    {displayColumns.map((col) => {
+                      const displayValue = getDisplayValue(item, col.internalName);
+                      return (
+                        <TableCell key={col.internalName}>
+                          {isSharePointUrl(displayValue) ? (
+                            <SharePointLink url={displayValue} />
+                          ) : (
+                            displayValue
+                          )}
+                        </TableCell>
+                      );
+                    })}
                   </TableRow>
                 ))}
               </TableBody>

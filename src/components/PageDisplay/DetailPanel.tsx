@@ -34,6 +34,8 @@ import { createListItem, updateListItem, deleteListItem, createSPClient, getColu
 import type { PageDefinition, RelatedSection } from '../../types/page';
 import { useSettings } from '../../contexts/SettingsContext';
 import ItemFormModal from './ItemFormModal';
+import { SharePointLink } from '../common/SharePointLink';
+import { isSharePointUrl } from '../../auth/graphClient';
 
 const MAX_TEXT_LENGTH = 200;
 
@@ -237,6 +239,11 @@ function DetailPanel({ page, columns, item, spClient }: DetailPanelProps) {
   const renderValue = useCallback((columnName: string) => {
     const value = getDisplayValue(columnName);
     if (value === '-') return value;
+
+    // Check if value starts with SharePoint URL - treat entire value as URL
+    if (isSharePointUrl(value)) {
+      return <SharePointLink url={value} stopPropagation={false} />;
+    }
 
     // Render link columns as clickable links
     if (isLinkColumn(columnName)) {
