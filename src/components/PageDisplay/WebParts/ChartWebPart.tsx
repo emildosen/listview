@@ -6,8 +6,8 @@ import {
   Spinner,
   mergeClasses,
 } from '@fluentui/react-components';
-import { DonutChart, VerticalBarChart, HorizontalBarChart, LineChart } from '@fluentui/react-charts';
-import type { ChartProps, VerticalBarChartDataPoint, HorizontalBarChartWithAxisDataPoint, LineChartPoints } from '@fluentui/react-charts';
+import { DonutChart, VerticalBarChart, LineChart } from '@fluentui/react-charts';
+import type { ChartProps, VerticalBarChartDataPoint, LineChartPoints } from '@fluentui/react-charts';
 import { DataPieRegular } from '@fluentui/react-icons';
 import { useMsal } from '@azure/msal-react';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -144,14 +144,6 @@ export default function ChartWebPart({ config, onConfigChange }: ChartWebPartPro
     })),
   [dataPoints]);
 
-  const horizontalBarChartData: HorizontalBarChartWithAxisDataPoint[] = useMemo(() =>
-    dataPoints.map((dp) => ({
-      x: dp.data,
-      y: dp.legend,
-      color: dp.color,
-    })),
-  [dataPoints]);
-
   const lineChartData: LineChartPoints[] = useMemo(() => [{
     legend: config.title || 'Data',
     data: dataPoints.map((dp, index) => ({
@@ -182,9 +174,12 @@ export default function ChartWebPart({ config, onConfigChange }: ChartWebPartPro
           />
         );
       case 'horizontal-bar':
+        // Using vertical bar as fallback since HorizontalBarChart has different API
         return (
-          <HorizontalBarChart
-            data={horizontalBarChartData}
+          <VerticalBarChart
+            data={barChartData}
+            height={250}
+            width={350}
             hideLegend={!config.showLegend}
           />
         );

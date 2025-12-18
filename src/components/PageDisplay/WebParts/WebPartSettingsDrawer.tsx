@@ -23,6 +23,7 @@ import type {
   WebPartDataSource,
   WebPartDisplayColumn,
   WebPartFilter,
+  WebPartJoin,
   WebPartSort,
   ChartAggregation,
 } from '../../../types/page';
@@ -32,6 +33,7 @@ import DataSourcePicker from './DataSourcePicker';
 import ColumnSelector from './ColumnSelector';
 import FilterBuilder from './FilterBuilder';
 import ChartSettingsPanel from './ChartSettingsPanel';
+import JoinBuilder from './JoinBuilder';
 
 const useStyles = makeStyles({
   body: {
@@ -121,6 +123,11 @@ export default function WebPartSettingsDrawer({
   const [showSearch, setShowSearch] = useState(
     webPart.type === 'list-items' ? (webPart as ListItemsWebPartConfig).showSearch || false : false
   );
+  const [joins, setJoins] = useState<WebPartJoin[]>(
+    webPart.type === 'list-items'
+      ? (webPart as ListItemsWebPartConfig).joins || []
+      : (webPart as ChartWebPartConfig).joins || []
+  );
 
   // Chart specific state
   const [chartType, setChartType] = useState<'bar' | 'donut' | 'line' | 'horizontal-bar'>(
@@ -175,6 +182,7 @@ export default function WebPartSettingsDrawer({
       setDataSource(config.dataSource);
       setDisplayColumns(config.displayColumns || []);
       setFilters(config.filters || []);
+      setJoins(config.joins || []);
       setSort(config.sort);
       setMaxItems(config.maxItems || 50);
       setShowSearch(config.showSearch || false);
@@ -182,6 +190,7 @@ export default function WebPartSettingsDrawer({
       const config = webPart as ChartWebPartConfig;
       setDataSource(config.dataSource);
       setFilters(config.filters || []);
+      setJoins(config.joins || []);
       setChartType(config.chartType || 'bar');
       setGroupByColumn(config.groupByColumn);
       setValueColumn(config.valueColumn);
@@ -203,6 +212,7 @@ export default function WebPartSettingsDrawer({
           dataSource,
           displayColumns,
           filters,
+          joins,
           sort,
           maxItems,
           showSearch,
@@ -213,6 +223,7 @@ export default function WebPartSettingsDrawer({
           title,
           dataSource,
           filters,
+          joins,
           chartType,
           groupByColumn,
           valueColumn,
@@ -233,6 +244,7 @@ export default function WebPartSettingsDrawer({
     dataSource,
     displayColumns,
     filters,
+    joins,
     sort,
     maxItems,
     showSearch,
@@ -321,6 +333,18 @@ export default function WebPartSettingsDrawer({
                       filters={filters}
                       columns={columns}
                       onChange={setFilters}
+                    />
+                  </div>
+
+                  <Divider />
+
+                  {/* Joins */}
+                  <div className={styles.section}>
+                    <Text className={styles.sectionTitle}>Joins</Text>
+                    <JoinBuilder
+                      joins={joins}
+                      primaryColumns={columns}
+                      onChange={setJoins}
                     />
                   </div>
 

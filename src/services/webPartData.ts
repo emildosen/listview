@@ -9,6 +9,7 @@ import type {
   ListItemsWebPartConfig,
   ChartWebPartConfig,
   WebPartFilter,
+  WebPartJoin,
   ChartAggregation,
 } from '../types/page';
 
@@ -388,4 +389,129 @@ export async function getDataSourceColumns(
   listId: string
 ): Promise<GraphListColumn[]> {
   return getListColumns(instance, account, siteId, listId);
+}
+
+/**
+ * Execute joins to merge data from related lists
+ */
+export async function executeJoins(
+  instance: IPublicClientApplication,
+  account: AccountInfo,
+  primaryItems: GraphListItem[],
+  joins: WebPartJoin[],
+  primaryColumns: GraphListColumn[]
+): Promise<{ items: GraphListItem[]; columns: GraphListColumn[] }> {
+  if (!joins || joins.length === 0) {
+    return { items: primaryItems, columns: primaryColumns };
+  }
+
+  let resultItems = [...primaryItems];
+  let resultColumns = [...primaryColumns];
+
+  for (const join of joins) {
+    if (!join.targetSource?.siteId || !join.targetSource?.listId) {
+      continue;
+    }
+
+    try {
+      // Fetch target list data
+      const targetResult = await getListItems(
+        instance,
+        account,
+        join.targetSource.siteId,
+        join.targetSource.listId
+      );
+
+      const targetItems = targetResult.items;
+      const targetColumns = targetResult.columns;
+
+      // Get the source column definition to determine if it's a lookup
+      const sourceColumn = primaryColumns.find((c) => c.name === join.sourceColumn);
+
+      // Build a map of target items by the join column
+      const targetMap = new Map<string, GraphListItem>();
+      for (const targetItem of targetItems) {
+        const keyValue = join.targetColumn === 'id'
+          ? targetItem.id
+          : targetItem.fields[join.targetColumn];
+
+        if (keyValue !== null && keyValue !== undefined) {
+          targetMap.set(String(keyValue), targetItem);
+        }
+      }
+
+      // Add target columns to result columns (with alias prefix if specified)
+      const columnsToAdd = targetColumns.filter((c) =>
+        join.columnsToInclude.includes(c.name)
+      );
+
+      for (const col of columnsToAdd) {
+        const aliasName = join.alias
+          ? `${join.alias}${col.name}`
+          : `${join.targetSource.listName}_${col.name}`;
+        const aliasDisplayName = join.alias
+          ? `${join.alias}${col.displayName}`
+          : `${join.targetSource.listName} - ${col.displayName}`;
+
+        resultColumns.push({
+          ...col,
+          name: aliasName,
+          displayName: aliasDisplayName,
+        });
+      }
+
+      // Merge data
+      const mergedItems: GraphListItem[] = [];
+
+      for (const primaryItem of resultItems) {
+        // Get the join key from the primary item
+        let joinKey: string | null = null;
+
+        if (sourceColumn?.lookup) {
+          // For lookup columns, get the LookupId
+          const lookupIdField = `${join.sourceColumn}LookupId`;
+          const lookupId = primaryItem.fields[lookupIdField];
+          if (lookupId !== null && lookupId !== undefined) {
+            joinKey = String(lookupId);
+          }
+        } else {
+          // For non-lookup columns, use the value directly
+          const value = primaryItem.fields[join.sourceColumn];
+          if (value !== null && value !== undefined) {
+            joinKey = String(value);
+          }
+        }
+
+        // Find matching target item
+        const targetItem = joinKey ? targetMap.get(joinKey) : null;
+
+        if (targetItem || join.joinType === 'left') {
+          // Merge the fields
+          const mergedFields = { ...primaryItem.fields };
+
+          if (targetItem) {
+            for (const col of columnsToAdd) {
+              const aliasName = join.alias
+                ? `${join.alias}${col.name}`
+                : `${join.targetSource.listName}_${col.name}`;
+              mergedFields[aliasName] = targetItem.fields[col.name];
+            }
+          }
+
+          mergedItems.push({
+            ...primaryItem,
+            fields: mergedFields,
+          });
+        }
+        // For inner join, items without a match are excluded
+      }
+
+      resultItems = mergedItems;
+    } catch (err) {
+      console.error(`Failed to execute join with ${join.targetSource.listName}:`, err);
+      // Continue with other joins even if one fails
+    }
+  }
+
+  return { items: resultItems, columns: resultColumns };
 }
