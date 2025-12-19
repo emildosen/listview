@@ -115,13 +115,16 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: tokens.colorNeutralBackground4,
+    backgroundColor: '#e0e0e0',
     color: tokens.colorNeutralForeground3,
     fontSize: '16px',
     flexShrink: 0,
     transition: 'all 0.15s ease',
     position: 'relative',
     zIndex: 1,
+  },
+  stepIconContainerDark: {
+    backgroundColor: '#2a2a2a',
   },
   stepIconActive: {
     backgroundColor: tokens.colorBrandBackground,
@@ -662,6 +665,7 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
               <div
                 className={mergeClasses(
                   styles.stepIconContainer,
+                  theme === 'dark' && styles.stepIconContainerDark,
                   isActive && styles.stepIconActive,
                   isPastCurrent && styles.stepIconCompleted
                 )}
