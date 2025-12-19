@@ -3,7 +3,11 @@
 // Detail modal layout configuration (for customizable popup)
 export interface DetailLayoutConfig {
   columnSettings: DetailColumnSetting[];
-  relatedSectionOrder?: string[];  // Array of RelatedSection.id values for ordering
+  // Section order: 'details', 'description', and linked list IDs (e.g., 'section-123')
+  // Default order: ['details', 'description', ...linkedListIds]
+  sectionOrder?: string[];
+  /** @deprecated Use sectionOrder instead */
+  relatedSectionOrder?: string[];  // Legacy: Array of RelatedSection.id values for ordering
 }
 
 export interface DetailColumnSetting {

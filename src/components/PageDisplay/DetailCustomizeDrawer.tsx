@@ -22,7 +22,11 @@ import {
 } from '@fluentui/react-icons';
 import type { PageDefinition, PageColumn, DetailLayoutConfig, DetailColumnSetting, RelatedSection, ListDetailConfig } from '../../types/page';
 import type { GraphListColumn } from '../../auth/graphClient';
-import RelatedSectionFlyout from './RelatedSectionFlyout';
+import LinkedListFlyout from './LinkedListFlyout';
+
+// Section IDs for built-in sections
+const DETAILS_SECTION_ID = 'details';
+const DESCRIPTION_SECTION_ID = 'description';
 
 // Helper to check if a column is a multiline text column
 function isMultilineColumn(internalName: string, columnMetadata?: GraphListColumn[]): boolean {
@@ -36,6 +40,11 @@ function isRichTextColumn(internalName: string, columnMetadata?: GraphListColumn
   if (!columnMetadata) return false;
   const col = columnMetadata.find(c => c.name === internalName);
   return col?.text?.textType === 'richText';
+}
+
+// Check if there's a column set to description display style
+function hasDescriptionColumn(settings: DetailColumnSetting[]): boolean {
+  return settings.some(s => s.visible && s.displayStyle === 'description');
 }
 
 const useStyles = makeStyles({
@@ -103,10 +112,18 @@ const useStyles = makeStyles({
     opacity: 0.5,
     border: `1px dashed ${tokens.colorBrandStroke1}`,
   },
+  sectionItemNoDrag: {
+    cursor: 'default',
+    opacity: 0.6,
+  },
   dragHandle: {
     color: tokens.colorNeutralForeground3,
     cursor: 'grab',
     flexShrink: 0,
+  },
+  dragHandleDisabled: {
+    opacity: 0.3,
+    cursor: 'not-allowed',
   },
   itemName: {
     flex: 1,
@@ -164,10 +181,10 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
   // Get existing detail layout
   const existingDetailLayout: DetailLayoutConfig | undefined = listDetailConfig?.detailLayout ?? page?.detailLayout;
 
-  // Get existing related sections
-  const existingRelatedSections: RelatedSection[] = listDetailConfig?.relatedSections ?? page?.relatedSections ?? [];
+  // Get existing linked lists (formerly related sections)
+  const existingLinkedLists: RelatedSection[] = listDetailConfig?.relatedSections ?? page?.relatedSections ?? [];
 
-  // Get primary list/site info for related section flyout
+  // Get primary list/site info for linked list flyout
   const primaryListId = listDetailConfig?.listId ?? page?.primarySource?.listId ?? '';
   const primarySiteId = listDetailConfig?.siteId ?? page?.primarySource?.siteId ?? '';
   const primarySiteUrl = listDetailConfig?.siteUrl ?? page?.primarySource?.siteUrl ?? '';
@@ -215,31 +232,63 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
     }));
   });
 
-  // Initialize related sections (for add/edit/remove)
-  const [relatedSections, setRelatedSections] = useState<RelatedSection[]>(() => {
-    return [...existingRelatedSections];
+  // Initialize linked lists (formerly related sections)
+  const [linkedLists, setLinkedLists] = useState<RelatedSection[]>(() => {
+    return [...existingLinkedLists];
   });
 
-  // Initialize section order
+  // Initialize section order (details, description, linked list IDs)
   const [sectionOrder, setSectionOrder] = useState<string[]>(() => {
-    if (existingDetailLayout?.relatedSectionOrder) {
-      // Include any new sections at the end
-      const existingOrder = existingDetailLayout.relatedSectionOrder;
-      const allIds = existingRelatedSections.map(s => s.id);
-      const orderedIds = existingOrder.filter(id => allIds.includes(id));
-      const newIds = allIds.filter(id => !existingOrder.includes(id));
-      return [...orderedIds, ...newIds];
+    // Check for new sectionOrder first, then legacy relatedSectionOrder
+    if (existingDetailLayout?.sectionOrder) {
+      // Validate and merge with current linked lists
+      const existingOrder = existingDetailLayout.sectionOrder;
+      const linkedListIds = existingLinkedLists.map(s => s.id);
+
+      // Build valid order: keep valid IDs, add missing linked lists at end
+      const validOrder = existingOrder.filter(id =>
+        id === DETAILS_SECTION_ID ||
+        id === DESCRIPTION_SECTION_ID ||
+        linkedListIds.includes(id)
+      );
+
+      // Add any new linked lists not in the order
+      const newListIds = linkedListIds.filter(id => !validOrder.includes(id));
+
+      // Ensure details and description are present
+      if (!validOrder.includes(DETAILS_SECTION_ID)) {
+        validOrder.unshift(DETAILS_SECTION_ID);
+      }
+      if (!validOrder.includes(DESCRIPTION_SECTION_ID)) {
+        const detailsIndex = validOrder.indexOf(DETAILS_SECTION_ID);
+        validOrder.splice(detailsIndex + 1, 0, DESCRIPTION_SECTION_ID);
+      }
+
+      return [...validOrder, ...newListIds];
     }
-    return existingRelatedSections.map(s => s.id);
+
+    // Legacy: convert relatedSectionOrder to new format
+    if (existingDetailLayout?.relatedSectionOrder) {
+      const linkedListIds = existingDetailLayout.relatedSectionOrder.filter(id =>
+        existingLinkedLists.some(s => s.id === id)
+      );
+      const newListIds = existingLinkedLists
+        .filter(s => !linkedListIds.includes(s.id))
+        .map(s => s.id);
+      return [DETAILS_SECTION_ID, DESCRIPTION_SECTION_ID, ...linkedListIds, ...newListIds];
+    }
+
+    // Default: details, description, then all linked lists
+    return [DETAILS_SECTION_ID, DESCRIPTION_SECTION_ID, ...existingLinkedLists.map(s => s.id)];
   });
 
   // Drag state for columns and sections
   const [draggedColIndex, setDraggedColIndex] = useState<number | null>(null);
   const [draggedSectionIndex, setDraggedSectionIndex] = useState<number | null>(null);
 
-  // Flyout state for add/edit related section
+  // Flyout state for add/edit linked list
   const [flyoutOpen, setFlyoutOpen] = useState(false);
-  const [editingSection, setEditingSection] = useState<RelatedSection | null>(null);
+  const [editingLinkedList, setEditingLinkedList] = useState<RelatedSection | null>(null);
 
   const handleColumnVisibilityChange = useCallback((internalName: string, visible: boolean) => {
     setColumnSettings(prev => prev.map(s =>
@@ -287,24 +336,24 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
     });
   }, []);
 
-  // Related section management
-  const handleAddSection = useCallback(() => {
-    setEditingSection(null);
+  // Linked list management
+  const handleAddLinkedList = useCallback(() => {
+    setEditingLinkedList(null);
     setFlyoutOpen(true);
   }, []);
 
-  const handleEditSection = useCallback((section: RelatedSection) => {
-    setEditingSection(section);
+  const handleEditLinkedList = useCallback((section: RelatedSection) => {
+    setEditingLinkedList(section);
     setFlyoutOpen(true);
   }, []);
 
-  const handleRemoveSection = useCallback((sectionId: string) => {
-    setRelatedSections(prev => prev.filter(s => s.id !== sectionId));
+  const handleRemoveLinkedList = useCallback((sectionId: string) => {
+    setLinkedLists(prev => prev.filter(s => s.id !== sectionId));
     setSectionOrder(prev => prev.filter(id => id !== sectionId));
   }, []);
 
-  const handleSaveSection = useCallback((section: RelatedSection) => {
-    setRelatedSections(prev => {
+  const handleSaveLinkedList = useCallback((section: RelatedSection) => {
+    setLinkedLists(prev => {
       const existingIndex = prev.findIndex(s => s.id === section.id);
       if (existingIndex >= 0) {
         // Update existing
@@ -327,14 +376,14 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
   }, []);
 
   const handleSave = async () => {
-    // Check if related sections changed
-    const sectionsChanged = JSON.stringify(relatedSections) !== JSON.stringify(existingRelatedSections);
+    // Check if linked lists changed
+    const listsChanged = JSON.stringify(linkedLists) !== JSON.stringify(existingLinkedLists);
     await onSave(
       {
         columnSettings,
-        relatedSectionOrder: sectionOrder,
+        sectionOrder,
       },
-      sectionsChanged ? relatedSections : undefined
+      listsChanged ? linkedLists : undefined
     );
   };
 
@@ -344,10 +393,33 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
     return col?.displayName || internalName;
   };
 
-  // Get section by ID (from local state)
-  const getSectionById = (id: string): RelatedSection | undefined => {
-    return relatedSections.find(s => s.id === id);
+  // Get linked list by ID (from local state)
+  const getLinkedListById = (id: string): RelatedSection | undefined => {
+    return linkedLists.find(s => s.id === id);
   };
+
+  // Get section display name
+  const getSectionDisplayName = (sectionId: string): string => {
+    if (sectionId === DETAILS_SECTION_ID) return 'Details';
+    if (sectionId === DESCRIPTION_SECTION_ID) return 'Description';
+    const linkedList = getLinkedListById(sectionId);
+    return linkedList?.title || 'Unknown Section';
+  };
+
+  // Check if section is a linked list
+  const isLinkedListSection = (sectionId: string): boolean => {
+    return sectionId !== DETAILS_SECTION_ID && sectionId !== DESCRIPTION_SECTION_ID;
+  };
+
+  // Check if description section should be shown (has a description column)
+  const showDescriptionSection = hasDescriptionColumn(columnSettings);
+
+  // Filter section order to only include valid sections
+  const visibleSections = sectionOrder.filter(id => {
+    if (id === DETAILS_SECTION_ID) return true;
+    if (id === DESCRIPTION_SECTION_ID) return showDescriptionSection;
+    return linkedLists.some(s => s.id === id);
+  });
 
   return (
   <>
@@ -373,11 +445,72 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
       </DrawerHeader>
 
       <DrawerBody>
-        {/* Column Settings Section */}
+        {/* Sections - Drag to reorder */}
         <div className={styles.section}>
+          <Text className={styles.sectionTitle}>Sections</Text>
+          <Text className={styles.sectionHint}>
+            Drag to reorder how sections appear in the detail view
+          </Text>
+
+          {visibleSections.map((sectionId, index) => {
+            const isLinkedList = isLinkedListSection(sectionId);
+            const linkedList = isLinkedList ? getLinkedListById(sectionId) : null;
+
+            return (
+              <div
+                key={sectionId}
+                draggable
+                onDragStart={() => setDraggedSectionIndex(index)}
+                onDragEnd={() => setDraggedSectionIndex(null)}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (draggedSectionIndex !== null && draggedSectionIndex !== index) {
+                    handleSectionReorder(draggedSectionIndex, index);
+                    setDraggedSectionIndex(index);
+                  }
+                }}
+                className={`${styles.sectionItem} ${
+                  draggedSectionIndex === index ? styles.sectionItemDragging : ''
+                }`}
+              >
+                <ReOrderDotsVerticalRegular className={styles.dragHandle} />
+                <Text className={styles.itemName}>{getSectionDisplayName(sectionId)}</Text>
+                {isLinkedList && linkedList && (
+                  <div className={styles.sectionActions}>
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={<EditRegular />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditLinkedList(linkedList);
+                      }}
+                      title="Edit"
+                    />
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={<DeleteRegular />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveLinkedList(sectionId);
+                      }}
+                      title="Remove"
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <Divider />
+
+        {/* Column Settings Section */}
+        <div className={styles.section} style={{ marginTop: '24px' }}>
           <Text className={styles.sectionTitle}>Columns</Text>
           <Text className={styles.sectionHint}>
-            Drag to reorder, toggle visibility, and choose display style
+            Configure which columns appear in Details and their display style
           </Text>
 
           {columnSettings.map((setting, index) => {
@@ -441,77 +574,58 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
           })}
         </div>
 
-        {/* Related Sections */}
         <Divider />
+
+        {/* Linked Lists */}
         <div className={styles.section} style={{ marginTop: '24px' }}>
           <div className={styles.sectionHeader}>
-            <Text className={styles.sectionTitle}>Related Sections</Text>
+            <Text className={styles.sectionTitle}>Linked Lists</Text>
             <Button
               appearance="subtle"
               size="small"
               icon={<AddRegular />}
-              onClick={handleAddSection}
+              onClick={handleAddLinkedList}
             >
               Add
             </Button>
           </div>
           <Text className={styles.sectionHint}>
-            Drag to reorder, click edit to configure settings
+            Lists with lookup relationships to this list
           </Text>
 
-          {sectionOrder.length === 0 ? (
+          {linkedLists.length === 0 ? (
             <div className={styles.emptySection}>
-              <Text>No related sections configured.</Text>
+              <Text>No linked lists configured.</Text>
             </div>
           ) : (
-            sectionOrder.map((sectionId, index) => {
-              const section = getSectionById(sectionId);
-              if (!section) return null;
-
-              return (
-                <div
-                  key={sectionId}
-                  draggable
-                  onDragStart={() => setDraggedSectionIndex(index)}
-                  onDragEnd={() => setDraggedSectionIndex(null)}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    if (draggedSectionIndex !== null && draggedSectionIndex !== index) {
-                      handleSectionReorder(draggedSectionIndex, index);
-                      setDraggedSectionIndex(index);
-                    }
-                  }}
-                  className={`${styles.sectionItem} ${
-                    draggedSectionIndex === index ? styles.sectionItemDragging : ''
-                  }`}
-                >
-                  <ReOrderDotsVerticalRegular className={styles.dragHandle} />
-                  <Text className={styles.itemName}>{section.title}</Text>
-                  <div className={styles.sectionActions}>
-                    <Button
-                      appearance="subtle"
-                      size="small"
-                      icon={<EditRegular />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditSection(section);
-                      }}
-                      title="Edit"
-                    />
-                    <Button
-                      appearance="subtle"
-                      size="small"
-                      icon={<DeleteRegular />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemoveSection(sectionId);
-                      }}
-                      title="Remove"
-                    />
-                  </div>
+            linkedLists.map((linkedList) => (
+              <div
+                key={linkedList.id}
+                className={styles.sectionItem}
+                style={{ cursor: 'default' }}
+              >
+                <Text className={styles.itemName}>{linkedList.title}</Text>
+                <Text style={{ color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 }}>
+                  {linkedList.source.listName}
+                </Text>
+                <div className={styles.sectionActions}>
+                  <Button
+                    appearance="subtle"
+                    size="small"
+                    icon={<EditRegular />}
+                    onClick={() => handleEditLinkedList(linkedList)}
+                    title="Edit"
+                  />
+                  <Button
+                    appearance="subtle"
+                    size="small"
+                    icon={<DeleteRegular />}
+                    onClick={() => handleRemoveLinkedList(linkedList.id)}
+                    title="Remove"
+                  />
                 </div>
-              );
-            })
+              </div>
+            ))
           )}
         </div>
 
@@ -527,15 +641,16 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
       </DrawerBody>
     </OverlayDrawer>
 
-    {/* Related Section Flyout */}
-    <RelatedSectionFlyout
+    {/* Linked List Flyout */}
+    <LinkedListFlyout
       open={flyoutOpen}
-      section={editingSection}
+      section={editingLinkedList}
       primaryListId={primaryListId}
       primarySiteId={primarySiteId}
       primarySiteUrl={primarySiteUrl}
+      columnMetadata={columnMetadata}
       onClose={() => setFlyoutOpen(false)}
-      onSave={handleSaveSection}
+      onSave={handleSaveLinkedList}
     />
   </>
   );

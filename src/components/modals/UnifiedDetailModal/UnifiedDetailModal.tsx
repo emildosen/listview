@@ -560,7 +560,7 @@ function UnifiedDetailModalContent({
               </div>
             ) : (
               <>
-                {/* Stat boxes */}
+                {/* Stat boxes - always shown at top */}
                 {statColumns.length > 0 && (
                   <div className={styles.statBoxContainer}>
                     {statColumns.map(col => {
@@ -576,71 +576,75 @@ function UnifiedDetailModalContent({
                   </div>
                 )}
 
-                {/* Description field */}
-                {descriptionColumn && (
-                  <DescriptionField
-                    value={String(currentItem.fields[descriptionColumn.internalName] ?? '')}
-                    isRichText={getColumnMetadata(descriptionColumn.internalName)?.text?.textType === 'richText'}
-                    isSaving={savingFields.has(descriptionColumn.internalName)}
-                    readOnly={getColumnMetadata(descriptionColumn.internalName)?.readOnly}
-                    onSave={(value) => handleSaveField(descriptionColumn.internalName, value)}
-                  />
-                )}
+                {/* Render sections in configured order */}
+                {(layoutConfig.sectionOrder ?? [DETAILS_SECTION_ID, DESCRIPTION_SECTION_ID]).map(sectionId => {
+                  // Details section
+                  if (sectionId === DETAILS_SECTION_ID) {
+                    if (listColumns.length === 0) return null;
+                    return (
+                      <div key={sectionId} className={mergeClasses(styles.detailsCard, theme === 'dark' && styles.detailsCardDark)}>
+                        <Text className={styles.sectionTitle}>Details</Text>
+                        <div className={styles.detailsGrid}>
+                          {listColumns.map(col => (
+                            <DetailFieldEdit
+                              key={col.internalName}
+                              fieldName={col.internalName}
+                              label={getDisplayName(col.internalName)}
+                              value={currentItem.fields[col.internalName]}
+                              formField={getFormField(col.internalName)}
+                              columnMetadata={getColumnMetadata(col.internalName)}
+                              isEditing={editingField === col.internalName}
+                              isHovered={hoveredField === col.internalName}
+                              isSaving={savingFields.has(col.internalName)}
+                              error={fieldErrors[col.internalName] ?? null}
+                              siteId={currentSiteId}
+                              getLookupOptions={getLookupOptions}
+                              lookupOptions={lookupOptions}
+                              setLookupOptions={setLookupOptions}
+                              onStartEdit={() => setEditingField(col.internalName)}
+                              onCancelEdit={() => setEditingField(null)}
+                              onSave={handleSaveField}
+                              onMouseEnter={() => setHoveredField(col.internalName)}
+                              onMouseLeave={() => setHoveredField(null)}
+                              onClearError={() => setFieldErrors(prev => {
+                                const next = { ...prev };
+                                delete next[col.internalName];
+                                return next;
+                              })}
+                              renderValue={renderFieldValue}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
 
-                {/* Detail fields */}
-                {listColumns.length > 0 && (
-                  <div className={mergeClasses(styles.detailsCard, theme === 'dark' && styles.detailsCardDark)}>
-                    <Text className={styles.sectionTitle}>Details</Text>
-                    <div className={styles.detailsGrid}>
-                      {listColumns.map(col => (
-                        <DetailFieldEdit
-                          key={col.internalName}
-                          fieldName={col.internalName}
-                          label={getDisplayName(col.internalName)}
-                          value={currentItem.fields[col.internalName]}
-                          formField={getFormField(col.internalName)}
-                          columnMetadata={getColumnMetadata(col.internalName)}
-                          isEditing={editingField === col.internalName}
-                          isHovered={hoveredField === col.internalName}
-                          isSaving={savingFields.has(col.internalName)}
-                          error={fieldErrors[col.internalName] ?? null}
-                          siteId={currentSiteId}
-                          getLookupOptions={getLookupOptions}
-                          lookupOptions={lookupOptions}
-                          setLookupOptions={setLookupOptions}
-                          onStartEdit={() => setEditingField(col.internalName)}
-                          onCancelEdit={() => setEditingField(null)}
-                          onSave={handleSaveField}
-                          onMouseEnter={() => setHoveredField(col.internalName)}
-                          onMouseLeave={() => setHoveredField(null)}
-                          onClearError={() => setFieldErrors(prev => {
-                            const next = { ...prev };
-                            delete next[col.internalName];
-                            return next;
-                          })}
-                          renderValue={renderFieldValue}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
+                  // Description section
+                  if (sectionId === DESCRIPTION_SECTION_ID) {
+                    if (!descriptionColumn) return null;
+                    return (
+                      <DescriptionField
+                        key={sectionId}
+                        value={String(currentItem.fields[descriptionColumn.internalName] ?? '')}
+                        isRichText={getColumnMetadata(descriptionColumn.internalName)?.text?.textType === 'richText'}
+                        isSaving={savingFields.has(descriptionColumn.internalName)}
+                        readOnly={getColumnMetadata(descriptionColumn.internalName)?.readOnly}
+                        onSave={(value) => handleSaveField(descriptionColumn.internalName, value)}
+                      />
+                    );
+                  }
 
-                {/* Related sections */}
-                {listDetailConfig.relatedSections.length > 0 && (
-                  <>
-                    {(layoutConfig.relatedSectionOrder ?? listDetailConfig.relatedSections.map(s => s.id)).map(sectionId => {
-                      const section = listDetailConfig.relatedSections.find(s => s.id === sectionId);
-                      if (!section) return null;
-                      return (
-                        <RelatedSectionView
-                          key={section.id}
-                          section={section}
-                          parentItem={currentItem}
-                        />
-                      );
-                    })}
-                  </>
-                )}
+                  // Linked list section
+                  const linkedList = listDetailConfig.relatedSections.find(s => s.id === sectionId);
+                  if (!linkedList) return null;
+                  return (
+                    <RelatedSectionView
+                      key={linkedList.id}
+                      section={linkedList}
+                      parentItem={currentItem}
+                    />
+                  );
+                })}
               </>
             )}
           </DialogBody>
@@ -908,6 +912,10 @@ function createDefaultListDetailConfig(
   };
 }
 
+// Section IDs for built-in sections
+const DETAILS_SECTION_ID = 'details';
+const DESCRIPTION_SECTION_ID = 'description';
+
 function getEffectiveLayoutConfig(
   existingLayout: DetailLayoutConfig | undefined,
   displayColumns: PageColumn[],
@@ -919,10 +927,13 @@ function getEffectiveLayoutConfig(
     displayStyle: 'list' as const,
   }));
 
+  const linkedListIds = relatedSections.map(s => s.id);
+  const defaultSectionOrder = [DETAILS_SECTION_ID, DESCRIPTION_SECTION_ID, ...linkedListIds];
+
   if (!existingLayout) {
     return {
       columnSettings: defaultSettings,
-      relatedSectionOrder: relatedSections.map(s => s.id),
+      sectionOrder: defaultSectionOrder,
     };
   }
 
@@ -941,8 +952,39 @@ function getEffectiveLayoutConfig(
       displayStyle: 'list' as const,
     }));
 
+  // Build section order
+  let sectionOrder: string[];
+  if (existingLayout.sectionOrder) {
+    // Use new sectionOrder, validate and merge
+    const validIds = new Set([DETAILS_SECTION_ID, DESCRIPTION_SECTION_ID, ...linkedListIds]);
+    sectionOrder = existingLayout.sectionOrder.filter(id => validIds.has(id));
+    // Add any missing linked lists
+    for (const id of linkedListIds) {
+      if (!sectionOrder.includes(id)) {
+        sectionOrder.push(id);
+      }
+    }
+    // Ensure details and description are present
+    if (!sectionOrder.includes(DETAILS_SECTION_ID)) {
+      sectionOrder.unshift(DETAILS_SECTION_ID);
+    }
+    if (!sectionOrder.includes(DESCRIPTION_SECTION_ID)) {
+      const detailsIdx = sectionOrder.indexOf(DETAILS_SECTION_ID);
+      sectionOrder.splice(detailsIdx + 1, 0, DESCRIPTION_SECTION_ID);
+    }
+  } else if (existingLayout.relatedSectionOrder) {
+    // Legacy: convert relatedSectionOrder to sectionOrder
+    const validLinkedListIds = existingLayout.relatedSectionOrder.filter(id =>
+      linkedListIds.includes(id)
+    );
+    const newListIds = linkedListIds.filter(id => !validLinkedListIds.includes(id));
+    sectionOrder = [DETAILS_SECTION_ID, DESCRIPTION_SECTION_ID, ...validLinkedListIds, ...newListIds];
+  } else {
+    sectionOrder = defaultSectionOrder;
+  }
+
   return {
     columnSettings: [...existingSettings, ...newColumns],
-    relatedSectionOrder: existingLayout.relatedSectionOrder ?? relatedSections.map(s => s.id),
+    sectionOrder,
   };
 }
