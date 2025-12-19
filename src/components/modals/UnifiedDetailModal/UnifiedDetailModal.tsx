@@ -25,7 +25,7 @@ import {
 } from '@fluentui/react-icons';
 import { getListItems, isSharePointUrl, type GraphListColumn, type GraphListItem } from '../../../auth/graphClient';
 import { updateListItem, deleteListItem, createSPClient } from '../../../services/sharepoint';
-import type { PageDefinition, PageColumn, DetailLayoutConfig, ListDetailConfig, RelatedSection } from '../../../types/page';
+import type { PageDefinition, PageColumn, DetailLayoutConfig, DetailColumnSetting, ListDetailConfig, RelatedSection } from '../../../types/page';
 import { useSettings } from '../../../contexts/SettingsContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { ModalNavigationProvider, useModalNavigation, type NavigationEntry } from './ModalNavigationContext';
@@ -1060,45 +1060,37 @@ function getEffectiveLayoutConfig(
   displayColumns: PageColumn[],
   relatedSections: RelatedSection[]
 ): DetailLayoutConfig {
-  const defaultSettings = displayColumns.map(col => ({
-    internalName: col.internalName,
-    visible: true,
-    displayStyle: 'list' as const,
-  }));
-
   const linkedListIds = relatedSections.map(s => s.id);
   const defaultSectionOrder = [DETAILS_SECTION_ID, DESCRIPTION_SECTION_ID, ...linkedListIds];
 
-  if (!existingLayout) {
-    return {
-      columnSettings: defaultSettings,
-      sectionOrder: defaultSectionOrder,
-    };
+  // Build a map of existing settings for quick lookup
+  const existingSettingsMap = new Map<string, DetailColumnSetting>();
+  if (existingLayout?.columnSettings) {
+    for (const setting of existingLayout.columnSettings) {
+      // Only keep first occurrence (deduplication)
+      if (!existingSettingsMap.has(setting.internalName)) {
+        existingSettingsMap.set(setting.internalName, setting);
+      }
+    }
   }
 
-  const validColumnNames = new Set(displayColumns.map(c => c.internalName));
-
-  // Deduplicate by internalName (keep first occurrence to preserve order)
-  const seenNames = new Set<string>();
-  const existingSettings = existingLayout.columnSettings.filter(s => {
-    if (!validColumnNames.has(s.internalName) || seenNames.has(s.internalName)) {
-      return false;
+  // Build column settings based on displayColumns, using existing settings where available
+  const columnSettings: DetailColumnSetting[] = displayColumns.map(col => {
+    const existing = existingSettingsMap.get(col.internalName);
+    if (existing) {
+      return existing;
     }
-    seenNames.add(s.internalName);
-    return true;
-  });
-
-  const newColumns = displayColumns
-    .filter(col => !seenNames.has(col.internalName))
-    .map(col => ({
+    // Default settings for columns not in existing config
+    return {
       internalName: col.internalName,
       visible: true,
       displayStyle: 'list' as const,
-    }));
+    };
+  });
 
   // Build section order
   let sectionOrder: string[];
-  if (existingLayout.sectionOrder) {
+  if (existingLayout?.sectionOrder) {
     // Use new sectionOrder, validate and merge
     const validIds = new Set([DETAILS_SECTION_ID, DESCRIPTION_SECTION_ID, ...linkedListIds]);
     sectionOrder = existingLayout.sectionOrder.filter(id => validIds.has(id));
@@ -1116,7 +1108,7 @@ function getEffectiveLayoutConfig(
       const detailsIdx = sectionOrder.indexOf(DETAILS_SECTION_ID);
       sectionOrder.splice(detailsIdx + 1, 0, DESCRIPTION_SECTION_ID);
     }
-  } else if (existingLayout.relatedSectionOrder) {
+  } else if (existingLayout?.relatedSectionOrder) {
     // Legacy: convert relatedSectionOrder to sectionOrder
     const validLinkedListIds = existingLayout.relatedSectionOrder.filter(id =>
       linkedListIds.includes(id)
@@ -1128,7 +1120,7 @@ function getEffectiveLayoutConfig(
   }
 
   return {
-    columnSettings: [...existingSettings, ...newColumns],
+    columnSettings,
     sectionOrder,
   };
 }
