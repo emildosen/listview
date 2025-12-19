@@ -538,10 +538,7 @@ function TableView({
           item={selectedItem}
           page={page}
           onClose={() => setSelectedItem(null)}
-          onItemUpdated={() => {
-            setSelectedItem(null);
-            onItemUpdated?.();
-          }}
+          onItemUpdated={onItemUpdated}
           onItemDeleted={() => {
             setSelectedItem(null);
             onItemDeleted?.();
