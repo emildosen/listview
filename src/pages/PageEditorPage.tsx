@@ -175,7 +175,7 @@ function PageEditorPage() {
           <Text className={styles.description}>
             {isEditMode
               ? 'Modify the page configuration below.'
-              : 'Configure a new entity detail page with search, filters, and related data.'}
+              : 'Configure a new search page or report dashboard.'}
           </Text>
         </div>
 
