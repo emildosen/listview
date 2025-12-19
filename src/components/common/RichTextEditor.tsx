@@ -107,50 +107,20 @@ function ensureTinyMCEGlobalStyles() {
       z-index: 1000001 !important;
     }
 
-    /* Compact toolbar styling */
+    /* Compact toolbar - reduce height only */
     .tox .tox-toolbar,
     .tox .tox-toolbar__overflow,
     .tox .tox-toolbar__primary {
       background: none !important;
-      padding: 2px 4px !important;
+      padding: 0 4px !important;
     }
 
-    .tox .tox-tbtn {
-      height: 32px !important;
-      width: 32px !important;
-      margin: 0 1px !important;
-    }
-
-    .tox .tox-tbtn .tox-icon {
-      width: 18px !important;
-      height: 18px !important;
-    }
-
-    .tox .tox-tbtn .tox-icon svg {
-      width: 18px !important;
-      height: 18px !important;
-    }
-
-    .tox .tox-split-button {
-      height: 32px !important;
-      margin: 0 1px !important;
-    }
-
-    .tox .tox-split-button .tox-icon svg {
-      width: 18px !important;
-      height: 18px !important;
-    }
-
-    .tox .tox-tbtn--bespoke {
-      width: auto !important;
+    .tox .tox-editor-header {
+      padding: 0 !important;
     }
 
     .tox .tox-toolbar-overlord {
       padding: 0 !important;
-    }
-
-    .tox .tox-toolbar__group {
-      padding: 0 6px !important;
     }
   `;
   document.head.appendChild(style);
