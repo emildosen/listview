@@ -426,6 +426,34 @@ function DetailModal({
     saveHandler: null,
   });
 
+  // Ref for focus restoration after nested modals close
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Track previous modal states to detect close events
+  const prevEditModalOpen = useRef(editModalOpen);
+  const prevRelatedFormOpen = useRef(relatedFormModal.open);
+
+  // Restore focus to DetailModal when edit modal closes
+  useEffect(() => {
+    if (prevEditModalOpen.current && !editModalOpen) {
+      // Use setTimeout to ensure the modal is fully unmounted
+      setTimeout(() => {
+        closeBtnRef.current?.focus();
+      }, 0);
+    }
+    prevEditModalOpen.current = editModalOpen;
+  }, [editModalOpen]);
+
+  // Restore focus to DetailModal when related form modal closes
+  useEffect(() => {
+    if (prevRelatedFormOpen.current && !relatedFormModal.open) {
+      setTimeout(() => {
+        closeBtnRef.current?.focus();
+      }, 0);
+    }
+    prevRelatedFormOpen.current = relatedFormModal.open;
+  }, [relatedFormModal.open]);
+
   // Create SP client for this list's site
   const listSpClientRef = useRef<SPFI | null>(null);
   const [listSpClientReady, setListSpClientReady] = useState(false);
@@ -694,6 +722,7 @@ function DetailModal({
                 Customize
               </Button>
               <Button
+                ref={closeBtnRef}
                 appearance="subtle"
                 icon={<DismissRegular />}
                 onClick={onClose}
