@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   makeStyles,
   tokens,
@@ -7,7 +7,7 @@ import {
   Spinner,
   mergeClasses,
 } from '@fluentui/react-components';
-import { EditRegular } from '@fluentui/react-icons';
+import { RichTextEditor } from '../../common/RichTextEditor';
 
 const useStyles = makeStyles({
   container: {
@@ -23,78 +23,45 @@ const useStyles = makeStyles({
     letterSpacing: '0.02em',
     marginBottom: '8px',
   },
-  contentWrapper: {
+  textareaWrapper: {
     position: 'relative',
     minHeight: '80px',
-    padding: '12px 16px',
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke1}`,
     backgroundColor: tokens.colorNeutralBackground2,
-    cursor: 'pointer',
     transitionProperty: 'border-color, background-color',
     transitionDuration: '0.15s',
     transitionTimingFunction: 'ease',
+    ':hover': {
+      border: `1px solid ${tokens.colorNeutralStroke1Hover}`,
+    },
   },
-  contentWrapperHover: {
-    border: `1px solid ${tokens.colorNeutralStroke1Hover}`,
-    backgroundColor: tokens.colorNeutralBackground3,
-  },
-  contentWrapperEditing: {
-    cursor: 'default',
+  textareaWrapperFocused: {
     border: `1px solid ${tokens.colorBrandStroke1}`,
     backgroundColor: tokens.colorNeutralBackground1,
   },
-  contentWrapperReadOnly: {
+  textareaWrapperReadOnly: {
     cursor: 'default',
-  },
-  placeholder: {
-    color: tokens.colorNeutralForeground4,
-    fontStyle: 'italic',
-  },
-  content: {
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'break-word',
-    lineHeight: '1.5',
-  },
-  richContent: {
-    '& p': {
-      margin: '0 0 8px 0',
-    },
-    '& p:last-child': {
-      marginBottom: 0,
-    },
-    '& ul, & ol': {
-      margin: '0 0 8px 0',
-      paddingLeft: '24px',
-    },
-    '& a': {
-      color: tokens.colorBrandForegroundLink,
-      textDecoration: 'none',
-      '&:hover': {
-        textDecoration: 'underline',
-      },
-    },
-  },
-  editIcon: {
-    position: 'absolute',
-    top: '12px',
-    right: '12px',
-    opacity: 0,
-    transition: 'opacity 0.15s ease',
-    color: tokens.colorNeutralForeground3,
-  },
-  editIconVisible: {
-    opacity: 1,
   },
   textarea: {
     width: '100%',
-    minHeight: '120px',
+    minHeight: '80px',
     resize: 'vertical',
+    border: 'none',
+    backgroundColor: 'transparent',
+    '& textarea': {
+      backgroundColor: 'transparent',
+    },
   },
   savingIndicator: {
     position: 'absolute',
     top: '12px',
     right: '12px',
+  },
+  error: {
+    marginTop: '4px',
+    color: tokens.colorPaletteRedForeground1,
+    fontSize: tokens.fontSizeBase200,
   },
 });
 
@@ -116,132 +83,101 @@ export function DescriptionField({
   onSave,
 }: DescriptionFieldProps) {
   const styles = useStyles();
-  const [isEditing, setIsEditing] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
-  // editValue is only used during editing - initialized from value when editing starts
-  const [editValue, setEditValue] = useState(value);
+  const [localValue, setLocalValue] = useState(value);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const lastSavedValue = useRef(value);
 
-  // Sync edit value with prop when not editing (valid prop-to-state sync pattern)
+  // Sync local value with prop when external changes occur
   useEffect(() => {
-    if (!isEditing) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setEditValue(value);
+    if (value !== lastSavedValue.current) {
+      setLocalValue(value);
+      lastSavedValue.current = value;
     }
-  }, [value, isEditing]);
+  }, [value]);
 
-  const handleStartEdit = () => {
-    if (readOnly || isEditing || isSaving) return;
-    setEditValue(value);
-    setIsEditing(true);
+  const handleSave = useCallback(async () => {
+    if (localValue === lastSavedValue.current) {
+      return; // No changes to save
+    }
+
+    setSaving(true);
     setError(null);
-    setTimeout(() => {
-      textareaRef.current?.focus();
-      textareaRef.current?.select();
-    }, 0);
-  };
-
-  const handleCommit = async () => {
-    if (editValue === value) {
-      setIsEditing(false);
-      return;
-    }
-
     try {
-      await onSave(editValue);
-      setIsEditing(false);
-      setError(null);
+      await onSave(localValue);
+      lastSavedValue.current = localValue;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save');
+    } finally {
+      setSaving(false);
     }
-  };
+  }, [localValue, onSave]);
 
-  const handleCancel = () => {
-    setEditValue(value);
-    setIsEditing(false);
-    setError(null);
-  };
+  const handleTextareaChange = useCallback((_e: unknown, data: { value: string }) => {
+    setLocalValue(data.value);
+  }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleTextareaKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault();
-      handleCancel();
+      setLocalValue(lastSavedValue.current);
+      textareaRef.current?.blur();
     } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      handleCommit();
+      handleSave();
+      textareaRef.current?.blur();
     }
-  };
+  }, [handleSave]);
 
-  const showEditIcon = isHovered && !isEditing && !readOnly && !isSaving;
+  const showSaving = isSaving || saving;
 
-  const renderContent = () => {
-    if (!value) {
-      return <span className={styles.placeholder}>{placeholder}</span>;
-    }
+  // Rich text: use TinyMCE editor
+  if (isRichText) {
+    return (
+      <div className={styles.container}>
+        <Text className={styles.label}>Description</Text>
+        <div style={{ position: 'relative' }}>
+          <RichTextEditor
+            value={localValue}
+            onChange={setLocalValue}
+            onBlur={handleSave}
+            placeholder={placeholder}
+            readOnly={readOnly}
+            minHeight={80}
+          />
+          {showSaving && <Spinner size="tiny" className={styles.savingIndicator} />}
+        </div>
+        {error && <Text className={styles.error}>{error}</Text>}
+      </div>
+    );
+  }
 
-    if (isRichText) {
-      // Render HTML content safely (SharePoint rich text)
-      return (
-        <div
-          className={mergeClasses(styles.content, styles.richContent)}
-          dangerouslySetInnerHTML={{ __html: value }}
-        />
-      );
-    }
-
-    return <span className={styles.content}>{value}</span>;
-  };
-
+  // Plain text: use Fluent UI Textarea (always visible, no mode toggle)
   return (
     <div className={styles.container}>
       <Text className={styles.label}>Description</Text>
       <div
         className={mergeClasses(
-          styles.contentWrapper,
-          isHovered && !isEditing && !readOnly && styles.contentWrapperHover,
-          isEditing && styles.contentWrapperEditing,
-          readOnly && styles.contentWrapperReadOnly
+          styles.textareaWrapper,
+          readOnly && styles.textareaWrapperReadOnly
         )}
-        onClick={handleStartEdit}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        role={readOnly ? undefined : 'button'}
-        tabIndex={readOnly || isEditing ? -1 : 0}
-        onKeyDown={(e) => {
-          if (!readOnly && !isEditing && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault();
-            handleStartEdit();
-          }
-        }}
-        aria-label={readOnly ? undefined : 'Edit description'}
       >
-        {isEditing ? (
-          <Textarea
-            ref={textareaRef}
-            value={editValue}
-            onChange={(_e, data) => setEditValue(data.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={handleCommit}
-            placeholder={placeholder}
-            className={styles.textarea}
-            resize="vertical"
-          />
-        ) : (
-          <>
-            {renderContent()}
-            {isSaving && <Spinner size="tiny" className={styles.savingIndicator} />}
-            <EditRegular
-              className={mergeClasses(styles.editIcon, showEditIcon && styles.editIconVisible)}
-            />
-          </>
-        )}
+        <Textarea
+          ref={textareaRef}
+          value={localValue}
+          onChange={handleTextareaChange}
+          onKeyDown={handleTextareaKeyDown}
+          onBlur={handleSave}
+          placeholder={placeholder}
+          className={styles.textarea}
+          resize="vertical"
+          disabled={readOnly}
+          appearance="outline"
+        />
+        {showSaving && <Spinner size="tiny" className={styles.savingIndicator} />}
       </div>
-      {error && (
-        <Text style={{ color: tokens.colorPaletteRedForeground1, fontSize: tokens.fontSizeBase200 }}>
-          {error}
-        </Text>
-      )}
+      {error && <Text className={styles.error}>{error}</Text>}
     </div>
   );
 }
