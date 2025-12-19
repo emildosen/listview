@@ -156,6 +156,7 @@ const useStyles = makeStyles({
     width: '2px',
     height: 'calc(100% - 24px)',
     backgroundColor: tokens.colorNeutralStroke1,
+    zIndex: 0,
   },
   stepLineCompleted: {
     backgroundColor: tokens.colorPaletteGreenBackground3,
@@ -661,6 +662,16 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
               )}
               onClick={() => handleStepClick(step.key, index)}
             >
+              {/* Connecting line - rendered first so it's behind the icon */}
+              {!isLast && (
+                <div
+                  className={mergeClasses(
+                    styles.stepLine,
+                    isPastCurrent && styles.stepLineCompleted
+                  )}
+                />
+              )}
+
               {/* Step icon */}
               <div
                 className={mergeClasses(
@@ -684,16 +695,6 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
                   {step.label}
                 </Text>
               </div>
-
-              {/* Connecting line */}
-              {!isLast && (
-                <div
-                  className={mergeClasses(
-                    styles.stepLine,
-                    isPastCurrent && styles.stepLineCompleted
-                  )}
-                />
-              )}
             </div>
           );
         })}
