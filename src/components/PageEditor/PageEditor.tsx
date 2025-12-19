@@ -120,6 +120,8 @@ const useStyles = makeStyles({
     fontSize: '16px',
     flexShrink: 0,
     transition: 'all 0.15s ease',
+    position: 'relative',
+    zIndex: 1,
   },
   stepIconActive: {
     backgroundColor: tokens.colorBrandBackground,
