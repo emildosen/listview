@@ -60,14 +60,13 @@ interface ItemFormModalProps {
 }
 
 const useStyles = makeStyles({
-  loadingOverlay: {
-    position: 'fixed',
-    inset: '0',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+  loadingContainer: {
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1000,
+    padding: '40px 20px',
+    gap: '12px',
   },
   dialogSurface: {
     maxWidth: '500px',
@@ -465,17 +464,17 @@ function ItemFormModal({
     );
   };
 
-  // Don't render Dialog until data is ready - avoids Fluent UI Tabster focus issues
-  if (loading) {
-    return <div className={styles.loadingOverlay}><Spinner label="Loading..." /></div>;
-  }
-
   return (
     <Dialog open onOpenChange={(_event, data) => { if (!data.open) onClose(); }}>
       <DialogSurface className={styles.dialogSurface}>
         <DialogTitle>{configError ? 'Error' : mode === 'create' ? 'Add New Item' : 'Edit Item'}</DialogTitle>
         <DialogBody className={styles.dialogBody}>
-          {configError ? (
+          {loading ? (
+            <div className={styles.loadingContainer}>
+              <Spinner size="medium" />
+              <span>Loading form fields...</span>
+            </div>
+          ) : configError ? (
             <MessageBar intent="error"><MessageBarBody>{configError}</MessageBarBody></MessageBar>
           ) : (
             <>
@@ -489,8 +488,8 @@ function ItemFormModal({
             <Button onClick={onClose}>Close</Button>
           ) : (
             <>
-              <Button appearance="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
-              <Button appearance="primary" onClick={handleSubmit} disabled={saving} icon={saving ? <Spinner size="tiny" /> : undefined}>
+              <Button appearance="secondary" onClick={onClose} disabled={saving || loading}>Cancel</Button>
+              <Button appearance="primary" onClick={handleSubmit} disabled={saving || loading} icon={saving ? <Spinner size="tiny" /> : undefined}>
                 {saving ? 'Saving...' : 'Save'}
               </Button>
             </>
