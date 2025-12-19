@@ -474,7 +474,17 @@ function UnifiedDetailModalContent({
 
   if (!listDetailConfig || !layoutConfig) {
     return (
-      <Dialog open onOpenChange={(_, data) => !data.open && onClose()}>
+      <Dialog
+        open
+        modalType="alert"
+        onOpenChange={(_, data) => {
+          // Only close on explicit ESC key press
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if (!data.open && (data as any).type === 'escapeKeyDown') {
+            onClose();
+          }
+        }}
+      >
         <DialogSurface className={styles.surface}>
           <div className={styles.loadingContainer}>
             <Spinner size="medium" />
@@ -486,7 +496,18 @@ function UnifiedDetailModalContent({
 
   return (
     <>
-      <Dialog open onOpenChange={(_, data) => !data.open && onClose()}>
+      <Dialog
+        open
+        modalType="alert"
+        onOpenChange={(_, data) => {
+          // Only close on explicit ESC key press, not backdrop clicks or focus loss
+          // This prevents the modal from closing when TinyMCE opens dropdowns/dialogs
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if (!data.open && (data as any).type === 'escapeKeyDown') {
+            onClose();
+          }
+        }}
+      >
         <DialogSurface className={styles.surface}>
           <DialogTitle className={styles.dialogTitle}>
             {/* Navigation buttons */}
