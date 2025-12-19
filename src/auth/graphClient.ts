@@ -229,11 +229,10 @@ export async function getListColumns(
     .select('id,name,displayName,columnGroup,hidden,readOnly,defaultValue,text,boolean,number,dateTime,lookup,choice,hyperlinkOrPicture')
     .get();
 
-  // Filter out hidden and system columns
+  // Filter out system columns but keep hidden columns (marked with hidden: true for UI to filter)
   const columns: GraphListColumn[] = (response.value || [])
     .filter(
       (col: GraphListColumn & { lookup?: { listId?: string; columnName?: string; allowMultipleValues?: boolean } }) =>
-        !col.hidden &&
         col.columnGroup !== '_Hidden' &&
         !['ContentType', 'Attachments', '_UIVersionString', 'Edit', 'LinkTitleNoMenu', 'LinkTitle', 'DocIcon', 'ItemChildCount', 'FolderChildCount', 'AppAuthor', 'AppEditor'].includes(col.name)
     )
