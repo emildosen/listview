@@ -84,6 +84,7 @@ export function InlineEditLookup({
     return (
       <Dropdown
         value="Loading..."
+        selectedOptions={[]}
         disabled
         className={styles.dropdown}
         style={{ width: `${dropdownWidth}px` }}
