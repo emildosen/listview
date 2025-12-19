@@ -116,9 +116,9 @@ export function RichTextEditor({
         onBlur={handleBlur}
         disabled={readOnly}
         init={{
-          // Appearance
+          // Appearance - use oxide-dark skin for dark mode
           skin: isDark ? 'oxide-dark' : 'oxide',
-          content_css: isDark ? 'dark' : 'default',
+          content_css: false, // Don't load external CSS, use content_style instead
 
           // Inline mode for seamless editing
           inline: false,
@@ -145,7 +145,7 @@ export function RichTextEditor({
           link_default_target: '_blank',
           link_assume_external_targets: true,
 
-          // Content styling to match Fluent UI
+          // Content styling to match Fluent UI theme
           content_style: `
             body {
               font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -154,7 +154,7 @@ export function RichTextEditor({
               margin: 12px 16px;
               padding: 0;
               color: ${isDark ? '#ffffff' : '#242424'};
-              background: transparent;
+              background-color: ${isDark ? '#1a1a1a' : '#ffffff'};
             }
             p { margin: 0 0 8px 0; }
             p:last-child { margin-bottom: 0; }
