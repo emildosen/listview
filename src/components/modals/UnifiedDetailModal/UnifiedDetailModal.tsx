@@ -38,7 +38,7 @@ import { InlineEditDate, formatDateForInput, formatDateTimeForInput, formatDateF
 import { InlineEditBoolean } from './InlineEditBoolean';
 import { DescriptionField } from './DescriptionField';
 import { RelatedSectionView } from './RelatedSectionView';
-import StatBox from '../../PageDisplay/StatBox';
+import { EditableStatBox } from './EditableStatBox';
 import DetailCustomizeDrawer from '../../PageDisplay/DetailCustomizeDrawer';
 import { SharePointLink } from '../../common/SharePointLink';
 import { useListFormConfig } from '../../../hooks/useListFormConfig';
@@ -671,10 +671,32 @@ function UnifiedDetailModalContent({
                     {statColumns.map(col => {
                       const value = currentItem.fields[col.internalName];
                       return (
-                        <StatBox
+                        <EditableStatBox
                           key={col.internalName}
+                          fieldName={col.internalName}
                           label={getDisplayName(col.internalName)}
-                          value={getStatValue(col.internalName, value)}
+                          value={value}
+                          displayValue={getStatValue(col.internalName, value)}
+                          formField={getFormField(col.internalName)}
+                          columnMetadata={getColumnMetadata(col.internalName)}
+                          isEditing={editingField === col.internalName}
+                          isHovered={hoveredField === col.internalName}
+                          isSaving={savingFields.has(col.internalName)}
+                          error={fieldErrors[col.internalName] ?? null}
+                          siteId={currentSiteId}
+                          getLookupOptions={getLookupOptions}
+                          lookupOptions={lookupOptions}
+                          setLookupOptions={setLookupOptions}
+                          onStartEdit={() => setEditingField(col.internalName)}
+                          onCancelEdit={() => setEditingField(null)}
+                          onSave={handleSaveField}
+                          onMouseEnter={() => setHoveredField(col.internalName)}
+                          onMouseLeave={() => setHoveredField(null)}
+                          onClearError={() => setFieldErrors(prev => {
+                            const next = { ...prev };
+                            delete next[col.internalName];
+                            return next;
+                          })}
                         />
                       );
                     })}
