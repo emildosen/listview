@@ -445,70 +445,9 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
       </DrawerHeader>
 
       <DrawerBody>
-        {/* Sections - Drag to reorder */}
+        {/* Detail Columns Section */}
         <div className={styles.section}>
-          <Text className={styles.sectionTitle}>Sections</Text>
-          <Text className={styles.sectionHint}>
-            Drag to reorder how sections appear in the detail view
-          </Text>
-
-          {visibleSections.map((sectionId, index) => {
-            const isLinkedList = isLinkedListSection(sectionId);
-            const linkedList = isLinkedList ? getLinkedListById(sectionId) : null;
-
-            return (
-              <div
-                key={sectionId}
-                draggable
-                onDragStart={() => setDraggedSectionIndex(index)}
-                onDragEnd={() => setDraggedSectionIndex(null)}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  if (draggedSectionIndex !== null && draggedSectionIndex !== index) {
-                    handleSectionReorder(draggedSectionIndex, index);
-                    setDraggedSectionIndex(index);
-                  }
-                }}
-                className={`${styles.sectionItem} ${
-                  draggedSectionIndex === index ? styles.sectionItemDragging : ''
-                }`}
-              >
-                <ReOrderDotsVerticalRegular className={styles.dragHandle} />
-                <Text className={styles.itemName}>{getSectionDisplayName(sectionId)}</Text>
-                {isLinkedList && linkedList && (
-                  <div className={styles.sectionActions}>
-                    <Button
-                      appearance="subtle"
-                      size="small"
-                      icon={<EditRegular />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditLinkedList(linkedList);
-                      }}
-                      title="Edit"
-                    />
-                    <Button
-                      appearance="subtle"
-                      size="small"
-                      icon={<DeleteRegular />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemoveLinkedList(sectionId);
-                      }}
-                      title="Remove"
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        <Divider />
-
-        {/* Column Settings Section */}
-        <div className={styles.section} style={{ marginTop: '24px' }}>
-          <Text className={styles.sectionTitle}>Columns</Text>
+          <Text className={styles.sectionTitle}>Detail Columns</Text>
           <Text className={styles.sectionHint}>
             Configure which columns appear in Details and their display style
           </Text>
@@ -576,57 +515,73 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
 
         <Divider />
 
-        {/* Linked Lists */}
+        {/* Sections - Drag to reorder */}
         <div className={styles.section} style={{ marginTop: '24px' }}>
-          <div className={styles.sectionHeader}>
-            <Text className={styles.sectionTitle}>Linked Lists</Text>
-            <Button
-              appearance="subtle"
-              size="small"
-              icon={<AddRegular />}
-              onClick={handleAddLinkedList}
-            >
-              Add
-            </Button>
-          </div>
+          <Text className={styles.sectionTitle}>Customize Layout</Text>
           <Text className={styles.sectionHint}>
-            Lists with lookup relationships to this list
+            Drag to reorder how sections appear in the detail view
           </Text>
 
-          {linkedLists.length === 0 ? (
-            <div className={styles.emptySection}>
-              <Text>No linked lists configured.</Text>
-            </div>
-          ) : (
-            linkedLists.map((linkedList) => (
+          {visibleSections.map((sectionId, index) => {
+            const isLinkedList = isLinkedListSection(sectionId);
+            const linkedList = isLinkedList ? getLinkedListById(sectionId) : null;
+
+            return (
               <div
-                key={linkedList.id}
-                className={styles.sectionItem}
-                style={{ cursor: 'default' }}
+                key={sectionId}
+                draggable
+                onDragStart={() => setDraggedSectionIndex(index)}
+                onDragEnd={() => setDraggedSectionIndex(null)}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  if (draggedSectionIndex !== null && draggedSectionIndex !== index) {
+                    handleSectionReorder(draggedSectionIndex, index);
+                    setDraggedSectionIndex(index);
+                  }
+                }}
+                className={`${styles.sectionItem} ${
+                  draggedSectionIndex === index ? styles.sectionItemDragging : ''
+                }`}
               >
-                <Text className={styles.itemName}>{linkedList.title}</Text>
-                <Text style={{ color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 }}>
-                  {linkedList.source.listName}
-                </Text>
-                <div className={styles.sectionActions}>
-                  <Button
-                    appearance="subtle"
-                    size="small"
-                    icon={<EditRegular />}
-                    onClick={() => handleEditLinkedList(linkedList)}
-                    title="Edit"
-                  />
-                  <Button
-                    appearance="subtle"
-                    size="small"
-                    icon={<DeleteRegular />}
-                    onClick={() => handleRemoveLinkedList(linkedList.id)}
-                    title="Remove"
-                  />
-                </div>
+                <ReOrderDotsVerticalRegular className={styles.dragHandle} />
+                <Text className={styles.itemName}>{getSectionDisplayName(sectionId)}</Text>
+                {isLinkedList && linkedList && (
+                  <div className={styles.sectionActions}>
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={<EditRegular />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditLinkedList(linkedList);
+                      }}
+                      title="Edit"
+                    />
+                    <Button
+                      appearance="subtle"
+                      size="small"
+                      icon={<DeleteRegular />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveLinkedList(sectionId);
+                      }}
+                      title="Remove"
+                    />
+                  </div>
+                )}
               </div>
-            ))
-          )}
+            );
+          })}
+
+          {/* Add Linked List button */}
+          <Button
+            appearance="subtle"
+            icon={<AddRegular />}
+            onClick={handleAddLinkedList}
+            style={{ alignSelf: 'flex-start', marginTop: '4px' }}
+          >
+            Add Linked List
+          </Button>
         </div>
 
         {/* Footer */}
