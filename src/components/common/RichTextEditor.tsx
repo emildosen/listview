@@ -76,6 +76,7 @@ interface RichTextEditorProps {
   placeholder?: string;
   readOnly?: boolean;
   minHeight?: number;
+  showToolbar?: boolean;
 }
 
 export function RichTextEditor({
@@ -85,6 +86,7 @@ export function RichTextEditor({
   placeholder = 'Start typing...',
   readOnly = false,
   minHeight = 80,
+  showToolbar = true,
 }: RichTextEditorProps) {
   const styles = useStyles();
   const { theme } = useTheme();
@@ -132,11 +134,15 @@ export function RichTextEditor({
           autoresize_bottom_margin: 0,
 
           // Toolbar - all features (trim based on SP compatibility)
-          toolbar: 'bold italic underline strikethrough | forecolor backcolor | bullist numlist | link image table | emoticons charmap | removeformat code',
+          toolbar: showToolbar
+            ? 'bold italic underline strikethrough | forecolor backcolor | bullist numlist | link image table | emoticons charmap | removeformat code'
+            : false,
           toolbar_mode: 'sliding',
 
           // Plugins
-          plugins: 'lists link autolink table autoresize image media code charmap emoticons',
+          plugins: showToolbar
+            ? 'lists link autolink table autoresize image media code charmap emoticons'
+            : 'autoresize',
 
           // Link settings
           link_default_target: '_blank',
