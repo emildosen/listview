@@ -147,13 +147,22 @@ export function EditableStatBox({
   const [showSuccess, setShowSuccess] = useState(false);
   const prevIsSaving = useRef(isSaving);
   const prevError = useRef(error);
+  // Ref to track latest edit value for commit (avoids race condition with state updates)
+  const editValueRef = useRef<unknown>(value);
 
   // Sync edit value with prop
   useEffect(() => {
     if (!isEditing) {
       setEditValue(value);
+      editValueRef.current = value;
     }
   }, [value, isEditing]);
+
+  // Helper to update both state and ref
+  const updateEditValue = (newValue: unknown) => {
+    setEditValue(newValue);
+    editValueRef.current = newValue;
+  };
 
   // Track when save completes successfully
   useEffect(() => {
@@ -204,7 +213,8 @@ export function EditableStatBox({
 
   const handleCommit = async (directValue?: unknown) => {
     try {
-      const valueToSave = directValue !== undefined ? directValue : editValue;
+      // Use directly passed value if provided, otherwise use ref (avoids race condition)
+      const valueToSave = directValue !== undefined ? directValue : editValueRef.current;
       await onSave(fieldName, valueToSave);
       onCancelEdit();
     } catch {
@@ -261,7 +271,7 @@ export function EditableStatBox({
         <InlineEditChoice
           value={String(editValue ?? '')}
           choices={formField.choice.choices}
-          onChange={(v) => setEditValue(v)}
+          onChange={(v) => updateEditValue(v)}
           onCommit={handleCommit}
           onCancel={onCancelEdit}
         />
@@ -288,7 +298,7 @@ export function EditableStatBox({
           options={lookupOptions[fieldName] ?? []}
           isLoading={lookupLoading}
           isMultiSelect={formField.lookup.allowMultipleValues ?? false}
-          onChange={(v) => setEditValue(v)}
+          onChange={(v) => updateEditValue(v)}
           onCommit={handleCommit}
           onCancel={onCancelEdit}
         />
@@ -300,7 +310,7 @@ export function EditableStatBox({
       return (
         <InlineEditBoolean
           value={Boolean(editValue)}
-          onChange={(v) => setEditValue(v)}
+          onChange={(v) => updateEditValue(v)}
           onCommit={handleCommit}
           onCancel={onCancelEdit}
         />
@@ -312,7 +322,7 @@ export function EditableStatBox({
       return (
         <InlineEditNumber
           value={typeof editValue === 'number' ? editValue : null}
-          onChange={(v) => setEditValue(v)}
+          onChange={(v) => updateEditValue(v)}
           onCommit={handleCommit}
           onCancel={onCancelEdit}
         />
@@ -330,7 +340,7 @@ export function EditableStatBox({
         <InlineEditDate
           value={formattedValue}
           dateOnly={isDateOnly}
-          onChange={(v) => setEditValue(v)}
+          onChange={(v) => updateEditValue(v)}
           onCommit={handleCommit}
           onCancel={onCancelEdit}
         />
@@ -343,7 +353,7 @@ export function EditableStatBox({
         <InlineEditText
           value={String(editValue ?? '')}
           multiline
-          onChange={(v) => setEditValue(v)}
+          onChange={(v) => updateEditValue(v)}
           onCommit={handleCommit}
           onCancel={onCancelEdit}
         />
@@ -354,7 +364,7 @@ export function EditableStatBox({
     return (
       <InlineEditText
         value={String(editValue ?? '')}
-        onChange={(v) => setEditValue(v)}
+        onChange={(v) => updateEditValue(v)}
         onCommit={handleCommit}
         onCancel={onCancelEdit}
       />
