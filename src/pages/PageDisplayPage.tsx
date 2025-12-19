@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
 import {
   makeStyles,
@@ -20,6 +20,7 @@ import { getListItems, type GraphListColumn, type GraphListItem } from '../auth/
 import TableView from '../components/PageDisplay/TableView';
 import ReportPageCanvas from '../components/PageDisplay/ReportPageCanvas';
 import ReportCustomizeDrawer from '../components/PageDisplay/ReportCustomizeDrawer';
+import LookupCustomizeDrawer from '../components/PageDisplay/LookupCustomizeDrawer';
 import type { PageDefinition, ReportLayoutConfig, AnyWebPartConfig } from '../types/page';
 
 const useStyles = makeStyles({
@@ -219,15 +220,15 @@ function PageDisplayPage() {
       <div className={styles.container}>
         <Breadcrumb className={styles.breadcrumb}>
           <BreadcrumbItem>
-            <Link to="/app" className={styles.breadcrumbLink}>
+            <RouterLink to="/app" className={styles.breadcrumbLink}>
               Home
-            </Link>
+            </RouterLink>
           </BreadcrumbItem>
           <BreadcrumbDivider />
           <BreadcrumbItem>
-            <Link to="/app/pages" className={styles.breadcrumbLink}>
+            <RouterLink to="/app/pages" className={styles.breadcrumbLink}>
               Pages
-            </Link>
+            </RouterLink>
           </BreadcrumbItem>
           <BreadcrumbDivider />
           <BreadcrumbItem>
@@ -252,15 +253,15 @@ function PageDisplayPage() {
       <div className={styles.container}>
         <Breadcrumb className={styles.breadcrumb}>
           <BreadcrumbItem>
-            <Link to="/app" className={styles.breadcrumbLink}>
+            <RouterLink to="/app" className={styles.breadcrumbLink}>
               Home
-            </Link>
+            </RouterLink>
           </BreadcrumbItem>
           <BreadcrumbDivider />
           <BreadcrumbItem>
-            <Link to="/app/pages" className={styles.breadcrumbLink}>
+            <RouterLink to="/app/pages" className={styles.breadcrumbLink}>
               Pages
-            </Link>
+            </RouterLink>
           </BreadcrumbItem>
           <BreadcrumbDivider />
           <BreadcrumbItem>
@@ -296,25 +297,6 @@ function PageDisplayPage() {
 
     return (
       <div className={styles.container}>
-        {/* Breadcrumb */}
-        <Breadcrumb className={styles.breadcrumb}>
-          <BreadcrumbItem>
-            <Link to="/app" className={styles.breadcrumbLink}>
-              Home
-            </Link>
-          </BreadcrumbItem>
-          <BreadcrumbDivider />
-          <BreadcrumbItem>
-            <Link to="/app/pages" className={styles.breadcrumbLink}>
-              Pages
-            </Link>
-          </BreadcrumbItem>
-          <BreadcrumbDivider />
-          <BreadcrumbItem>
-            <Text weight="semibold">{page.name}</Text>
-          </BreadcrumbItem>
-        </Breadcrumb>
-
         {/* Report Page Header */}
         <div className={styles.reportHeader}>
           <div className={styles.reportHeaderInfo}>
@@ -349,26 +331,29 @@ function PageDisplayPage() {
     );
   }
 
+  // Handle lookup page save
+  const handleLookupPageSave = useCallback(async (updatedPage: PageDefinition) => {
+    await savePage(updatedPage);
+  }, [savePage]);
+
   return (
     <div className={styles.container}>
-      {/* Breadcrumb */}
-      <Breadcrumb className={styles.breadcrumb}>
-        <BreadcrumbItem>
-          <Link to="/app" className={styles.breadcrumbLink}>
-            Home
-          </Link>
-        </BreadcrumbItem>
-        <BreadcrumbDivider />
-        <BreadcrumbItem>
-          <Link to="/app/pages" className={styles.breadcrumbLink}>
-            Pages
-          </Link>
-        </BreadcrumbItem>
-        <BreadcrumbDivider />
-        <BreadcrumbItem>
-          <Text weight="semibold">{page.name}</Text>
-        </BreadcrumbItem>
-      </Breadcrumb>
+      {/* Lookup Page Header */}
+      <div className={styles.reportHeader}>
+        <div className={styles.reportHeaderInfo}>
+          <Title1 className={styles.reportHeaderTitle}>{page.name}</Title1>
+          {page.description && (
+            <Text className={styles.reportHeaderDescription}>{page.description}</Text>
+          )}
+        </div>
+        <Button
+          appearance="subtle"
+          icon={<SettingsRegular />}
+          onClick={() => setCustomizeDrawerOpen(true)}
+        >
+          Customize
+        </Button>
+      </div>
 
       {/* Error State */}
       {error && (
@@ -401,6 +386,14 @@ function PageDisplayPage() {
           />
         </div>
       )}
+
+      {/* Customize Drawer */}
+      <LookupCustomizeDrawer
+        page={page}
+        open={customizeDrawerOpen}
+        onClose={() => setCustomizeDrawerOpen(false)}
+        onSave={handleLookupPageSave}
+      />
     </div>
   );
 }
