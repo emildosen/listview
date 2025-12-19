@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useMsal } from '@azure/msal-react';
 import {
   makeStyles,
@@ -10,15 +10,13 @@ import {
   Dropdown,
   Option,
   Badge,
-  Checkbox,
-  Divider,
   Spinner,
   DrawerBody,
   DrawerHeader,
   DrawerHeaderTitle,
   OverlayDrawer,
 } from '@fluentui/react-components';
-import { DismissRegular } from '@fluentui/react-icons';
+import { DismissRegular, ArrowLeftRegular, ArrowRightRegular } from '@fluentui/react-icons';
 import { getListColumns, getSiteLists, type GraphListColumn, type GraphList } from '../../auth/graphClient';
 import { SYSTEM_LIST_NAMES } from '../../services/sharepoint';
 import type { RelatedSection, PageColumn } from '../../types/page';
@@ -58,12 +56,6 @@ const useStyles = makeStyles({
   sortDirection: {
     width: '120px',
   },
-  permissionsRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '16px',
-    marginTop: '8px',
-  },
   footer: {
     display: 'flex',
     justifyContent: 'flex-end',
@@ -75,27 +67,48 @@ const useStyles = makeStyles({
   warningText: {
     color: tokens.colorPaletteYellowForeground1,
   },
+  listOption: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  directionBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    fontSize: tokens.fontSizeBase100,
+  },
 });
 
-interface RelatedSectionFlyoutProps {
+// Type for lists with lookup relationship info
+interface LinkedListInfo {
+  list: GraphList;
+  direction: 'incoming' | 'outgoing';
+  lookupColumn?: string; // The lookup column name (for incoming, it's in this list; for outgoing, it's in primary list)
+  lookupColumnDisplayName?: string;
+}
+
+interface LinkedListFlyoutProps {
   open: boolean;
   section: RelatedSection | null; // null = creating new
   primaryListId: string;
   primarySiteId: string;
   primarySiteUrl: string;
+  columnMetadata?: GraphListColumn[]; // Primary list columns for outgoing lookups
   onClose: () => void;
   onSave: (section: RelatedSection) => void;
 }
 
-function RelatedSectionFlyout({
+function LinkedListFlyout({
   open,
   section,
   primaryListId,
   primarySiteId,
   primarySiteUrl,
+  columnMetadata,
   onClose,
   onSave,
-}: RelatedSectionFlyoutProps) {
+}: LinkedListFlyoutProps) {
   const styles = useStyles();
   const { instance, accounts } = useMsal();
   const account = accounts[0];
@@ -108,22 +121,65 @@ function RelatedSectionFlyout({
   const [lookupColumn, setLookupColumn] = useState('');
   const [displayColumns, setDisplayColumns] = useState<PageColumn[]>([]);
   const [defaultSort, setDefaultSort] = useState<{ column: string; direction: 'asc' | 'desc' } | undefined>();
-  const [allowCreate, setAllowCreate] = useState(true);
-  const [allowEdit, setAllowEdit] = useState(true);
-  const [allowDelete, setAllowDelete] = useState(true);
 
-  // Lists loading state (fetched from same site as primary list)
-  const [availableLists, setAvailableLists] = useState<GraphList[]>([]);
+  // Lists loading state
+  const [allLists, setAllLists] = useState<GraphList[]>([]);
   const [loadingLists, setLoadingLists] = useState(false);
 
-  // Column loading state
+  // Column data for all lists (keyed by listId)
+  const [listColumnsCache, setListColumnsCache] = useState<Record<string, GraphListColumn[]>>({});
+
+  // Selected list columns
   const [columns, setColumns] = useState<GraphListColumn[]>([]);
   const [loadingColumns, setLoadingColumns] = useState(false);
 
-  // Derived values
-  const selectedList = availableLists.find((l) => l.id === selectedListId);
+  // Get linked lists with lookup relationships
+  const linkedLists = useMemo((): LinkedListInfo[] => {
+    const result: LinkedListInfo[] = [];
 
-  // Load lists from the same site when drawer opens
+    for (const list of allLists) {
+      if (list.id === primaryListId) continue;
+
+      const listColumns = listColumnsCache[list.id];
+      if (!listColumns) continue;
+
+      // Check for incoming lookups (other list has lookup to primary)
+      for (const col of listColumns) {
+        if (col.lookup?.listId === primaryListId) {
+          result.push({
+            list,
+            direction: 'incoming',
+            lookupColumn: col.name,
+            lookupColumnDisplayName: col.displayName,
+          });
+          break; // Only add once per list for incoming
+        }
+      }
+
+      // Check for outgoing lookups (primary list has lookup to other list)
+      if (columnMetadata) {
+        for (const col of columnMetadata) {
+          if (col.lookup?.listId === list.id) {
+            // Check if not already added as incoming
+            const alreadyAdded = result.some(r => r.list.id === list.id);
+            if (!alreadyAdded) {
+              result.push({
+                list,
+                direction: 'outgoing',
+                lookupColumn: col.name,
+                lookupColumnDisplayName: col.displayName,
+              });
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    return result;
+  }, [allLists, listColumnsCache, primaryListId, columnMetadata]);
+
+  // Load all lists from the site when drawer opens
   useEffect(() => {
     if (!open || !account || !primarySiteId) {
       return;
@@ -133,23 +189,36 @@ function RelatedSectionFlyout({
       setLoadingLists(true);
       try {
         const lists = await getSiteLists(instance, account, primarySiteId);
-        // Filter out system lists and the primary list
+        // Filter out system lists
         const filtered = lists.filter(
-          (list) =>
-            !SYSTEM_LIST_NAMES.includes(list.name as typeof SYSTEM_LIST_NAMES[number]) &&
-            list.id !== primaryListId
+          (list) => !SYSTEM_LIST_NAMES.includes(list.name as typeof SYSTEM_LIST_NAMES[number])
         );
-        setAvailableLists(filtered);
+        setAllLists(filtered);
+
+        // Load columns for all lists to determine lookup relationships
+        const columnsMap: Record<string, GraphListColumn[]> = {};
+        await Promise.all(
+          filtered.map(async (list) => {
+            try {
+              const cols = await getListColumns(instance, account, primarySiteId, list.id);
+              columnsMap[list.id] = cols;
+            } catch (err) {
+              console.error(`Failed to load columns for list ${list.displayName}:`, err);
+              columnsMap[list.id] = [];
+            }
+          })
+        );
+        setListColumnsCache(columnsMap);
       } catch (err) {
         console.error('Failed to load lists:', err);
-        setAvailableLists([]);
+        setAllLists([]);
       } finally {
         setLoadingLists(false);
       }
     };
 
     loadLists();
-  }, [open, instance, account, primarySiteId, primaryListId]);
+  }, [open, instance, account, primarySiteId]);
 
   // Initialize form when section changes
   useEffect(() => {
@@ -159,25 +228,32 @@ function RelatedSectionFlyout({
       setLookupColumn(section.lookupColumn);
       setDisplayColumns(section.displayColumns);
       setDefaultSort(section.defaultSort);
-      setAllowCreate(section.allowCreate);
-      setAllowEdit(section.allowEdit);
-      setAllowDelete(section.allowDelete);
     } else {
       // Reset for new section
-      setTitle('Related Items');
+      setTitle('');
       setSelectedListId('');
       setLookupColumn('');
       setDisplayColumns([]);
       setDefaultSort(undefined);
-      setAllowCreate(true);
-      setAllowEdit(true);
-      setAllowDelete(true);
     }
   }, [section, open]);
 
   // Load columns when source list changes
   useEffect(() => {
-    if (!account || !selectedList || !primarySiteId) {
+    if (!selectedListId) {
+      setColumns([]);
+      return;
+    }
+
+    // Use cached columns if available
+    const cached = listColumnsCache[selectedListId];
+    if (cached) {
+      setColumns(cached);
+      return;
+    }
+
+    // Otherwise load them
+    if (!account || !primarySiteId) {
       setColumns([]);
       return;
     }
@@ -185,35 +261,70 @@ function RelatedSectionFlyout({
     const loadColumns = async () => {
       setLoadingColumns(true);
       try {
-        const cols = await getListColumns(
-          instance,
-          account,
-          primarySiteId,
-          selectedList.id
-        );
+        const cols = await getListColumns(instance, account, primarySiteId, selectedListId);
         setColumns(cols);
+        setListColumnsCache(prev => ({ ...prev, [selectedListId]: cols }));
       } catch (err) {
         console.error('Failed to load columns:', err);
+        setColumns([]);
       } finally {
         setLoadingColumns(false);
       }
     };
 
     loadColumns();
-  }, [instance, account, selectedList, primarySiteId]);
+  }, [instance, account, selectedListId, primarySiteId, listColumnsCache]);
 
-  // Get lookup columns that reference the primary list
-  const lookupColumns = columns.filter(
-    (col) => col.lookup?.listId === primaryListId
-  );
+  // Get the selected linked list info
+  const selectedLinkedListInfo = useMemo(() => {
+    return linkedLists.find(ll => ll.list.id === selectedListId);
+  }, [linkedLists, selectedListId]);
+
+  // Get lookup columns based on direction
+  const lookupColumns = useMemo(() => {
+    if (!selectedLinkedListInfo) return [];
+
+    if (selectedLinkedListInfo.direction === 'incoming') {
+      // Incoming: lookup is in the selected list, pointing to primary list
+      return columns.filter(col => col.lookup?.listId === primaryListId);
+    } else {
+      // Outgoing: lookup is in primary list, pointing to selected list
+      // For outgoing, we need to use the Title column or ID of the selected list to match
+      // Return a synthetic option for the lookup
+      if (columnMetadata) {
+        const outgoingLookup = columnMetadata.find(col => col.lookup?.listId === selectedListId);
+        if (outgoingLookup) {
+          // Create a synthetic column representing this relationship
+          return [{
+            id: `outgoing-${outgoingLookup.name}`,
+            name: outgoingLookup.name,
+            displayName: `${outgoingLookup.displayName} (from current list)`,
+            lookup: { listId: selectedListId },
+          } as GraphListColumn];
+        }
+      }
+      return [];
+    }
+  }, [selectedLinkedListInfo, columns, primaryListId, columnMetadata, selectedListId]);
 
   const handleSourceChange = useCallback((listId: string) => {
     setSelectedListId(listId);
+    // Auto-set lookup column if there's only one option
+    const linkedInfo = linkedLists.find(ll => ll.list.id === listId);
+    if (linkedInfo?.lookupColumn) {
+      setLookupColumn(linkedInfo.lookupColumn);
+    } else {
+      setLookupColumn('');
+    }
+    // Auto-set title from list name
+    const list = linkedLists.find(ll => ll.list.id === listId);
+    if (list && !title) {
+      setTitle(list.list.displayName);
+    }
     // Reset dependent fields
-    setLookupColumn('');
     setDisplayColumns([]);
     setDefaultSort(undefined);
-  }, []);
+  }, [linkedLists, title]);
 
   const handleDisplayColumnToggle = useCallback((col: GraphListColumn) => {
     setDisplayColumns((prev) => {
@@ -233,6 +344,7 @@ function RelatedSectionFlyout({
   }, []);
 
   const handleSave = () => {
+    const selectedList = linkedLists.find(ll => ll.list.id === selectedListId);
     if (!selectedList) return;
 
     const updatedSection: RelatedSection = {
@@ -241,21 +353,18 @@ function RelatedSectionFlyout({
       source: {
         siteId: primarySiteId,
         siteUrl: primarySiteUrl,
-        listId: selectedList.id,
-        listName: selectedList.displayName,
+        listId: selectedList.list.id,
+        listName: selectedList.list.displayName,
       },
       lookupColumn,
       displayColumns,
-      allowCreate,
-      allowEdit,
-      allowDelete,
       defaultSort,
     };
 
     onSave(updatedSection);
   };
 
-  const canSave = title.trim() && selectedList && lookupColumn && displayColumns.length > 0;
+  const canSave = title.trim() && selectedListId && lookupColumn && displayColumns.length > 0;
 
   return (
     <OverlayDrawer
@@ -276,7 +385,7 @@ function RelatedSectionFlyout({
             />
           }
         >
-          {isEditing ? 'Edit Related List' : 'Add Related List'}
+          {isEditing ? 'Edit Linked List' : 'Add Linked List'}
         </DrawerHeaderTitle>
       </DrawerHeader>
 
@@ -290,31 +399,52 @@ function RelatedSectionFlyout({
             />
           </Field>
 
-          <Field label="Related List" required>
+          <Field label="Linked List" required>
             {loadingLists ? (
               <div className={styles.loadingRow}>
                 <Spinner size="tiny" />
                 <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>
-                  Loading lists...
+                  Loading lists and relationships...
                 </Text>
               </div>
             ) : (
               <>
                 <Dropdown
-                  value={selectedList?.displayName || ''}
+                  value={linkedLists.find(ll => ll.list.id === selectedListId)?.list.displayName || ''}
                   selectedOptions={selectedListId ? [selectedListId] : []}
                   onOptionSelect={(_e, data) => handleSourceChange(data.optionValue as string)}
                   placeholder="Select a list"
                 >
-                  {availableLists.map((list) => (
-                    <Option key={list.id} value={list.id}>
-                      {list.displayName}
+                  {linkedLists.map((linkedList) => (
+                    <Option key={linkedList.list.id} value={linkedList.list.id} text={linkedList.list.displayName}>
+                      <div className={styles.listOption}>
+                        <span>{linkedList.list.displayName}</span>
+                        <Badge
+                          size="small"
+                          appearance="outline"
+                          color={linkedList.direction === 'incoming' ? 'informative' : 'success'}
+                        >
+                          <span className={styles.directionBadge}>
+                            {linkedList.direction === 'incoming' ? (
+                              <>
+                                <ArrowRightRegular fontSize={10} />
+                                links here
+                              </>
+                            ) : (
+                              <>
+                                <ArrowLeftRegular fontSize={10} />
+                                linked from here
+                              </>
+                            )}
+                          </span>
+                        </Badge>
+                      </div>
                     </Option>
                   ))}
                 </Dropdown>
-                {availableLists.length === 0 && !loadingLists && (
+                {linkedLists.length === 0 && !loadingLists && (
                   <Text size={200} className={styles.warningText} style={{ marginTop: '4px' }}>
-                    No other lists available in this site.
+                    No lists with lookup relationships found. Lists must have a lookup column that references this list, or this list must have a lookup to another list.
                   </Text>
                 )}
               </>
@@ -334,12 +464,17 @@ function RelatedSectionFlyout({
                 <>
                   <Field label="Link Column" required>
                     <Text size={200} style={{ color: tokens.colorNeutralForeground2, marginBottom: '8px', display: 'block' }}>
-                      Column that links to the primary list
+                      Column that links the lists together
                     </Text>
                     {lookupColumns.length === 0 ? (
                       <Text size={200} className={styles.warningText}>
-                        No lookup columns found that reference the primary list.
+                        No valid lookup column found for this relationship.
                       </Text>
+                    ) : lookupColumns.length === 1 ? (
+                      <Input
+                        value={lookupColumns[0].displayName}
+                        disabled
+                      />
                     ) : (
                       <Dropdown
                         value={lookupColumns.find((c) => c.name === lookupColumn)?.displayName || ''}
@@ -358,7 +493,7 @@ function RelatedSectionFlyout({
 
                   <Field label="Display Columns" required>
                     <Text size={200} style={{ color: tokens.colorNeutralForeground2, marginBottom: '8px', display: 'block' }}>
-                      Columns to show in the related items table
+                      Columns to show in the linked items table
                     </Text>
                     <div className={styles.badgeWrap}>
                       {columns
@@ -429,30 +564,6 @@ function RelatedSectionFlyout({
                     </Field>
                   )}
 
-                  <Divider />
-
-                  <Field label="Permissions">
-                    <Text size={200} style={{ color: tokens.colorNeutralForeground2, marginBottom: '8px', display: 'block' }}>
-                      What actions users can perform on related items
-                    </Text>
-                    <div className={styles.permissionsRow}>
-                      <Checkbox
-                        checked={allowCreate}
-                        onChange={(_e, data) => setAllowCreate(data.checked === true)}
-                        label="Allow Create"
-                      />
-                      <Checkbox
-                        checked={allowEdit}
-                        onChange={(_e, data) => setAllowEdit(data.checked === true)}
-                        label="Allow Edit"
-                      />
-                      <Checkbox
-                        checked={allowDelete}
-                        onChange={(_e, data) => setAllowDelete(data.checked === true)}
-                        label="Allow Delete"
-                      />
-                    </div>
-                  </Field>
                 </>
               )}
             </>
@@ -465,7 +576,7 @@ function RelatedSectionFlyout({
             Cancel
           </Button>
           <Button appearance="primary" onClick={handleSave} disabled={!canSave}>
-            {isEditing ? 'Save Changes' : 'Add Section'}
+            {isEditing ? 'Save Changes' : 'Add Linked List'}
           </Button>
         </div>
       </DrawerBody>
@@ -473,4 +584,4 @@ function RelatedSectionFlyout({
   );
 }
 
-export default RelatedSectionFlyout;
+export default LinkedListFlyout;

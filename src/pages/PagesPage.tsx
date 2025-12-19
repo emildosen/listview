@@ -342,7 +342,7 @@ function PagesPage() {
                           ) : (
                             <>
                               <TableRegular className={styles.typeIcon} />
-                              <Text className={styles.sourceInfo}>Lookup</Text>
+                              <Text className={styles.sourceInfo}>Search</Text>
                             </>
                           )}
                         </div>

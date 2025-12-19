@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useMsal } from '@azure/msal-react';
 import {
   makeStyles,
@@ -18,9 +18,9 @@ import { SettingsRegular } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { getListItems, type GraphListColumn, type GraphListItem } from '../auth/graphClient';
 import TableView from '../components/PageDisplay/TableView';
-import DetailModal from '../components/modals/DetailModal';
 import ReportPageCanvas from '../components/PageDisplay/ReportPageCanvas';
 import ReportCustomizeDrawer from '../components/PageDisplay/ReportCustomizeDrawer';
+import LookupCustomizeDrawer from '../components/PageDisplay/LookupCustomizeDrawer';
 import type { PageDefinition, ReportLayoutConfig, AnyWebPartConfig } from '../types/page';
 
 const useStyles = makeStyles({
@@ -95,13 +95,12 @@ function PageDisplayPage() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
   const { instance, accounts } = useMsal();
-  const { pages, spClient, savePage } = useSettings();
+  const { pages, savePage } = useSettings();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<GraphListItem[]>([]);
   const [columns, setColumns] = useState<GraphListColumn[]>([]);
-  const [modalItem, setModalItem] = useState<GraphListItem | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [searchText, setSearchText] = useState('');
   const [customizeDrawerOpen, setCustomizeDrawerOpen] = useState(false);
@@ -172,17 +171,10 @@ function PageDisplayPage() {
     });
   }, [items, filters, searchText, page?.searchConfig]);
 
-  // Handle page configuration updates
-  const handlePageUpdate = useCallback(async (updatedPage: PageDefinition) => {
+  // Handle report page save
+  const handleReportPageSave = useCallback(async (updatedPage: PageDefinition) => {
     await savePage(updatedPage);
   }, [savePage]);
-
-  // Handle report layout save
-  const handleReportLayoutSave = useCallback(async (layout: ReportLayoutConfig) => {
-    if (!page) return;
-    const updatedPage = { ...page, reportLayout: layout };
-    await savePage(updatedPage);
-  }, [page, savePage]);
 
   // Handle web part config change
   const handleWebPartConfigChange = useCallback(
@@ -209,6 +201,11 @@ function PageDisplayPage() {
     [page, savePage]
   );
 
+  // Handle lookup page save
+  const handleLookupPageSave = useCallback(async (updatedPage: PageDefinition) => {
+    await savePage(updatedPage);
+  }, [savePage]);
+
   // Loading state for pages
   if (pages.length === 0) {
     return (
@@ -226,15 +223,15 @@ function PageDisplayPage() {
       <div className={styles.container}>
         <Breadcrumb className={styles.breadcrumb}>
           <BreadcrumbItem>
-            <Link to="/app" className={styles.breadcrumbLink}>
+            <RouterLink to="/app" className={styles.breadcrumbLink}>
               Home
-            </Link>
+            </RouterLink>
           </BreadcrumbItem>
           <BreadcrumbDivider />
           <BreadcrumbItem>
-            <Link to="/app/pages" className={styles.breadcrumbLink}>
+            <RouterLink to="/app/pages" className={styles.breadcrumbLink}>
               Pages
-            </Link>
+            </RouterLink>
           </BreadcrumbItem>
           <BreadcrumbDivider />
           <BreadcrumbItem>
@@ -259,15 +256,15 @@ function PageDisplayPage() {
       <div className={styles.container}>
         <Breadcrumb className={styles.breadcrumb}>
           <BreadcrumbItem>
-            <Link to="/app" className={styles.breadcrumbLink}>
+            <RouterLink to="/app" className={styles.breadcrumbLink}>
               Home
-            </Link>
+            </RouterLink>
           </BreadcrumbItem>
           <BreadcrumbDivider />
           <BreadcrumbItem>
-            <Link to="/app/pages" className={styles.breadcrumbLink}>
+            <RouterLink to="/app/pages" className={styles.breadcrumbLink}>
               Pages
-            </Link>
+            </RouterLink>
           </BreadcrumbItem>
           <BreadcrumbDivider />
           <BreadcrumbItem>
@@ -303,25 +300,6 @@ function PageDisplayPage() {
 
     return (
       <div className={styles.container}>
-        {/* Breadcrumb */}
-        <Breadcrumb className={styles.breadcrumb}>
-          <BreadcrumbItem>
-            <Link to="/app" className={styles.breadcrumbLink}>
-              Home
-            </Link>
-          </BreadcrumbItem>
-          <BreadcrumbDivider />
-          <BreadcrumbItem>
-            <Link to="/app/pages" className={styles.breadcrumbLink}>
-              Pages
-            </Link>
-          </BreadcrumbItem>
-          <BreadcrumbDivider />
-          <BreadcrumbItem>
-            <Text weight="semibold">{page.name}</Text>
-          </BreadcrumbItem>
-        </Breadcrumb>
-
         {/* Report Page Header */}
         <div className={styles.reportHeader}>
           <div className={styles.reportHeaderInfo}>
@@ -350,7 +328,7 @@ function PageDisplayPage() {
           page={page}
           open={customizeDrawerOpen}
           onClose={() => setCustomizeDrawerOpen(false)}
-          onSave={handleReportLayoutSave}
+          onSave={handleReportPageSave}
         />
       </div>
     );
@@ -358,24 +336,22 @@ function PageDisplayPage() {
 
   return (
     <div className={styles.container}>
-      {/* Breadcrumb */}
-      <Breadcrumb className={styles.breadcrumb}>
-        <BreadcrumbItem>
-          <Link to="/app" className={styles.breadcrumbLink}>
-            Home
-          </Link>
-        </BreadcrumbItem>
-        <BreadcrumbDivider />
-        <BreadcrumbItem>
-          <Link to="/app/pages" className={styles.breadcrumbLink}>
-            Pages
-          </Link>
-        </BreadcrumbItem>
-        <BreadcrumbDivider />
-        <BreadcrumbItem>
-          <Text weight="semibold">{page.name}</Text>
-        </BreadcrumbItem>
-      </Breadcrumb>
+      {/* Lookup Page Header */}
+      <div className={styles.reportHeader}>
+        <div className={styles.reportHeaderInfo}>
+          <Title1 className={styles.reportHeaderTitle}>{page.name}</Title1>
+          {page.description && (
+            <Text className={styles.reportHeaderDescription}>{page.description}</Text>
+          )}
+        </div>
+        <Button
+          appearance="subtle"
+          icon={<SettingsRegular />}
+          onClick={() => setCustomizeDrawerOpen(true)}
+        >
+          Customize
+        </Button>
+      </div>
 
       {/* Error State */}
       {error && (
@@ -393,40 +369,29 @@ function PageDisplayPage() {
 
       {/* Main Content */}
       {!loading && !error && (
-        <>
-          <div className={styles.mainContent}>
-            <TableView
-              page={page}
-              columns={columns}
-              items={filteredItems}
-              filters={filters}
-              searchText={searchText}
-              onFilterChange={setFilters}
-              onSearchChange={setSearchText}
-              spClient={spClient}
-              onPageUpdate={handlePageUpdate}
-              onItemCreated={loadData}
-              onItemUpdated={loadData}
-              onItemDeleted={loadData}
-            />
-          </div>
-
-          {/* Item Detail Modal */}
-          {modalItem && page && (
-            <DetailModal
-              listId={page.primarySource.listId}
-              listName={page.primarySource.listName}
-              siteId={page.primarySource.siteId}
-              siteUrl={page.primarySource.siteUrl}
-              columns={columns}
-              item={modalItem}
-              spClient={spClient}
-              page={page}
-              onClose={() => setModalItem(null)}
-            />
-          )}
-        </>
+        <div className={styles.mainContent}>
+          <TableView
+            page={page}
+            columns={columns}
+            items={filteredItems}
+            filters={filters}
+            searchText={searchText}
+            onFilterChange={setFilters}
+            onSearchChange={setSearchText}
+            onItemCreated={loadData}
+            onItemUpdated={loadData}
+            onItemDeleted={loadData}
+          />
+        </div>
       )}
+
+      {/* Customize Drawer */}
+      <LookupCustomizeDrawer
+        page={page}
+        open={customizeDrawerOpen}
+        onClose={() => setCustomizeDrawerOpen(false)}
+        onSave={handleLookupPageSave}
+      />
     </div>
   );
 }

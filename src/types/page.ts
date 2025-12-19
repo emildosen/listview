@@ -3,13 +3,17 @@
 // Detail modal layout configuration (for customizable popup)
 export interface DetailLayoutConfig {
   columnSettings: DetailColumnSetting[];
-  relatedSectionOrder?: string[];  // Array of RelatedSection.id values for ordering
+  // Section order: 'details', 'description', and linked list IDs (e.g., 'section-123')
+  // Default order: ['details', 'description', ...linkedListIds]
+  sectionOrder?: string[];
+  /** @deprecated Use sectionOrder instead */
+  relatedSectionOrder?: string[];  // Legacy: Array of RelatedSection.id values for ordering
 }
 
 export interface DetailColumnSetting {
   internalName: string;
   visible: boolean;
-  displayStyle: 'stat' | 'list';  // 'stat' = badge at top, 'list' = detail grid
+  displayStyle: 'stat' | 'list' | 'description';  // 'stat' = badge at top, 'list' = detail grid, 'description' = large text area
 }
 
 // Per-list detail popup configuration
@@ -85,9 +89,6 @@ export interface RelatedSection {
   source: PageSource;                 // Related list details
   lookupColumn: string;               // Column in related list that links to primary
   displayColumns: PageColumn[];       // Columns to show in related items table
-  allowCreate: boolean;               // Can add new items
-  allowEdit: boolean;                 // Can edit existing items
-  allowDelete: boolean;               // Can delete items
   defaultSort?: {
     column: string;
     direction: 'asc' | 'desc';

@@ -176,6 +176,7 @@ export function FormConfigProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useFormConfigContext() {
   const context = useContext(FormConfigContext);
   if (!context) {

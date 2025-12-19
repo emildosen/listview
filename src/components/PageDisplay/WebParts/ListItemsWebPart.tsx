@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import type { SPFI } from '@pnp/sp';
+import { useState, useEffect, useCallback } from 'react';
 import {
   makeStyles,
   tokens,
@@ -19,10 +18,9 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import type { ListItemsWebPartConfig, AnyWebPartConfig } from '../../../types/page';
 import type { GraphListColumn, GraphListItem } from '../../../auth/graphClient';
 import { fetchListWebPartData } from '../../../services/webPartData';
-import { createSPClient } from '../../../services/sharepoint';
 import WebPartHeader from './WebPartHeader';
 import WebPartSettingsDrawer from './WebPartSettingsDrawer';
-import DetailModal from '../../modals/DetailModal';
+import { UnifiedDetailModal } from '../../modals/UnifiedDetailModal';
 import { SharePointLink } from '../../common/SharePointLink';
 import { isSharePointUrl } from '../../../auth/graphClient';
 
@@ -123,32 +121,9 @@ export default function ListItemsWebPart({ config, onConfigChange }: ListItemsWe
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<GraphListItem | null>(null);
 
-  // SP client for the detail modal
-  const spClientRef = useRef<SPFI | null>(null);
-
   const isConfigured = Boolean(config.dataSource?.siteId && config.dataSource?.listId);
 
   const siteUrl = config.dataSource?.siteUrl;
-
-  // Initialize SP client when siteUrl is available
-  useEffect(() => {
-    if (!account || !siteUrl) {
-      spClientRef.current = null;
-      return;
-    }
-
-    const initClient = async () => {
-      try {
-        const client = await createSPClient(instance, account, siteUrl);
-        spClientRef.current = client;
-      } catch (err) {
-        console.error('Failed to create SP client for list items web part:', err);
-        spClientRef.current = null;
-      }
-    };
-
-    initClient();
-  }, [instance, account, siteUrl]);
 
   // Load data when config changes
   useEffect(() => {
@@ -309,14 +284,13 @@ export default function ListItemsWebPart({ config, onConfigChange }: ListItemsWe
 
       {/* Detail Modal */}
       {selectedItem && config.dataSource && (
-        <DetailModal
+        <UnifiedDetailModal
           listId={config.dataSource.listId}
           listName={config.dataSource.listName}
           siteId={config.dataSource.siteId}
           siteUrl={siteUrl}
           columns={columns}
           item={selectedItem}
-          spClient={spClientRef.current}
           titleColumnOverride={displayColumns[0]?.internalName}
           onClose={() => setSelectedItem(null)}
         />
