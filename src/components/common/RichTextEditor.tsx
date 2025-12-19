@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useLayoutEffect } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import { makeStyles, tokens, mergeClasses } from '@fluentui/react-components';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -14,7 +14,6 @@ import 'tinymce/plugins/lists';
 import 'tinymce/plugins/link';
 import 'tinymce/plugins/autolink';
 import 'tinymce/plugins/autoresize';
-import 'tinymce/plugins/code';
 import 'tinymce/plugins/charmap';
 import 'tinymce/plugins/emoticons';
 import 'tinymce/plugins/emoticons/js/emojis';
@@ -93,6 +92,24 @@ function plainTextToHtml(text: string): string {
   return text.replace(/\n/g, '<br>');
 }
 
+// Inject global styles for TinyMCE floating elements (color pickers, etc.)
+// These need high z-index to appear above Fluent UI Dialogs
+const TINYMCE_GLOBAL_STYLES_ID = 'tinymce-global-styles';
+
+function ensureTinyMCEGlobalStyles() {
+  if (document.getElementById(TINYMCE_GLOBAL_STYLES_ID)) return;
+
+  const style = document.createElement('style');
+  style.id = TINYMCE_GLOBAL_STYLES_ID;
+  style.textContent = `
+    /* TinyMCE floating elements (color pickers, menus, dialogs) need high z-index */
+    .tox-tinymce-aux {
+      z-index: 1000001 !important;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 export function RichTextEditor({
   value,
   onChange,
@@ -107,6 +124,11 @@ export function RichTextEditor({
   const editorRef = useRef<TinyMCEEditor | null>(null);
   const isDark = theme === 'dark';
   const lastExternalValue = useRef(value);
+
+  // Ensure global styles are injected for TinyMCE floating elements
+  useLayoutEffect(() => {
+    ensureTinyMCEGlobalStyles();
+  }, []);
 
   // Update editor content when external value changes (e.g., from parent reset)
   useEffect(() => {
@@ -168,13 +190,13 @@ export function RichTextEditor({
 
           // Toolbar - SP-compatible features (no tables/images)
           toolbar: showToolbar
-            ? 'bold italic underline strikethrough | forecolor backcolor | bullist numlist | link | emoticons charmap | removeformat code'
+            ? 'bold italic underline strikethrough | forecolor backcolor | bullist numlist | link | emoticons charmap | removeformat inlinecode'
             : false,
           toolbar_mode: 'sliding',
 
           // Plugins
           plugins: showToolbar
-            ? 'lists link autolink autoresize code charmap emoticons'
+            ? 'lists link autolink autoresize charmap emoticons'
             : 'autoresize',
 
           // For plain text mode, don't wrap in <p> tags
@@ -201,15 +223,37 @@ export function RichTextEditor({
             ul, ol { margin: 0 0 8px 0; padding-left: 24px; }
             a { color: #0078d4; text-decoration: none; }
             a:hover { text-decoration: underline; }
+            code {
+              font-family: 'Consolas', 'Monaco', monospace;
+              font-size: 0.9em;
+              background-color: ${isDark ? '#2d2d2d' : '#f0f0f0'};
+              padding: 2px 6px;
+              border-radius: 3px;
+            }
           `,
 
-          // Keyboard shortcuts
+          // Keyboard shortcuts and custom buttons
           setup: (editor) => {
             editor.addShortcut('meta+enter', 'Blur editor', () => {
               editor.fire('blur');
             });
             editor.addShortcut('ctrl+enter', 'Blur editor', () => {
               editor.fire('blur');
+            });
+
+            // Custom inline code button (toggles <code> tag)
+            editor.ui.registry.addToggleButton('inlinecode', {
+              icon: 'sourcecode',
+              tooltip: 'Inline code',
+              onAction: () => {
+                editor.execCommand('mceToggleFormat', false, 'code');
+              },
+              onSetup: (api) => {
+                const changed = editor.formatter.formatChanged('code', (state) => {
+                  api.setActive(state);
+                });
+                return () => changed.unbind();
+              },
             });
           },
         }}
