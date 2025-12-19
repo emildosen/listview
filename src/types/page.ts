@@ -89,9 +89,6 @@ export interface RelatedSection {
   source: PageSource;                 // Related list details
   lookupColumn: string;               // Column in related list that links to primary
   displayColumns: PageColumn[];       // Columns to show in related items table
-  allowCreate: boolean;               // Can add new items
-  allowEdit: boolean;                 // Can edit existing items
-  allowDelete: boolean;               // Can delete items
   defaultSort?: {
     column: string;
     direction: 'asc' | 'desc';

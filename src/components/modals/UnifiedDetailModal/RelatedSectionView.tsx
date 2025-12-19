@@ -269,52 +269,44 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
     })
   );
 
-  // Add actions column if edit/delete allowed
-  if (section.allowEdit || section.allowDelete) {
-    tableColumns.push(
-      createTableColumn<GraphListItem>({
-        columnId: 'actions',
-        renderHeaderCell: () => '',
-        renderCell: (item) => (
-          <div className={styles.actionsCell}>
-            {section.allowEdit && (
-              <Button
-                appearance="subtle"
-                size="small"
-                icon={<EditRegular />}
-                onClick={(e) => handleEdit(e, item)}
-                title="Edit"
-              />
-            )}
-            {section.allowDelete && (
-              <Button
-                appearance="subtle"
-                size="small"
-                icon={<DeleteRegular />}
-                onClick={(e) => handleDelete(e, item)}
-                title="Delete"
-              />
-            )}
-          </div>
-        ),
-      })
-    );
-  }
+  // Add actions column for edit/delete
+  tableColumns.push(
+    createTableColumn<GraphListItem>({
+      columnId: 'actions',
+      renderHeaderCell: () => '',
+      renderCell: (item) => (
+        <div className={styles.actionsCell}>
+          <Button
+            appearance="subtle"
+            size="small"
+            icon={<EditRegular />}
+            onClick={(e) => handleEdit(e, item)}
+            title="Edit"
+          />
+          <Button
+            appearance="subtle"
+            size="small"
+            icon={<DeleteRegular />}
+            onClick={(e) => handleDelete(e, item)}
+            title="Delete"
+          />
+        </div>
+      ),
+    })
+  );
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <Text className={styles.sectionTitle}>{section.title}</Text>
-        {section.allowCreate && (
-          <Button
-            appearance="subtle"
-            size="small"
-            icon={<AddRegular />}
-            onClick={handleAdd}
-          >
-            Add
-          </Button>
-        )}
+        <Button
+          appearance="subtle"
+          size="small"
+          icon={<AddRegular />}
+          onClick={handleAdd}
+        >
+          Add
+        </Button>
       </div>
 
       <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)}>

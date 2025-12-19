@@ -358,9 +358,6 @@ function LinkedListFlyout({
       },
       lookupColumn,
       displayColumns,
-      allowCreate: true,
-      allowEdit: true,
-      allowDelete: true,
       defaultSort,
     };
 
