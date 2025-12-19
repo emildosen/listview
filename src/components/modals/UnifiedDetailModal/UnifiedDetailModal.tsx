@@ -761,6 +761,7 @@ function UnifiedDetailModalContent({
                     return (
                       <DescriptionField
                         key={sectionId}
+                        label={getDisplayName(descriptionColumn.internalName)}
                         value={String(currentItem.fields[descriptionColumn.internalName] ?? '')}
                         isRichText={getColumnMetadata(descriptionColumn.internalName)?.text?.textType === 'richText'}
                         isSaving={savingFields.has(descriptionColumn.internalName)}
