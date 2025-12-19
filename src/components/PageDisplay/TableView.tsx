@@ -22,7 +22,7 @@ import {
 import { SearchRegular, DismissRegular, DocumentRegular, AddRegular } from '@fluentui/react-icons';
 import type { GraphListColumn, GraphListItem } from '../../auth/graphClient';
 import type { PageDefinition } from '../../types/page';
-import DetailModal from '../modals/DetailModal';
+import { UnifiedDetailModal } from '../modals/UnifiedDetailModal';
 import ItemFormModal from '../modals/ItemFormModal';
 import { useTheme } from '../../contexts/ThemeContext';
 import { SharePointLink } from '../common/SharePointLink';
@@ -113,8 +113,6 @@ interface TableViewProps {
   searchText: string;
   onFilterChange: (filters: Record<string, string>) => void;
   onSearchChange: (text: string) => void;
-  spClient: SPFI | null;
-  onPageUpdate: (page: PageDefinition) => Promise<void>;
   onItemCreated?: () => void;
   onItemUpdated?: () => void;
   onItemDeleted?: () => void;
@@ -263,7 +261,6 @@ function TableView({
   searchText,
   onFilterChange,
   onSearchChange,
-  spClient,
   onItemCreated,
   onItemUpdated,
   onItemDeleted,
@@ -532,14 +529,13 @@ function TableView({
 
       {/* Detail Modal */}
       {selectedItem && (
-        <DetailModal
+        <UnifiedDetailModal
           listId={page.primarySource.listId}
           listName={page.primarySource.listName}
           siteId={page.primarySource.siteId}
           siteUrl={siteUrl}
           columns={columns}
           item={selectedItem}
-          spClient={spClient}
           page={page}
           onClose={() => setSelectedItem(null)}
           onItemUpdated={() => {

@@ -21,7 +21,22 @@ import {
   DeleteRegular,
 } from '@fluentui/react-icons';
 import type { PageDefinition, PageColumn, DetailLayoutConfig, DetailColumnSetting, RelatedSection, ListDetailConfig } from '../../types/page';
+import type { GraphListColumn } from '../../auth/graphClient';
 import RelatedSectionFlyout from './RelatedSectionFlyout';
+
+// Helper to check if a column is a multiline text column
+function isMultilineColumn(internalName: string, columnMetadata?: GraphListColumn[]): boolean {
+  if (!columnMetadata) return false;
+  const col = columnMetadata.find(c => c.name === internalName);
+  return col?.text?.allowMultipleLines === true;
+}
+
+// Helper to check if a column is rich text
+function isRichTextColumn(internalName: string, columnMetadata?: GraphListColumn[]): boolean {
+  if (!columnMetadata) return false;
+  const col = columnMetadata.find(c => c.name === internalName);
+  return col?.text?.textType === 'richText';
+}
 
 const useStyles = makeStyles({
   section: {
@@ -131,6 +146,8 @@ interface DetailCustomizeDrawerProps {
   // Either provide a page (legacy lookup pages) or listDetailConfig (new per-list config)
   page?: PageDefinition;
   listDetailConfig?: ListDetailConfig;
+  // Column metadata for determining column types (multiline, rich text, etc.)
+  columnMetadata?: GraphListColumn[];
   // Optional title column override
   titleColumn?: string;
   open: boolean;
@@ -138,7 +155,7 @@ interface DetailCustomizeDrawerProps {
   onSave: (config: DetailLayoutConfig, relatedSections?: RelatedSection[]) => Promise<void>;
 }
 
-function DetailCustomizeDrawer({ page, listDetailConfig, titleColumn: titleColumnProp, open, onClose, onSave }: DetailCustomizeDrawerProps) {
+function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleColumn: titleColumnProp, open, onClose, onSave }: DetailCustomizeDrawerProps) {
   const styles = useStyles();
 
   // Get display columns from either source
@@ -230,10 +247,24 @@ function DetailCustomizeDrawer({ page, listDetailConfig, titleColumn: titleColum
     ));
   }, []);
 
-  const handleColumnStyleChange = useCallback((internalName: string, displayStyle: 'stat' | 'list') => {
-    setColumnSettings(prev => prev.map(s =>
-      s.internalName === internalName ? { ...s, displayStyle } : s
-    ));
+  const handleColumnStyleChange = useCallback((internalName: string, displayStyle: 'stat' | 'list' | 'description') => {
+    setColumnSettings(prev => {
+      // If setting a column to 'description', reset any other column that was 'description' to 'list'
+      if (displayStyle === 'description') {
+        return prev.map(s => {
+          if (s.internalName === internalName) {
+            return { ...s, displayStyle };
+          }
+          if (s.displayStyle === 'description') {
+            return { ...s, displayStyle: 'list' as const };
+          }
+          return s;
+        });
+      }
+      return prev.map(s =>
+        s.internalName === internalName ? { ...s, displayStyle } : s
+      );
+    });
   }, []);
 
   const handleColumnReorder = useCallback((fromIndex: number, toIndex: number) => {
@@ -380,18 +411,29 @@ function DetailCustomizeDrawer({ page, listDetailConfig, titleColumn: titleColum
                 {setting.visible && (
                   <Dropdown
                     className={styles.displayStyleDropdown}
-                    value={setting.displayStyle === 'stat' ? 'Stat Box' : 'Detail List'}
+                    value={
+                      setting.displayStyle === 'stat'
+                        ? 'Stat Box'
+                        : setting.displayStyle === 'description'
+                        ? 'Description'
+                        : 'Detail List'
+                    }
                     selectedOptions={[setting.displayStyle]}
                     onOptionSelect={(_, data) =>
                       handleColumnStyleChange(
                         setting.internalName,
-                        data.optionValue as 'stat' | 'list'
+                        data.optionValue as 'stat' | 'list' | 'description'
                       )
                     }
                     size="small"
                   >
                     <Option value="stat">Stat Box</Option>
                     <Option value="list">Detail List</Option>
+                    {isMultilineColumn(setting.internalName, columnMetadata) && (
+                      <Option text={`Description${isRichTextColumn(setting.internalName, columnMetadata) ? ' (Rich)' : ''}`} value="description">
+                        Description{isRichTextColumn(setting.internalName, columnMetadata) ? ' (Rich)' : ''}
+                      </Option>
+                    )}
                   </Dropdown>
                 )}
               </div>

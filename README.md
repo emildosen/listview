@@ -1,5 +1,7 @@
 # ListView
 
+Simple tracking for small teams.
+
 A lightweight, open-source web app for managing data stored in SharePoint lists. Built for simple CRM or information knowledge use cases.
 
 ## Features

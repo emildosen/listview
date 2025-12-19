@@ -9,7 +9,7 @@ export interface DetailLayoutConfig {
 export interface DetailColumnSetting {
   internalName: string;
   visible: boolean;
-  displayStyle: 'stat' | 'list';  // 'stat' = badge at top, 'list' = detail grid
+  displayStyle: 'stat' | 'list' | 'description';  // 'stat' = badge at top, 'list' = detail grid, 'description' = large text area
 }
 
 // Per-list detail popup configuration

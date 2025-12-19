@@ -18,7 +18,6 @@ import { SettingsRegular } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { getListItems, type GraphListColumn, type GraphListItem } from '../auth/graphClient';
 import TableView from '../components/PageDisplay/TableView';
-import DetailModal from '../components/modals/DetailModal';
 import ReportPageCanvas from '../components/PageDisplay/ReportPageCanvas';
 import ReportCustomizeDrawer from '../components/PageDisplay/ReportCustomizeDrawer';
 import type { PageDefinition, ReportLayoutConfig, AnyWebPartConfig } from '../types/page';
@@ -95,13 +94,12 @@ function PageDisplayPage() {
   const { pageId } = useParams<{ pageId: string }>();
   const navigate = useNavigate();
   const { instance, accounts } = useMsal();
-  const { pages, spClient, savePage } = useSettings();
+  const { pages, savePage } = useSettings();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<GraphListItem[]>([]);
   const [columns, setColumns] = useState<GraphListColumn[]>([]);
-  const [modalItem, setModalItem] = useState<GraphListItem | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [searchText, setSearchText] = useState('');
   const [customizeDrawerOpen, setCustomizeDrawerOpen] = useState(false);
@@ -171,11 +169,6 @@ function PageDisplayPage() {
       return true;
     });
   }, [items, filters, searchText, page?.searchConfig]);
-
-  // Handle page configuration updates
-  const handlePageUpdate = useCallback(async (updatedPage: PageDefinition) => {
-    await savePage(updatedPage);
-  }, [savePage]);
 
   // Handle report layout save
   const handleReportLayoutSave = useCallback(async (layout: ReportLayoutConfig) => {
@@ -393,39 +386,20 @@ function PageDisplayPage() {
 
       {/* Main Content */}
       {!loading && !error && (
-        <>
-          <div className={styles.mainContent}>
-            <TableView
-              page={page}
-              columns={columns}
-              items={filteredItems}
-              filters={filters}
-              searchText={searchText}
-              onFilterChange={setFilters}
-              onSearchChange={setSearchText}
-              spClient={spClient}
-              onPageUpdate={handlePageUpdate}
-              onItemCreated={loadData}
-              onItemUpdated={loadData}
-              onItemDeleted={loadData}
-            />
-          </div>
-
-          {/* Item Detail Modal */}
-          {modalItem && page && (
-            <DetailModal
-              listId={page.primarySource.listId}
-              listName={page.primarySource.listName}
-              siteId={page.primarySource.siteId}
-              siteUrl={page.primarySource.siteUrl}
-              columns={columns}
-              item={modalItem}
-              spClient={spClient}
-              page={page}
-              onClose={() => setModalItem(null)}
-            />
-          )}
-        </>
+        <div className={styles.mainContent}>
+          <TableView
+            page={page}
+            columns={columns}
+            items={filteredItems}
+            filters={filters}
+            searchText={searchText}
+            onFilterChange={setFilters}
+            onSearchChange={setSearchText}
+            onItemCreated={loadData}
+            onItemUpdated={loadData}
+            onItemDeleted={loadData}
+          />
+        </div>
       )}
     </div>
   );

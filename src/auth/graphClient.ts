@@ -36,7 +36,7 @@ export interface GraphListColumn {
   // Default value configured in SharePoint
   defaultValue?: { value?: string; formula?: string };
   // Type-specific properties from Graph API (only one will be present)
-  text?: { allowMultipleLines?: boolean; maxLength?: number };
+  text?: { allowMultipleLines?: boolean; maxLength?: number; textType?: 'plain' | 'richText' };
   boolean?: Record<string, never>;  // Empty object indicates boolean column
   number?: { minimum?: number; maximum?: number };
   dateTime?: { format?: string };
@@ -65,7 +65,7 @@ export interface FormFieldConfig {
   required: boolean;
   hidden: boolean;
   readOnly: boolean;
-  text?: { allowMultipleLines?: boolean; maxLength?: number };
+  text?: { allowMultipleLines?: boolean; maxLength?: number; textType?: 'plain' | 'richText' };
   boolean?: Record<string, never>;
   number?: { minimum?: number; maximum?: number };
   dateTime?: { format?: string };
