@@ -475,15 +475,24 @@ function UnifiedDetailModalContent({
           }));
 
         // Update detailLayout.columnSettings - remove deleted, add new with visible: false
+        // Deduplicate by internalName (keep first occurrence to preserve order)
         const existingSettings = listDetailConfig.detailLayout?.columnSettings ?? [];
-        const updatedColumnSettings = existingSettings.filter(s =>
-          freshColumnNames.has(s.internalName)
-        );
-        const newColumnSettings = newColumns.map(c => ({
-          internalName: c.internalName,
-          visible: false, // New columns not selected by default
-          displayStyle: 'list' as const,
-        }));
+        const seenColumnNames = new Set<string>();
+        const updatedColumnSettings = existingSettings.filter(s => {
+          if (!freshColumnNames.has(s.internalName) || seenColumnNames.has(s.internalName)) {
+            return false;
+          }
+          seenColumnNames.add(s.internalName);
+          return true;
+        });
+        // Only add columns that aren't already in columnSettings
+        const newColumnSettings = newColumns
+          .filter(c => !seenColumnNames.has(c.internalName))
+          .map(c => ({
+            internalName: c.internalName,
+            visible: false, // New columns not selected by default
+            displayStyle: 'list' as const,
+          }));
 
         const updatedConfig: ListDetailConfig = {
           ...listDetailConfig,
@@ -1068,14 +1077,19 @@ function getEffectiveLayoutConfig(
   }
 
   const validColumnNames = new Set(displayColumns.map(c => c.internalName));
-  const existingNames = new Set(existingLayout.columnSettings.map(s => s.internalName));
 
-  const existingSettings = existingLayout.columnSettings.filter(s =>
-    validColumnNames.has(s.internalName)
-  );
+  // Deduplicate by internalName (keep first occurrence to preserve order)
+  const seenNames = new Set<string>();
+  const existingSettings = existingLayout.columnSettings.filter(s => {
+    if (!validColumnNames.has(s.internalName) || seenNames.has(s.internalName)) {
+      return false;
+    }
+    seenNames.add(s.internalName);
+    return true;
+  });
 
   const newColumns = displayColumns
-    .filter(col => !existingNames.has(col.internalName))
+    .filter(col => !seenNames.has(col.internalName))
     .map(col => ({
       internalName: col.internalName,
       visible: true,

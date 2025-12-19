@@ -202,28 +202,32 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
   const [columnSettings, setColumnSettings] = useState<DetailColumnSetting[]>(() => {
     // Filter out the title column from display columns
     const nonTitleColumns = displayColumns.filter(col => col.internalName !== titleColumn);
+    const validColumnNames = new Set(nonTitleColumns.map(c => c.internalName));
 
     if (existingDetailLayout?.columnSettings) {
       // Preserve existing order and merge with any new columns
+      // Deduplicate by internalName (keep first occurrence to preserve order)
       const existingSettings = existingDetailLayout.columnSettings.filter(
         s => s.internalName !== titleColumn
       );
-      const existingNames = new Set(existingSettings.map(s => s.internalName));
+      const seenNames = new Set<string>();
+      const validExisting = existingSettings.filter(s => {
+        if (!validColumnNames.has(s.internalName) || seenNames.has(s.internalName)) {
+          return false;
+        }
+        seenNames.add(s.internalName);
+        return true;
+      });
 
       // Keep existing settings in their order, add new columns at the end
       // New columns are not selected by default
       const newColumns = nonTitleColumns
-        .filter(col => !existingNames.has(col.internalName))
+        .filter(col => !seenNames.has(col.internalName))
         .map(col => ({
           internalName: col.internalName,
           visible: false,
           displayStyle: 'list' as const,
         }));
-
-      // Filter out any settings for columns that no longer exist
-      const validExisting = existingSettings.filter(s =>
-        nonTitleColumns.some(col => col.internalName === s.internalName)
-      );
 
       return [...validExisting, ...newColumns];
     }
@@ -305,26 +309,30 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
     // Only sync when loading transitions from true to false
     if (wasLoading && !loading) {
       const nonTitleColumns = displayColumns.filter(col => col.internalName !== titleColumn);
+      const validColumnNames = new Set(nonTitleColumns.map(c => c.internalName));
 
       if (existingDetailLayout?.columnSettings) {
+        // Deduplicate by internalName (keep first occurrence to preserve order)
         const existingSettings = existingDetailLayout.columnSettings.filter(
           s => s.internalName !== titleColumn
         );
-        const existingNames = new Set(existingSettings.map(s => s.internalName));
+        const seenNames = new Set<string>();
+        const validExisting = existingSettings.filter(s => {
+          if (!validColumnNames.has(s.internalName) || seenNames.has(s.internalName)) {
+            return false;
+          }
+          seenNames.add(s.internalName);
+          return true;
+        });
 
         // New columns are not selected by default
         const newColumns = nonTitleColumns
-          .filter(col => !existingNames.has(col.internalName))
+          .filter(col => !seenNames.has(col.internalName))
           .map(col => ({
             internalName: col.internalName,
             visible: false,
             displayStyle: 'list' as const,
           }));
-
-        // Filter out any settings for columns that no longer exist
-        const validExisting = existingSettings.filter(s =>
-          nonTitleColumns.some(col => col.internalName === s.internalName)
-        );
 
         setColumnSettings([...validExisting, ...newColumns]);
       } else {
