@@ -10,8 +10,6 @@ import {
   Dropdown,
   Option,
   Badge,
-  Checkbox,
-  Divider,
   Spinner,
   DrawerBody,
   DrawerHeader,
@@ -57,12 +55,6 @@ const useStyles = makeStyles({
   },
   sortDirection: {
     width: '120px',
-  },
-  permissionsRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '16px',
-    marginTop: '8px',
   },
   footer: {
     display: 'flex',
@@ -129,9 +121,6 @@ function LinkedListFlyout({
   const [lookupColumn, setLookupColumn] = useState('');
   const [displayColumns, setDisplayColumns] = useState<PageColumn[]>([]);
   const [defaultSort, setDefaultSort] = useState<{ column: string; direction: 'asc' | 'desc' } | undefined>();
-  const [allowCreate, setAllowCreate] = useState(true);
-  const [allowEdit, setAllowEdit] = useState(true);
-  const [allowDelete, setAllowDelete] = useState(true);
 
   // Lists loading state
   const [allLists, setAllLists] = useState<GraphList[]>([]);
@@ -239,9 +228,6 @@ function LinkedListFlyout({
       setLookupColumn(section.lookupColumn);
       setDisplayColumns(section.displayColumns);
       setDefaultSort(section.defaultSort);
-      setAllowCreate(section.allowCreate);
-      setAllowEdit(section.allowEdit);
-      setAllowDelete(section.allowDelete);
     } else {
       // Reset for new section
       setTitle('');
@@ -249,9 +235,6 @@ function LinkedListFlyout({
       setLookupColumn('');
       setDisplayColumns([]);
       setDefaultSort(undefined);
-      setAllowCreate(true);
-      setAllowEdit(true);
-      setAllowDelete(true);
     }
   }, [section, open]);
 
@@ -375,9 +358,9 @@ function LinkedListFlyout({
       },
       lookupColumn,
       displayColumns,
-      allowCreate,
-      allowEdit,
-      allowDelete,
+      allowCreate: true,
+      allowEdit: true,
+      allowDelete: true,
       defaultSort,
     };
 
@@ -584,30 +567,6 @@ function LinkedListFlyout({
                     </Field>
                   )}
 
-                  <Divider />
-
-                  <Field label="Permissions">
-                    <Text size={200} style={{ color: tokens.colorNeutralForeground2, marginBottom: '8px', display: 'block' }}>
-                      What actions users can perform on linked items
-                    </Text>
-                    <div className={styles.permissionsRow}>
-                      <Checkbox
-                        checked={allowCreate}
-                        onChange={(_e, data) => setAllowCreate(data.checked === true)}
-                        label="Allow Create"
-                      />
-                      <Checkbox
-                        checked={allowEdit}
-                        onChange={(_e, data) => setAllowEdit(data.checked === true)}
-                        label="Allow Edit"
-                      />
-                      <Checkbox
-                        checked={allowDelete}
-                        onChange={(_e, data) => setAllowDelete(data.checked === true)}
-                        label="Allow Delete"
-                      />
-                    </div>
-                  </Field>
                 </>
               )}
             </>
