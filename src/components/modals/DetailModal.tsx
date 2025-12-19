@@ -840,7 +840,6 @@ function RelatedSectionComponent({
 }: RelatedSectionComponentProps) {
   const styles = useStyles();
   const { instance, accounts } = useMsal();
-  const { enabledLists } = useSettings();
   const account = accounts[0];
 
   const [items, setItems] = useState<GraphListItem[]>([]);
@@ -851,15 +850,7 @@ function RelatedSectionComponent({
   const [spClientReady, setSpClientReady] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  const siteUrl = useMemo(() => {
-    if (section.source.siteUrl) {
-      return section.source.siteUrl;
-    }
-    const list = enabledLists.find(
-      (l) => l.siteId === section.source.siteId && l.listId === section.source.listId
-    );
-    return list?.siteUrl;
-  }, [section.source.siteUrl, section.source.siteId, section.source.listId, enabledLists]);
+  const siteUrl = section.source.siteUrl;
 
   useEffect(() => {
     if (!account || !siteUrl) {

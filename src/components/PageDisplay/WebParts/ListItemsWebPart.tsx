@@ -16,7 +16,6 @@ import {
 import { TableRegular } from '@fluentui/react-icons';
 import { useMsal } from '@azure/msal-react';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { useSettings } from '../../../contexts/SettingsContext';
 import type { ListItemsWebPartConfig, AnyWebPartConfig } from '../../../types/page';
 import type { GraphListColumn, GraphListItem } from '../../../auth/graphClient';
 import { fetchListWebPartData } from '../../../services/webPartData';
@@ -115,7 +114,6 @@ export default function ListItemsWebPart({ config, onConfigChange }: ListItemsWe
   const styles = useStyles();
   const { instance, accounts } = useMsal();
   const account = accounts[0];
-  const { enabledLists } = useSettings();
 
   const [items, setItems] = useState<GraphListItem[]>([]);
   const [columns, setColumns] = useState<GraphListColumn[]>([]);
@@ -130,10 +128,7 @@ export default function ListItemsWebPart({ config, onConfigChange }: ListItemsWe
 
   const isConfigured = Boolean(config.dataSource?.siteId && config.dataSource?.listId);
 
-  // Get site URL from dataSource or enabledLists
-  const siteUrl = config.dataSource?.siteUrl || enabledLists.find(
-    (l) => l.siteId === config.dataSource?.siteId && l.listId === config.dataSource?.listId
-  )?.siteUrl;
+  const siteUrl = config.dataSource?.siteUrl;
 
   // Initialize SP client when siteUrl is available
   useEffect(() => {

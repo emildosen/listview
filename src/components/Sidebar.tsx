@@ -271,11 +271,10 @@ const useStyles = makeStyles({
 function Sidebar() {
   const styles = useStyles();
   const { instance, accounts } = useMsal();
-  const { setupStatus, enabledLists, pages } = useSettings();
+  const { setupStatus, pages } = useSettings();
   const { theme, setTheme } = useTheme();
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [listsExpanded, setListsExpanded] = useState(true);
   const [pagesExpanded, setPagesExpanded] = useState(true);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const profilePictureUrlRef = useRef<string | null>(null);
@@ -451,57 +450,6 @@ function Sidebar() {
           </div>
         )}
 
-        {/* Lists Section */}
-        {isReady && (
-          <div className={styles.section}>
-            <div
-              className={styles.sectionHeader}
-              onMouseEnter={() => setSectionHover('lists')}
-              onMouseLeave={() => setSectionHover(null)}
-            >
-              <button
-                onClick={() => setListsExpanded(!listsExpanded)}
-                className={styles.sectionTitle}
-              >
-                Lists
-              </button>
-              <div
-                className={styles.sectionActions}
-                style={{ opacity: sectionHover === 'lists' ? 1 : 0 }}
-              >
-                <Link
-                  to="/app/lists"
-                  className={styles.sectionActionLink}
-                  title="Manage Lists"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <EditRegular fontSize={16} />
-                </Link>
-              </div>
-            </div>
-            {listsExpanded && enabledLists.length > 0 && (
-              <div className={styles.sectionContent}>
-                {enabledLists.map((list) => {
-                  const listPath = `/app/lists/${encodeURIComponent(list.siteId)}/${encodeURIComponent(list.listId)}`;
-                  const isListActive = location.pathname === listPath;
-                  return (
-                    <Link
-                      key={`${list.siteId}:${list.listId}`}
-                      to={listPath}
-                      className={mergeClasses(
-                        styles.sectionLink,
-                        isListActive && styles.sectionLinkActive
-                      )}
-                      title={`${list.listName} (${list.siteName})`}
-                    >
-                      {list.listName}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
       </nav>
 
       {/* User Profile */}

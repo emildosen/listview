@@ -19,8 +19,8 @@ import {
   OverlayDrawer,
 } from '@fluentui/react-components';
 import { DismissRegular } from '@fluentui/react-icons';
-import { getListColumns, type GraphListColumn } from '../../auth/graphClient';
-import { useSettings } from '../../contexts/SettingsContext';
+import { getListColumns, getSiteLists, type GraphListColumn, type GraphList } from '../../auth/graphClient';
+import { SYSTEM_LIST_NAMES } from '../../services/sharepoint';
 import type { RelatedSection, PageColumn } from '../../types/page';
 
 const useStyles = makeStyles({
@@ -81,6 +81,8 @@ interface RelatedSectionFlyoutProps {
   open: boolean;
   section: RelatedSection | null; // null = creating new
   primaryListId: string;
+  primarySiteId: string;
+  primarySiteUrl: string;
   onClose: () => void;
   onSave: (section: RelatedSection) => void;
 }
@@ -89,19 +91,20 @@ function RelatedSectionFlyout({
   open,
   section,
   primaryListId,
+  primarySiteId,
+  primarySiteUrl,
   onClose,
   onSave,
 }: RelatedSectionFlyoutProps) {
   const styles = useStyles();
   const { instance, accounts } = useMsal();
-  const { enabledLists } = useSettings();
   const account = accounts[0];
 
   const isEditing = section !== null;
 
   // Form state
   const [title, setTitle] = useState('');
-  const [sourceListKey, setSourceListKey] = useState(''); // "siteId|listId"
+  const [selectedListId, setSelectedListId] = useState('');
   const [lookupColumn, setLookupColumn] = useState('');
   const [displayColumns, setDisplayColumns] = useState<PageColumn[]>([]);
   const [defaultSort, setDefaultSort] = useState<{ column: string; direction: 'asc' | 'desc' } | undefined>();
@@ -109,20 +112,50 @@ function RelatedSectionFlyout({
   const [allowEdit, setAllowEdit] = useState(true);
   const [allowDelete, setAllowDelete] = useState(true);
 
+  // Lists loading state (fetched from same site as primary list)
+  const [availableLists, setAvailableLists] = useState<GraphList[]>([]);
+  const [loadingLists, setLoadingLists] = useState(false);
+
   // Column loading state
   const [columns, setColumns] = useState<GraphListColumn[]>([]);
   const [loadingColumns, setLoadingColumns] = useState(false);
 
   // Derived values
-  const selectedList = enabledLists.find((l) => `${l.siteId}|${l.listId}` === sourceListKey);
+  const selectedList = availableLists.find((l) => l.id === selectedListId);
+
+  // Load lists from the same site when drawer opens
+  useEffect(() => {
+    if (!open || !account || !primarySiteId) {
+      return;
+    }
+
+    const loadLists = async () => {
+      setLoadingLists(true);
+      try {
+        const lists = await getSiteLists(instance, account, primarySiteId);
+        // Filter out system lists and the primary list
+        const filtered = lists.filter(
+          (list) =>
+            !SYSTEM_LIST_NAMES.includes(list.name as typeof SYSTEM_LIST_NAMES[number]) &&
+            list.id !== primaryListId
+        );
+        setAvailableLists(filtered);
+      } catch (err) {
+        console.error('Failed to load lists:', err);
+        setAvailableLists([]);
+      } finally {
+        setLoadingLists(false);
+      }
+    };
+
+    loadLists();
+  }, [open, instance, account, primarySiteId, primaryListId]);
 
   // Initialize form when section changes
   useEffect(() => {
     if (section) {
       setTitle(section.title);
-      setSourceListKey(section.source.siteId && section.source.listId
-        ? `${section.source.siteId}|${section.source.listId}`
-        : '');
+      setSelectedListId(section.source.listId || '');
       setLookupColumn(section.lookupColumn);
       setDisplayColumns(section.displayColumns);
       setDefaultSort(section.defaultSort);
@@ -132,7 +165,7 @@ function RelatedSectionFlyout({
     } else {
       // Reset for new section
       setTitle('Related Items');
-      setSourceListKey('');
+      setSelectedListId('');
       setLookupColumn('');
       setDisplayColumns([]);
       setDefaultSort(undefined);
@@ -144,7 +177,7 @@ function RelatedSectionFlyout({
 
   // Load columns when source list changes
   useEffect(() => {
-    if (!account || !selectedList) {
+    if (!account || !selectedList || !primarySiteId) {
       setColumns([]);
       return;
     }
@@ -155,8 +188,8 @@ function RelatedSectionFlyout({
         const cols = await getListColumns(
           instance,
           account,
-          selectedList.siteId,
-          selectedList.listId
+          primarySiteId,
+          selectedList.id
         );
         setColumns(cols);
       } catch (err) {
@@ -167,15 +200,15 @@ function RelatedSectionFlyout({
     };
 
     loadColumns();
-  }, [instance, account, selectedList]);
+  }, [instance, account, selectedList, primarySiteId]);
 
   // Get lookup columns that reference the primary list
   const lookupColumns = columns.filter(
     (col) => col.lookup?.listId === primaryListId
   );
 
-  const handleSourceChange = useCallback((listKey: string) => {
-    setSourceListKey(listKey);
+  const handleSourceChange = useCallback((listId: string) => {
+    setSelectedListId(listId);
     // Reset dependent fields
     setLookupColumn('');
     setDisplayColumns([]);
@@ -206,10 +239,10 @@ function RelatedSectionFlyout({
       id: section?.id || `section-${Date.now()}`,
       title,
       source: {
-        siteId: selectedList.siteId,
-        siteUrl: selectedList.siteUrl,
-        listId: selectedList.listId,
-        listName: selectedList.listName,
+        siteId: primarySiteId,
+        siteUrl: primarySiteUrl,
+        listId: selectedList.id,
+        listName: selectedList.displayName,
       },
       lookupColumn,
       displayColumns,
@@ -223,9 +256,6 @@ function RelatedSectionFlyout({
   };
 
   const canSave = title.trim() && selectedList && lookupColumn && displayColumns.length > 0;
-
-  // Filter lists - exclude primary list
-  const availableLists = enabledLists.filter((l) => l.listId !== primaryListId);
 
   return (
     <OverlayDrawer
@@ -261,29 +291,37 @@ function RelatedSectionFlyout({
           </Field>
 
           <Field label="Related List" required>
-            <Dropdown
-              value={selectedList?.listName || ''}
-              selectedOptions={sourceListKey ? [sourceListKey] : []}
-              onOptionSelect={(_e, data) => handleSourceChange(data.optionValue as string)}
-              placeholder="Select a list"
-            >
-              {availableLists.map((list) => (
-                <Option
-                  key={`${list.siteId}-${list.listId}`}
-                  value={`${list.siteId}|${list.listId}`}
+            {loadingLists ? (
+              <div className={styles.loadingRow}>
+                <Spinner size="tiny" />
+                <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>
+                  Loading lists...
+                </Text>
+              </div>
+            ) : (
+              <>
+                <Dropdown
+                  value={selectedList?.displayName || ''}
+                  selectedOptions={selectedListId ? [selectedListId] : []}
+                  onOptionSelect={(_e, data) => handleSourceChange(data.optionValue as string)}
+                  placeholder="Select a list"
                 >
-                  {list.listName}
-                </Option>
-              ))}
-            </Dropdown>
-            {availableLists.length === 0 && (
-              <Text size={200} className={styles.warningText} style={{ marginTop: '4px' }}>
-                No other lists available. Enable more lists in Data settings.
-              </Text>
+                  {availableLists.map((list) => (
+                    <Option key={list.id} value={list.id}>
+                      {list.displayName}
+                    </Option>
+                  ))}
+                </Dropdown>
+                {availableLists.length === 0 && !loadingLists && (
+                  <Text size={200} className={styles.warningText} style={{ marginTop: '4px' }}>
+                    No other lists available in this site.
+                  </Text>
+                )}
+              </>
             )}
           </Field>
 
-          {sourceListKey && (
+          {selectedListId && (
             <>
               {loadingColumns ? (
                 <div className={styles.loadingRow}>

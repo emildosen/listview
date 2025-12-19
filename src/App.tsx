@@ -3,8 +3,6 @@ import LandingPage from './pages/LandingPage';
 import AppShell from './pages/AppShell';
 import HomePage from './pages/HomePage';
 import SettingsPage from './pages/SettingsPage';
-import DataPage from './pages/DataPage';
-import ListViewPage from './pages/ListViewPage';
 import PagesPage from './pages/PagesPage';
 import PageEditorPage from './pages/PageEditorPage';
 import PageDisplayPage from './pages/PageDisplayPage';
@@ -22,8 +20,6 @@ function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/app" element={<AppShell />}>
               <Route index element={<HomePage />} />
-              <Route path="lists" element={<DataPage />} />
-              <Route path="lists/:siteId/:listId" element={<ListViewPage />} />
               <Route path="pages" element={<PagesPage />} />
               <Route path="pages/new" element={<PageEditorPage />} />
               <Route path="pages/:pageId" element={<PageDisplayPage />} />

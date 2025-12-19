@@ -150,8 +150,10 @@ function DetailCustomizeDrawer({ page, listDetailConfig, titleColumn: titleColum
   // Get existing related sections
   const existingRelatedSections: RelatedSection[] = listDetailConfig?.relatedSections ?? page?.relatedSections ?? [];
 
-  // Get primary list ID for related section flyout
+  // Get primary list/site info for related section flyout
   const primaryListId = listDetailConfig?.listId ?? page?.primarySource?.listId ?? '';
+  const primarySiteId = listDetailConfig?.siteId ?? page?.primarySource?.siteId ?? '';
+  const primarySiteUrl = listDetailConfig?.siteUrl ?? page?.primarySource?.siteUrl ?? '';
 
   // Get the title column - first table column, first display column, or fallback to Title
   // This column is always shown in header, excluded from customization
@@ -488,6 +490,8 @@ function DetailCustomizeDrawer({ page, listDetailConfig, titleColumn: titleColum
       open={flyoutOpen}
       section={editingSection}
       primaryListId={primaryListId}
+      primarySiteId={primarySiteId}
+      primarySiteUrl={primarySiteUrl}
       onClose={() => setFlyoutOpen(false)}
       onSave={handleSaveSection}
     />
