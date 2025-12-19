@@ -1,6 +1,6 @@
 import { createContext, useContext, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useMsal } from '@azure/msal-react';
-import { getFormFieldConfig, getListItems, type FormFieldConfig } from '../auth/graphClient';
+import { getFormFieldConfig, getListItems, getListColumns, type FormFieldConfig, type GraphListColumn } from '../auth/graphClient';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -22,9 +22,15 @@ interface LookupOptionsCache {
   fetchedAt: number;
 }
 
+interface ColumnsCache {
+  columns: GraphListColumn[];
+  fetchedAt: number;
+}
+
 interface FormConfigContextValue {
   getFormConfig: (siteId: string, listId: string) => Promise<FormConfig>;
   getLookupOptions: (siteId: string, listId: string, columnName: string) => Promise<LookupOption[]>;
+  getCachedListColumns: (siteId: string, listId: string) => Promise<GraphListColumn[]>;
   invalidateCache: (listId: string) => void;
 }
 
@@ -36,6 +42,8 @@ export function FormConfigProvider({ children }: { children: ReactNode }) {
   const pendingRef = useRef<Record<string, Promise<FormConfig>>>({});
   const lookupCacheRef = useRef<Record<string, LookupOptionsCache>>({});
   const lookupPendingRef = useRef<Record<string, Promise<LookupOption[]>>>({});
+  const columnsCacheRef = useRef<Record<string, ColumnsCache>>({});
+  const columnsPendingRef = useRef<Record<string, Promise<GraphListColumn[]>>>({});
 
   // Use refs to avoid re-creating getFormConfig when accounts changes
   const instanceRef = useRef(instance);
@@ -148,6 +156,50 @@ export function FormConfigProvider({ children }: { children: ReactNode }) {
     [] // No dependencies - uses refs for mutable values
   );
 
+  const getCachedListColumns = useCallback(
+    async (siteId: string, listId: string): Promise<GraphListColumn[]> => {
+      const cacheKey = `${siteId}:${listId}`;
+      const cached = columnsCacheRef.current[cacheKey];
+      const now = Date.now();
+
+      // Return cached if still valid
+      if (cached && now - cached.fetchedAt < CACHE_TTL_MS) {
+        return cached.columns;
+      }
+
+      // Deduplicate concurrent requests
+      if (cacheKey in columnsPendingRef.current) {
+        return columnsPendingRef.current[cacheKey];
+      }
+
+      const account = accountsRef.current[0];
+      if (!account) {
+        throw new Error('No authenticated account');
+      }
+
+      // Fetch and cache
+      const fetchPromise = (async () => {
+        try {
+          const columns = await getListColumns(
+            instanceRef.current,
+            account,
+            siteId,
+            listId
+          );
+
+          columnsCacheRef.current[cacheKey] = { columns, fetchedAt: now };
+          return columns;
+        } finally {
+          delete columnsPendingRef.current[cacheKey];
+        }
+      })();
+
+      columnsPendingRef.current[cacheKey] = fetchPromise;
+      return fetchPromise;
+    },
+    [] // No dependencies - uses refs for mutable values
+  );
+
   const invalidateCache = useCallback((listId: string) => {
     // Remove all cache entries for this listId (any siteId)
     for (const key of Object.keys(cacheRef.current)) {
@@ -161,12 +213,18 @@ export function FormConfigProvider({ children }: { children: ReactNode }) {
         delete lookupCacheRef.current[key];
       }
     }
+    // Also invalidate columns cache for this list
+    for (const key of Object.keys(columnsCacheRef.current)) {
+      if (key.endsWith(`:${listId}`)) {
+        delete columnsCacheRef.current[key];
+      }
+    }
   }, []);
 
   // Memoize context value to prevent unnecessary re-renders of consumers
   const contextValue = useMemo(
-    () => ({ getFormConfig, getLookupOptions, invalidateCache }),
-    [getFormConfig, getLookupOptions, invalidateCache]
+    () => ({ getFormConfig, getLookupOptions, getCachedListColumns, invalidateCache }),
+    [getFormConfig, getLookupOptions, getCachedListColumns, invalidateCache]
   );
 
   return (

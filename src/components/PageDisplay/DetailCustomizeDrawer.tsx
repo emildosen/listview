@@ -12,6 +12,7 @@ import {
   DrawerHeader,
   DrawerHeaderTitle,
   OverlayDrawer,
+  Spinner,
 } from '@fluentui/react-components';
 import {
   DismissRegular,
@@ -149,6 +150,12 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground3,
     borderRadius: tokens.borderRadiusMedium,
   },
+  loadingContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '48px',
+  },
 });
 
 interface DetailCustomizeDrawerProps {
@@ -160,12 +167,14 @@ interface DetailCustomizeDrawerProps {
   // Optional title column override
   titleColumn?: string;
   open: boolean;
+  // Show loading spinner while columns are being refreshed
+  loading?: boolean;
   onClose: () => void;
   // Called immediately on every change for real-time updates
   onChange: (config: DetailLayoutConfig, relatedSections?: RelatedSection[]) => void;
 }
 
-function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleColumn: titleColumnProp, open, onClose, onChange }: DetailCustomizeDrawerProps) {
+function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleColumn: titleColumnProp, open, loading, onClose, onChange }: DetailCustomizeDrawerProps) {
   const styles = useStyles();
 
   // Get display columns from either source
@@ -202,11 +211,12 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
       const existingNames = new Set(existingSettings.map(s => s.internalName));
 
       // Keep existing settings in their order, add new columns at the end
+      // New columns are not selected by default
       const newColumns = nonTitleColumns
         .filter(col => !existingNames.has(col.internalName))
         .map(col => ({
           internalName: col.internalName,
-          visible: true,
+          visible: false,
           displayStyle: 'list' as const,
         }));
 
@@ -453,6 +463,12 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
       </DrawerHeader>
 
       <DrawerBody>
+        {loading ? (
+          <div className={styles.loadingContainer}>
+            <Spinner size="medium" label="Loading columns..." />
+          </div>
+        ) : (
+        <>
         {/* Detail Columns Section */}
         <div className={styles.section} style={{ marginTop: '8px' }}>
           <Text className={styles.sectionTitle}>Detail Columns</Text>
@@ -594,6 +610,8 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
             Add Linked List
           </Button>
         </div>
+        </>
+        )}
       </DrawerBody>
     </OverlayDrawer>
 
