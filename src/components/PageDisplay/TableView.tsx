@@ -539,7 +539,8 @@ function TableView({
           page={page}
           onClose={() => setSelectedItem(null)}
           onItemUpdated={() => {
-            setSelectedItem(null);
+            // Don't close modal on update - just refresh data
+            // Modal closes only when user explicitly closes it
             onItemUpdated?.();
           }}
           onItemDeleted={() => {
