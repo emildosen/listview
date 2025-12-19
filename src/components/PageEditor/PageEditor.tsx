@@ -152,9 +152,9 @@ const useStyles = makeStyles({
   stepLine: {
     position: 'absolute',
     left: '31px',
-    top: '48px',
+    top: '56px',
     width: '2px',
-    height: 'calc(100% - 24px)',
+    height: 'calc(100% - 56px)',
     backgroundColor: tokens.colorNeutralStroke1,
     zIndex: 0,
   },
