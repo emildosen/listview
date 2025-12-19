@@ -97,7 +97,7 @@ export function DescriptionField({
           onBlur={handleSave}
           placeholder={placeholder}
           readOnly={readOnly}
-          minHeight={80}
+          minHeight={400}
           showToolbar={isRichText}
         />
         {showSaving && <Spinner size="tiny" className={styles.savingIndicator} />}

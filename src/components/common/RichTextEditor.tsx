@@ -9,14 +9,11 @@ import 'tinymce/themes/silver';
 import 'tinymce/icons/default';
 import 'tinymce/models/dom';
 
-// Import plugins
+// Import plugins (no table/image for SP compatibility)
 import 'tinymce/plugins/lists';
 import 'tinymce/plugins/link';
 import 'tinymce/plugins/autolink';
-import 'tinymce/plugins/table';
 import 'tinymce/plugins/autoresize';
-import 'tinymce/plugins/image';
-import 'tinymce/plugins/media';
 import 'tinymce/plugins/code';
 import 'tinymce/plugins/charmap';
 import 'tinymce/plugins/emoticons';
@@ -130,33 +127,23 @@ export function RichTextEditor({
 
           // Size
           min_height: minHeight,
-          max_height: 500,
+          max_height: 600,
           autoresize_bottom_margin: 0,
 
-          // Toolbar - all features (trim based on SP compatibility)
+          // Toolbar - SP-compatible features (no tables/images)
           toolbar: showToolbar
-            ? 'bold italic underline strikethrough | forecolor backcolor | bullist numlist | link image table | emoticons charmap | removeformat code'
+            ? 'bold italic underline strikethrough | forecolor backcolor | bullist numlist | link | emoticons charmap | removeformat code'
             : false,
           toolbar_mode: 'sliding',
 
-          // Plugins
+          // Plugins (no table/image for SP compatibility)
           plugins: showToolbar
-            ? 'lists link autolink table autoresize image media code charmap emoticons'
+            ? 'lists link autolink autoresize code charmap emoticons'
             : 'autoresize',
 
           // Link settings
           link_default_target: '_blank',
           link_assume_external_targets: true,
-
-          // Table settings
-          table_responsive_width: true,
-          table_default_attributes: {
-            border: '1',
-          },
-
-          // Image settings (for pasting)
-          images_upload_handler: () => Promise.reject('Image upload not supported'),
-          paste_data_images: false,
 
           // Content styling to match Fluent UI
           content_style: `
@@ -174,9 +161,6 @@ export function RichTextEditor({
             ul, ol { margin: 0 0 8px 0; padding-left: 24px; }
             a { color: #0078d4; text-decoration: none; }
             a:hover { text-decoration: underline; }
-            table { border-collapse: collapse; width: 100%; margin: 8px 0; }
-            th, td { border: 1px solid ${isDark ? '#444' : '#d1d1d1'}; padding: 8px; }
-            th { background: ${isDark ? '#2a2a2a' : '#f5f5f5'}; font-weight: 600; }
           `,
 
           // Keyboard shortcuts
