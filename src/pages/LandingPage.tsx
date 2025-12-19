@@ -5,10 +5,7 @@ import {
   makeStyles,
 } from '@fluentui/react-components';
 import {
-  LockClosedRegular,
   DatabaseRegular,
-  CodeRegular,
-  ShieldCheckmarkRegular,
   CloudRegular,
   PlugConnectedRegular,
 } from '@fluentui/react-icons';
@@ -39,18 +36,6 @@ const useStyles = makeStyles({
     zIndex: 1,
   },
   heroLogo: {
-    marginBottom: '24px',
-  },
-  badge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
-    backgroundColor: 'rgba(33, 115, 70, 0.1)',
-    color: '#217346',
-    padding: '6px 12px',
-    borderRadius: '16px',
-    fontSize: '13px',
-    fontWeight: '500',
     marginBottom: '24px',
   },
   heroTitle: {
@@ -163,39 +148,32 @@ const useStyles = makeStyles({
     fontSize: '17px',
     lineHeight: 1.6,
   },
-  featuresGrid: {
-    display: 'grid',
-    gap: '24px',
+  featuresRow: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '48px',
     '@media (min-width: 768px)': {
-      gridTemplateColumns: 'repeat(2, 1fr)',
-    },
-    '@media (min-width: 1024px)': {
-      gridTemplateColumns: 'repeat(3, 1fr)',
-    },
-  },
-  featureCard: {
-    padding: '28px',
-    borderRadius: '12px',
-    backgroundColor: '#ffffff',
-    border: '1px solid #e5e7eb',
-    transition: 'all 0.2s ease',
-    ':hover': {
-      border: '1px solid #d1d5db',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: '64px',
     },
   },
-  featureCardGray: {
-    backgroundColor: '#f9fafb',
-    border: '1px solid #f3f4f6',
-    ':hover': {
-      border: '1px solid #e5e7eb',
+  featureItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    maxWidth: '280px',
+    margin: '0 auto',
+    '@media (min-width: 768px)': {
+      margin: 0,
     },
   },
   featureIcon: {
-    width: '44px',
-    height: '44px',
-    borderRadius: '10px',
-    backgroundColor: 'rgba(33, 115, 70, 0.1)',
+    width: '48px',
+    height: '48px',
+    borderRadius: '12px',
+    backgroundColor: 'rgba(33, 115, 70, 0.08)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -204,7 +182,7 @@ const useStyles = makeStyles({
   },
   featureTitle: {
     fontWeight: '600',
-    fontSize: '17px',
+    fontSize: '16px',
     color: '#111827',
     marginBottom: '8px',
   },
@@ -311,30 +289,6 @@ const useStyles = makeStyles({
   diagramArrow: {
     color: '#9ca3af',
     fontSize: '20px',
-  },
-  securityGrid: {
-    display: 'grid',
-    gap: '16px',
-    '@media (min-width: 768px)': {
-      gridTemplateColumns: 'repeat(2, 1fr)',
-    },
-  },
-  securityCard: {
-    padding: '24px',
-    borderRadius: '10px',
-    backgroundColor: '#ffffff',
-    border: '1px solid #e5e7eb',
-  },
-  securityTitle: {
-    fontWeight: '600',
-    fontSize: '15px',
-    color: '#111827',
-    marginBottom: '6px',
-  },
-  securityDescription: {
-    color: '#6b7280',
-    fontSize: '14px',
-    lineHeight: 1.5,
   },
   ctaSection: {
     textAlign: 'center',
@@ -458,18 +412,13 @@ function LandingPage() {
             <div className={styles.heroLogo}>
               <Logo size={72} />
             </div>
-            <div className={styles.badge}>
-              <CodeRegular fontSize={14} />
-              Open source
-            </div>
             <h1 className={styles.heroTitle}>
               SharePoint lists,{' '}
               <span className={styles.heroHighlight}>your way</span>
             </h1>
             <p className={styles.heroDescription}>
-              A flexible web app for managing SharePoint list data. Like Notion,
-              build what you need—tracking, dashboards, workflows—without
-              being locked into a specific use case.
+              A flexible web app for managing SharePoint list data. <br></br>
+              Built for nonprofits and small teams.
             </p>
             <div className={styles.heroButtons}>
               <button
@@ -498,39 +447,35 @@ function LandingPage() {
             <h2 className={styles.sectionTitle}>Built for flexibility</h2>
             <p className={styles.sectionSubtitle}>
               Point ListView at any SharePoint list and start working immediately.
-              No hardcoding, no custom development.
             </p>
-            <div className={styles.featuresGrid}>
-              <div className={`${styles.featureCard} ${styles.featureCardGray}`}>
+            <div className={styles.featuresRow}>
+              <div className={styles.featureItem}>
                 <div className={styles.featureIcon}>
-                  <DatabaseRegular fontSize={22} />
+                  <DatabaseRegular fontSize={24} />
                 </div>
-                <h3 className={styles.featureTitle}>Schema-driven UI</h3>
+                <h3 className={styles.featureTitle}>Schema-driven</h3>
                 <p className={styles.featureDescription}>
-                  Components discover list structure via Graph metadata. The app
-                  adapts to whatever lists you point it at.
+                  Discovers list structure via Graph metadata
                 </p>
               </div>
 
-              <div className={`${styles.featureCard} ${styles.featureCardGray}`}>
+              <div className={styles.featureItem}>
                 <div className={styles.featureIcon}>
-                  <PlugConnectedRegular fontSize={22} />
+                  <PlugConnectedRegular fontSize={24} />
                 </div>
                 <h3 className={styles.featureTitle}>Works with any list</h3>
                 <p className={styles.featureDescription}>
-                  Connect to existing SharePoint lists across your tenant.
-                  No migration or data restructuring needed.
+                  No migration or data restructuring needed
                 </p>
               </div>
 
-              <div className={`${styles.featureCard} ${styles.featureCardGray}`}>
+              <div className={styles.featureItem}>
                 <div className={styles.featureIcon}>
-                  <CloudRegular fontSize={22} />
+                  <CloudRegular fontSize={24} />
                 </div>
                 <h3 className={styles.featureTitle}>Pure client-side</h3>
                 <p className={styles.featureDescription}>
-                  No backend servers. All Graph API calls happen directly from
-                  your browser using delegated permissions.
+                  No backend—Graph calls from your browser
                 </p>
               </div>
             </div>
@@ -598,66 +543,12 @@ function LandingPage() {
           </div>
         </section>
 
-        {/* Security Section */}
-        <section className={styles.section}>
-          <div className={styles.sectionContent}>
-            <h2 className={styles.sectionTitle}>Defense in depth</h2>
-            <p className={styles.sectionSubtitle}>
-              ListView implements a strict Content Security Policy to restrict what
-              code can run and where data can be sent.
-            </p>
-            <div className={styles.securityGrid}>
-              <div className={styles.securityCard}>
-                <div className={styles.featureIcon}>
-                  <ShieldCheckmarkRegular fontSize={22} />
-                </div>
-                <h3 className={styles.securityTitle}>XSS mitigation</h3>
-                <p className={styles.securityDescription}>
-                  CSP blocks unauthorized scripts from executing, even if injection
-                  occurs through other vulnerabilities.
-                </p>
-              </div>
-              <div className={styles.securityCard}>
-                <div className={styles.featureIcon}>
-                  <LockClosedRegular fontSize={22} />
-                </div>
-                <h3 className={styles.securityTitle}>Data exfiltration prevention</h3>
-                <p className={styles.securityDescription}>
-                  Outbound connections are restricted to Microsoft services only.
-                  Tokens cannot be sent to attacker-controlled servers.
-                </p>
-              </div>
-              <div className={styles.securityCard}>
-                <div className={styles.featureIcon}>
-                  <CodeRegular fontSize={22} />
-                </div>
-                <h3 className={styles.securityTitle}>Supply chain defense</h3>
-                <p className={styles.securityDescription}>
-                  No external CDNs or third-party scripts. All code is bundled and
-                  served from the same origin.
-                </p>
-              </div>
-              <div className={styles.securityCard}>
-                <div className={styles.featureIcon}>
-                  <CloudRegular fontSize={22} />
-                </div>
-                <h3 className={styles.securityTitle}>Sovereign cloud support</h3>
-                <p className={styles.securityDescription}>
-                  Self-host for GCC, GCC High, DoD, or China cloud environments
-                  with your own Entra ID app registration.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* CTA Section */}
-        <section className={`${styles.section} ${styles.sectionGray}`}>
+        <section className={`${styles.section}`}>
           <div className={styles.ctaSection}>
             <h2 className={styles.sectionTitle}>Get started</h2>
             <p className={styles.ctaDescription}>
-              Free and open source under the MIT license. Works with any commercial
-              M365 tenant—your admin may need to grant consent for the app.
+              Free and open source under the MIT license.
             </p>
             <div className={styles.heroButtons}>
               <button
