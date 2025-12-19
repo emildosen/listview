@@ -45,7 +45,7 @@ const useStyles = makeStyles({
     alignItems: 'center',
     gap: '10px',
     fontFamily: 'Anta, sans-serif',
-    fontSize: tokens.fontSizeBase500,
+    fontSize: tokens.fontSizeBase600,
     fontWeight: 400,
     letterSpacing: '-0.02em',
     textDecoration: 'none',
