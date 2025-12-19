@@ -116,19 +116,29 @@ function ensureTinyMCEGlobalStyles() {
     }
 
     .tox .tox-tbtn {
-      height: 28px !important;
-      width: 28px !important;
+      height: 32px !important;
+      width: 32px !important;
       margin: 0 1px !important;
     }
 
-    .tox .tox-tbtn svg {
-      width: 14px !important;
-      height: 14px !important;
+    .tox .tox-tbtn .tox-icon {
+      width: 18px !important;
+      height: 18px !important;
+    }
+
+    .tox .tox-tbtn .tox-icon svg {
+      width: 18px !important;
+      height: 18px !important;
     }
 
     .tox .tox-split-button {
-      height: 28px !important;
+      height: 32px !important;
       margin: 0 1px !important;
+    }
+
+    .tox .tox-split-button .tox-icon svg {
+      width: 18px !important;
+      height: 18px !important;
     }
 
     .tox .tox-tbtn--bespoke {
