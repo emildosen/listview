@@ -175,24 +175,10 @@ function UnifiedDetailModalContent({
   item: initialItem,
   page,
   titleColumnOverride,
-  onClose: onCloseProp,
+  onClose,
   onItemUpdated,
   onItemDeleted,
 }: UnifiedDetailModalProps) {
-  // Debug: log mount/unmount
-  useEffect(() => {
-    console.log('[UnifiedDetailModal] MOUNTED');
-    return () => {
-      console.log('[UnifiedDetailModal] UNMOUNTED');
-    };
-  }, []);
-
-  // Wrap onClose to add debug logging
-  const onClose = useCallback(() => {
-    console.log('[UnifiedDetailModal] onClose called');
-    console.trace('[UnifiedDetailModal] onClose stack trace');
-    onCloseProp();
-  }, [onCloseProp]);
   const styles = useStyles();
   const { theme } = useTheme();
   const { instance, accounts } = useMsal();
@@ -361,7 +347,6 @@ function UnifiedDetailModalContent({
 
   // Auto-save handler
   const handleSaveField = useCallback(async (fieldName: string, value: unknown) => {
-    console.log('[UnifiedDetailModal] handleSaveField called:', { fieldName, value });
     if (!spClient) return;
 
     setSavingFields(prev => new Set(prev).add(fieldName));
@@ -390,9 +375,7 @@ function UnifiedDetailModalContent({
         fields: { ...prev.fields, [fieldName]: value },
       }));
 
-      console.log('[UnifiedDetailModal] Save successful, calling onItemUpdated');
       onItemUpdated?.();
-      console.log('[UnifiedDetailModal] onItemUpdated completed');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save';
       setFieldErrors(prev => ({ ...prev, [fieldName]: message }));
@@ -517,18 +500,10 @@ function UnifiedDetailModalContent({
         open
         modalType="alert"
         onOpenChange={(_, data) => {
-          // Debug logging
-          console.log('[UnifiedDetailModal] onOpenChange:', {
-            open: data.open,
-            type: (data as Record<string, unknown>).type,
-            event: (data as Record<string, unknown>).event,
-            data,
-          });
           // Only close on explicit ESC key press, not backdrop clicks or focus loss
           // This prevents the modal from closing when TinyMCE opens dropdowns/dialogs
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           if (!data.open && (data as any).type === 'escapeKeyDown') {
-            console.log('[UnifiedDetailModal] Closing via ESC key');
             onClose();
           }
         }}

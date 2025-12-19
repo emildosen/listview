@@ -67,25 +67,20 @@ export function DescriptionField({
 
   // Called after onChange, triggers save
   const handleBlur = useCallback(async () => {
-    console.log('[DescriptionField] handleBlur called');
     const newValue = pendingValue.current;
     pendingValue.current = null;
 
     // No pending change or same as last saved
     if (newValue === null || newValue === lastSavedValue.current) {
-      console.log('[DescriptionField] No change to save');
       return;
     }
 
-    console.log('[DescriptionField] Saving new value');
     setSaving(true);
     setError(null);
     try {
       await onSave(newValue);
-      console.log('[DescriptionField] Save completed');
       lastSavedValue.current = newValue;
     } catch (err) {
-      console.log('[DescriptionField] Save failed:', err);
       setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSaving(false);

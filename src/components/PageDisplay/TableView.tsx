@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useMsal } from '@azure/msal-react';
 import type { SPFI } from '@pnp/sp';
 import {
@@ -270,27 +270,7 @@ function TableView({
   const { instance, accounts } = useMsal();
   const account = accounts[0];
 
-  // Debug: log mount/unmount
-  useEffect(() => {
-    console.log('[TableView] MOUNTED');
-    return () => {
-      console.log('[TableView] UNMOUNTED');
-    };
-  }, []);
-
-  const [selectedItem, setSelectedItemState] = useState<GraphListItem | null>(null);
-
-  // Debug: log selectedItem changes
-  useEffect(() => {
-    console.log('[TableView] selectedItem changed:', selectedItem ? `item ${selectedItem.id}` : 'null');
-  }, [selectedItem]);
-
-  // Wrap setSelectedItem to add debug logging
-  const setSelectedItem = useCallback((item: GraphListItem | null) => {
-    console.log('[TableView] setSelectedItem called:', item ? `item ${item.id}` : 'null');
-    console.trace('[TableView] setSelectedItem stack trace');
-    setSelectedItemState(item);
-  }, []);
+  const [selectedItem, setSelectedItem] = useState<GraphListItem | null>(null);
   const [filterOptions, setFilterOptions] = useState<Record<string, string[]>>({});
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
