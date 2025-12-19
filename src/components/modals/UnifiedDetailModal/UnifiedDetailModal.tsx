@@ -474,7 +474,7 @@ function UnifiedDetailModalContent({
 
   if (!listDetailConfig || !layoutConfig) {
     return (
-      <Dialog open modalType="alert" onOpenChange={(_, data) => !data.open && data.type === 'escapeKeyDown' && onClose()}>
+      <Dialog open onOpenChange={(_, data) => !data.open && onClose()}>
         <DialogSurface className={styles.surface}>
           <div className={styles.loadingContainer}>
             <Spinner size="medium" />
@@ -486,7 +486,7 @@ function UnifiedDetailModalContent({
 
   return (
     <>
-      <Dialog open modalType="alert" onOpenChange={(_, data) => !data.open && data.type === 'escapeKeyDown' && onClose()}>
+      <Dialog open onOpenChange={(_, data) => !data.open && onClose()}>
         <DialogSurface className={styles.surface}>
           <DialogTitle className={styles.dialogTitle}>
             {/* Navigation buttons */}
