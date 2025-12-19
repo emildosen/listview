@@ -51,7 +51,7 @@ interface PageEditorProps {
 
 type Step = 'basic' | 'source' | 'columns' | 'search';
 
-// Steps for Lookup pages
+// Steps for Search pages
 const LOOKUP_STEPS: { key: Step; label: string; icon: React.ReactNode }[] = [
   { key: 'basic', label: 'Basic Information', icon: <DocumentRegular /> },
   { key: 'source', label: 'Data Source', icon: <DatabaseRegular /> },
@@ -740,7 +740,7 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
 
               <Field label="Page Type">
                 <div className={styles.pageTypeGrid}>
-                  {/* Lookup Type */}
+                  {/* Search Type */}
                   <div
                     className={mergeClasses(
                       styles.pageTypeOption,
@@ -782,7 +782,7 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
                     </svg>
                     <div className={styles.pageTypeLabel}>
                       <Text weight="semibold" size={300}>
-                        Lookup
+                        Search
                       </Text>
                       <Text
                         size={200}
