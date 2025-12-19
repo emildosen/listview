@@ -19,7 +19,7 @@ interface InlineEditLookupProps {
   isLoading: boolean;
   isMultiSelect: boolean;
   onChange: (value: number | number[] | null) => void;
-  onCommit: () => void;
+  onCommit: (directValue?: number | number[] | null) => void;
   onCancel: () => void;
   placeholder?: string;
 }
@@ -59,9 +59,10 @@ export function InlineEditLookup({
     } else {
       // For single select, parse the selected option
       const selectedId = data.optionValue ? parseInt(data.optionValue, 10) : null;
-      onChange(isNaN(selectedId!) ? null : selectedId);
-      // Commit immediately for single select
-      setTimeout(() => onCommit(), 0);
+      const valueToSave = isNaN(selectedId!) ? null : selectedId;
+      onChange(valueToSave);
+      // Commit immediately for single select, passing value directly to avoid race condition
+      setTimeout(() => onCommit(valueToSave), 0);
     }
   };
 
