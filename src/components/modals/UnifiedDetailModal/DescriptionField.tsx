@@ -71,18 +71,14 @@ export function DescriptionField({
   const [showSuccess, setShowSuccess] = useState(false);
   const lastSavedValue = useRef(value);
   const pendingValue = useRef<string | null>(null);
-  const wasSaving = useRef(false);
 
-  // Track when save completes successfully
+  // Auto-hide success after 2 seconds
   useEffect(() => {
-    const currentlySaving = isSaving || saving;
-    if (wasSaving.current && !currentlySaving && !error) {
-      setShowSuccess(true);
+    if (showSuccess) {
       const timer = setTimeout(() => setShowSuccess(false), 2000);
       return () => clearTimeout(timer);
     }
-    wasSaving.current = currentlySaving;
-  }, [isSaving, saving, error]);
+  }, [showSuccess]);
 
   // Clear success when error appears
   useEffect(() => {
@@ -108,9 +104,11 @@ export function DescriptionField({
 
     setSaving(true);
     setError(null);
+    setShowSuccess(false);
     try {
       await onSave(newValue);
       lastSavedValue.current = newValue;
+      setShowSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {

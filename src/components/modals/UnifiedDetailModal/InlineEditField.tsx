@@ -118,17 +118,31 @@ export function InlineEditField({
 }: InlineEditFieldProps) {
   const styles = useStyles();
   const [showSuccess, setShowSuccess] = useState(false);
-  const wasSaving = useRef(false);
+  const prevIsSaving = useRef(isSaving);
+  const prevError = useRef(error);
 
-  // Track when save completes successfully
+  // Track when save completes successfully (isSaving: true → false, no error)
   useEffect(() => {
-    if (wasSaving.current && !isSaving && !error) {
+    const wasSaving = prevIsSaving.current;
+    const hadError = prevError.current;
+
+    // Update refs for next render
+    prevIsSaving.current = isSaving;
+    prevError.current = error;
+
+    // Detect successful save completion
+    if (wasSaving && !isSaving && !error && !hadError) {
       setShowSuccess(true);
+    }
+  }, [isSaving, error]);
+
+  // Auto-hide success after 2 seconds
+  useEffect(() => {
+    if (showSuccess) {
       const timer = setTimeout(() => setShowSuccess(false), 2000);
       return () => clearTimeout(timer);
     }
-    wasSaving.current = isSaving;
-  }, [isSaving, error]);
+  }, [showSuccess]);
 
   // Clear success when error appears
   useEffect(() => {
