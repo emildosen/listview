@@ -42,8 +42,10 @@ export function useFieldEdit({
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(null);
 
   // Update value when initialValue changes (e.g., after successful save)
+  // Valid prop-to-state sync pattern for controlled editing
   useEffect(() => {
     if (!state.isEditing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setValueState(initialValue);
       originalValue.current = initialValue;
     }

@@ -54,6 +54,7 @@ export function InlineEditDate({
 }
 
 // Helper functions for date formatting
+// eslint-disable-next-line react-refresh/only-export-components
 export function formatDateForInput(value: unknown): string {
   if (!value) return '';
   if (typeof value === 'string') {
@@ -70,6 +71,7 @@ export function formatDateForInput(value: unknown): string {
   return '';
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formatDateTimeForInput(value: unknown): string {
   if (!value) return '';
   if (typeof value === 'string') {
@@ -97,6 +99,7 @@ function formatLocalDateTime(d: Date): string {
   return `${formatLocalDate(d)}T${hours}:${minutes}`;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formatDateForDisplay(value: unknown): string {
   if (!value) return '-';
   const date = value instanceof Date ? value : new Date(String(value));
@@ -104,6 +107,7 @@ export function formatDateForDisplay(value: unknown): string {
   return date.toLocaleDateString();
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formatDateTimeForDisplay(value: unknown): string {
   if (!value) return '-';
   const date = value instanceof Date ? value : new Date(String(value));

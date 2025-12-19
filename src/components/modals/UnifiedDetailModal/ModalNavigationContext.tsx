@@ -153,6 +153,7 @@ export function ModalNavigationProvider({ children, modalId, initialEntry }: Mod
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useModalNavigation(): ModalNavigationContextValue {
   const context = useContext(ModalNavigationContext);
   if (!context) {

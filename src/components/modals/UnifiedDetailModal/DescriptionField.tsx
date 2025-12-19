@@ -118,13 +118,15 @@ export function DescriptionField({
   const styles = useStyles();
   const [isEditing, setIsEditing] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  // editValue is only used during editing - initialized from value when editing starts
   const [editValue, setEditValue] = useState(value);
   const [error, setError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Sync edit value with prop when not editing
+  // Sync edit value with prop when not editing (valid prop-to-state sync pattern)
   useEffect(() => {
     if (!isEditing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEditValue(value);
     }
   }, [value, isEditing]);

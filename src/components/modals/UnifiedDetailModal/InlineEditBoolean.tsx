@@ -3,7 +3,6 @@ import { Checkbox } from '@fluentui/react-components';
 
 interface InlineEditBooleanProps {
   value: boolean;
-  label: string;
   onChange: (value: boolean) => void;
   onCommit: () => void;
   onCancel: () => void;
@@ -11,7 +10,6 @@ interface InlineEditBooleanProps {
 
 export function InlineEditBoolean({
   value,
-  label: _label,
   onChange,
   onCommit,
   onCancel,

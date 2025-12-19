@@ -104,10 +104,9 @@ const useStyles = makeStyles({
 interface RelatedSectionViewProps {
   section: RelatedSection;
   parentItem: GraphListItem;
-  parentListId: string;
 }
 
-export function RelatedSectionView({ section, parentItem, parentListId: _parentListId }: RelatedSectionViewProps) {
+export function RelatedSectionView({ section, parentItem }: RelatedSectionViewProps) {
   const styles = useStyles();
   const { theme } = useTheme();
   const { instance, accounts } = useMsal();

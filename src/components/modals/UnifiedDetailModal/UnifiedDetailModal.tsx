@@ -636,7 +636,6 @@ function UnifiedDetailModalContent({
                           key={section.id}
                           section={section}
                           parentItem={currentItem}
-                          parentListId={currentListId}
                         />
                       );
                     })}
@@ -794,7 +793,6 @@ function DetailFieldEdit({
       return (
         <InlineEditBoolean
           value={Boolean(editValue)}
-          label={label}
           onChange={(v) => setEditValue(v)}
           onCommit={handleCommit}
           onCancel={onCancelEdit}

@@ -1,4 +1,5 @@
 // Unified Detail Modal - Notion-style modal with inline editing and navigation
+/* eslint-disable react-refresh/only-export-components */
 export { UnifiedDetailModal } from './UnifiedDetailModal';
 export { ModalNavigationProvider, useModalNavigation, type NavigationEntry } from './ModalNavigationContext';
 export { useAutoSave } from './useAutoSave';
