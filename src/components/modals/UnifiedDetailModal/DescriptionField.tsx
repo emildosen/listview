@@ -1,10 +1,12 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   makeStyles,
   tokens,
   Text,
   Spinner,
+  Tooltip,
 } from '@fluentui/react-components';
+import { CheckmarkCircleRegular, DismissCircleRegular } from '@fluentui/react-icons';
 import { RichTextEditor } from '../../common/RichTextEditor';
 
 const useStyles = makeStyles({
@@ -12,28 +14,37 @@ const useStyles = makeStyles({
     marginTop: '16px',
     marginBottom: '16px',
   },
+  labelContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    marginBottom: '8px',
+  },
   label: {
-    display: 'block',
     fontSize: tokens.fontSizeBase200,
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground3,
     textTransform: 'uppercase',
     letterSpacing: '0.02em',
-    marginBottom: '8px',
+  },
+  labelStatus: {
+    display: 'flex',
+    alignItems: 'center',
+  },
+  successIcon: {
+    color: tokens.colorPaletteGreenForeground1,
+    fontSize: '14px',
+  },
+  errorIcon: {
+    color: tokens.colorPaletteRedForeground1,
+    fontSize: '14px',
+    cursor: 'pointer',
+  },
+  savingSpinner: {
+    flexShrink: 0,
   },
   editorWrapper: {
     position: 'relative',
-  },
-  savingIndicator: {
-    position: 'absolute',
-    top: '12px',
-    right: '12px',
-    zIndex: 10,
-  },
-  error: {
-    marginTop: '4px',
-    color: tokens.colorPaletteRedForeground1,
-    fontSize: tokens.fontSizeBase200,
   },
 });
 
@@ -57,8 +68,28 @@ export function DescriptionField({
   const styles = useStyles();
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const lastSavedValue = useRef(value);
   const pendingValue = useRef<string | null>(null);
+  const wasSaving = useRef(false);
+
+  // Track when save completes successfully
+  useEffect(() => {
+    const currentlySaving = isSaving || saving;
+    if (wasSaving.current && !currentlySaving && !error) {
+      setShowSuccess(true);
+      const timer = setTimeout(() => setShowSuccess(false), 2000);
+      return () => clearTimeout(timer);
+    }
+    wasSaving.current = currentlySaving;
+  }, [isSaving, saving, error]);
+
+  // Clear success when error appears
+  useEffect(() => {
+    if (error) {
+      setShowSuccess(false);
+    }
+  }, [error]);
 
   // Called when editor content changes (on blur)
   const handleChange = useCallback((newValue: string) => {
@@ -87,11 +118,39 @@ export function DescriptionField({
     }
   }, [onSave]);
 
+  const handleClearError = useCallback(() => {
+    setError(null);
+  }, []);
+
   const showSaving = isSaving || saving;
+
+  // Render label status indicator (spinner, checkmark, or error)
+  const renderLabelStatus = () => {
+    if (showSaving) {
+      return <Spinner size="tiny" className={styles.savingSpinner} />;
+    }
+    if (error) {
+      return (
+        <Tooltip content={error} relationship="label">
+          <DismissCircleRegular
+            className={styles.errorIcon}
+            onClick={handleClearError}
+          />
+        </Tooltip>
+      );
+    }
+    if (showSuccess) {
+      return <CheckmarkCircleRegular className={styles.successIcon} />;
+    }
+    return null;
+  };
 
   return (
     <div className={styles.container}>
-      <Text className={styles.label}>Description</Text>
+      <div className={styles.labelContainer}>
+        <Text className={styles.label}>Description</Text>
+        <span className={styles.labelStatus}>{renderLabelStatus()}</span>
+      </div>
       <div className={styles.editorWrapper}>
         <RichTextEditor
           value={value}
@@ -102,9 +161,7 @@ export function DescriptionField({
           minHeight={200}
           showToolbar={isRichText}
         />
-        {showSaving && <Spinner size="tiny" className={styles.savingIndicator} />}
       </div>
-      {error && <Text className={styles.error}>{error}</Text>}
     </div>
   );
 }

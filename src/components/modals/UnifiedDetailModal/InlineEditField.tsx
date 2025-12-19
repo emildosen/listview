@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useState, useEffect, useRef } from 'react';
 import {
   makeStyles,
   tokens,
@@ -7,7 +7,7 @@ import {
   Tooltip,
   mergeClasses,
 } from '@fluentui/react-components';
-import { EditRegular, ErrorCircleRegular } from '@fluentui/react-icons';
+import { EditRegular, CheckmarkCircleRegular, DismissCircleRegular } from '@fluentui/react-icons';
 
 const useStyles = makeStyles({
   container: {
@@ -17,12 +17,33 @@ const useStyles = makeStyles({
     gap: '8px',
     minHeight: '32px',
   },
-  label: {
-    fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground3,
+  labelContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
     minWidth: '100px',
     flexShrink: 0,
     paddingTop: '6px',
+  },
+  label: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground3,
+  },
+  labelStatus: {
+    display: 'flex',
+    alignItems: 'center',
+  },
+  successIcon: {
+    color: tokens.colorPaletteGreenForeground1,
+    fontSize: '14px',
+  },
+  errorIcon: {
+    color: tokens.colorPaletteRedForeground1,
+    fontSize: '14px',
+    cursor: 'pointer',
+  },
+  savingSpinner: {
+    flexShrink: 0,
   },
   valueContainer: {
     flex: 1,
@@ -64,13 +85,6 @@ const useStyles = makeStyles({
   editIconVisible: {
     opacity: 1,
   },
-  savingSpinner: {
-    flexShrink: 0,
-  },
-  errorIcon: {
-    color: tokens.colorPaletteRedForeground1,
-    flexShrink: 0,
-  },
 });
 
 interface InlineEditFieldProps {
@@ -103,6 +117,25 @@ export function InlineEditField({
   onClearError,
 }: InlineEditFieldProps) {
   const styles = useStyles();
+  const [showSuccess, setShowSuccess] = useState(false);
+  const wasSaving = useRef(false);
+
+  // Track when save completes successfully
+  useEffect(() => {
+    if (wasSaving.current && !isSaving && !error) {
+      setShowSuccess(true);
+      const timer = setTimeout(() => setShowSuccess(false), 2000);
+      return () => clearTimeout(timer);
+    }
+    wasSaving.current = isSaving;
+  }, [isSaving, error]);
+
+  // Clear success when error appears
+  useEffect(() => {
+    if (error) {
+      setShowSuccess(false);
+    }
+  }, [error]);
 
   const handleClick = () => {
     if (!readOnly && !isEditing && !isSaving) {
@@ -119,9 +152,36 @@ export function InlineEditField({
 
   const showEditIcon = isHovered && !isEditing && !readOnly && !isSaving;
 
+  // Render label status indicator (spinner, checkmark, or error)
+  const renderLabelStatus = () => {
+    if (isSaving) {
+      return <Spinner size="tiny" className={styles.savingSpinner} />;
+    }
+    if (error) {
+      return (
+        <Tooltip content={error} relationship="label">
+          <DismissCircleRegular
+            className={styles.errorIcon}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClearError();
+            }}
+          />
+        </Tooltip>
+      );
+    }
+    if (showSuccess) {
+      return <CheckmarkCircleRegular className={styles.successIcon} />;
+    }
+    return null;
+  };
+
   return (
     <div className={styles.container}>
-      <Text className={styles.label}>{label}</Text>
+      <div className={styles.labelContainer}>
+        <Text className={styles.label}>{label}</Text>
+        <span className={styles.labelStatus}>{renderLabelStatus()}</span>
+      </div>
       <div
         className={mergeClasses(
           styles.valueContainer,
@@ -141,18 +201,6 @@ export function InlineEditField({
         ) : (
           <>
             <span className={styles.value}>{children}</span>
-            {isSaving && <Spinner size="tiny" className={styles.savingSpinner} />}
-            {error && (
-              <Tooltip content={error} relationship="label">
-                <ErrorCircleRegular
-                  className={styles.errorIcon}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClearError();
-                  }}
-                />
-              </Tooltip>
-            )}
             <EditRegular
               className={mergeClasses(styles.editIcon, showEditIcon && styles.editIconVisible)}
             />

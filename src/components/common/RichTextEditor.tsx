@@ -107,20 +107,10 @@ function ensureTinyMCEGlobalStyles() {
       z-index: 1000001 !important;
     }
 
-    /* Compact toolbar - reduce height only */
-    .tox .tox-toolbar,
-    .tox .tox-toolbar__overflow,
-    .tox .tox-toolbar__primary {
-      background: none !important;
-      padding: 0 4px !important;
-    }
-
-    .tox .tox-editor-header {
-      padding: 0 !important;
-    }
-
-    .tox .tox-toolbar-overlord {
-      padding: 0 !important;
+    /* Compact toolbar */
+    .tox-toolbar__primary {
+      height: 32px !important;
+      margin-top: -7px !important;
     }
   `;
   document.head.appendChild(style);
