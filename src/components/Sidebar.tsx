@@ -44,8 +44,9 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
+    fontFamily: 'Condor, sans-serif',
     fontSize: tokens.fontSizeBase500,
-    fontWeight: tokens.fontWeightBold,
+    fontWeight: 900, // Black weight
     letterSpacing: '-0.02em',
     textDecoration: 'none',
     color: tokens.colorNeutralForeground1,
