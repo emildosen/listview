@@ -455,7 +455,7 @@ function LandingPage() {
                 </div>
                 <h3 className={styles.featureTitle}>Schema-driven</h3>
                 <p className={styles.featureDescription}>
-                  Discovers list structure via Graph metadata
+                  Discovers list structure via Graph metadata.
                 </p>
               </div>
 
@@ -465,7 +465,7 @@ function LandingPage() {
                 </div>
                 <h3 className={styles.featureTitle}>Works with any list</h3>
                 <p className={styles.featureDescription}>
-                  No migration or data restructuring needed
+                  No migration or data restructuring needed.
                 </p>
               </div>
 
@@ -475,7 +475,7 @@ function LandingPage() {
                 </div>
                 <h3 className={styles.featureTitle}>Pure client-side</h3>
                 <p className={styles.featureDescription}>
-                  No backend—Graph calls from your browser
+                  No backend. All your SharePoint data stays in your browser.
                 </p>
               </div>
             </div>
