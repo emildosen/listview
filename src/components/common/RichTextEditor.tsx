@@ -91,8 +91,22 @@ export function RichTextEditor({
   const isDark = theme === 'dark';
 
   const handleEditorChange = useCallback((content: string) => {
-    onChange(content);
-  }, [onChange]);
+    if (showToolbar) {
+      // Rich text mode - keep HTML
+      onChange(content);
+    } else {
+      // Plain text mode - strip HTML, convert <br> to newlines
+      const plainText = content
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"');
+      onChange(plainText);
+    }
+  }, [onChange, showToolbar]);
 
   const handleBlur = useCallback(() => {
     onBlur?.();
@@ -100,6 +114,9 @@ export function RichTextEditor({
 
   // Check if content is empty (TinyMCE may have empty paragraphs)
   const isEmpty = !value || value === '<p></p>' || value === '<p><br></p>';
+
+  // For plain text mode, convert newlines to <br> for display in editor
+  const displayValue = showToolbar ? value : value.replace(/\n/g, '<br>');
 
   return (
     <div className={mergeClasses(styles.container, isDark && styles.containerDark)}>
@@ -111,7 +128,7 @@ export function RichTextEditor({
         onInit={(_evt, editor) => {
           editorRef.current = editor;
         }}
-        value={value}
+        value={displayValue}
         onEditorChange={handleEditorChange}
         onBlur={handleBlur}
         disabled={readOnly}
@@ -140,6 +157,10 @@ export function RichTextEditor({
           plugins: showToolbar
             ? 'lists link autolink autoresize code charmap emoticons'
             : 'autoresize',
+
+          // For plain text mode (no toolbar), don't wrap in <p> tags
+          forced_root_block: showToolbar ? 'p' : '',
+          newline_behavior: showToolbar ? 'default' : 'linebreak',
 
           // Link settings
           link_default_target: '_blank',
