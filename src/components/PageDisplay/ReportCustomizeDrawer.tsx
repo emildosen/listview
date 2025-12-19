@@ -10,6 +10,8 @@ import {
   DrawerHeaderTitle,
   OverlayDrawer,
   Input,
+  Textarea,
+  Field,
 } from '@fluentui/react-components';
 import {
   DismissRegular,
@@ -19,7 +21,6 @@ import {
 } from '@fluentui/react-icons';
 import type {
   PageDefinition,
-  ReportLayoutConfig,
   ReportSection,
   ReportColumn,
   SectionLayout,
@@ -205,7 +206,7 @@ interface ReportCustomizeDrawerProps {
   page: PageDefinition;
   open: boolean;
   onClose: () => void;
-  onSave: (layout: ReportLayoutConfig) => Promise<void>;
+  onSave: (page: PageDefinition) => Promise<void>;
 }
 
 export default function ReportCustomizeDrawer({
@@ -216,6 +217,10 @@ export default function ReportCustomizeDrawer({
 }: ReportCustomizeDrawerProps) {
   const styles = useStyles();
 
+  // Basic info state
+  const [name, setName] = useState(page.name);
+  const [description, setDescription] = useState(page.description || '');
+
   // Initialize sections from existing config or create default
   const [sections, setSections] = useState<ReportSection[]>(() => {
     if (page.reportLayout?.sections && page.reportLayout.sections.length > 0) {
@@ -225,16 +230,18 @@ export default function ReportCustomizeDrawer({
     return [createSection('one-column')];
   });
 
-  // Sync sections state when drawer opens or page changes
+  // Sync state when drawer opens or page changes
   useEffect(() => {
     if (open) {
+      setName(page.name);
+      setDescription(page.description || '');
       if (page.reportLayout?.sections && page.reportLayout.sections.length > 0) {
         setSections([...page.reportLayout.sections]);
       } else {
         setSections([createSection('one-column')]);
       }
     }
-  }, [open, page.reportLayout]);
+  }, [open, page]);
 
   // Drag state
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -363,12 +370,18 @@ export default function ReportCustomizeDrawer({
   const handleSave = useCallback(async () => {
     setSaving(true);
     try {
-      await onSave({ sections });
+      const updatedPage: PageDefinition = {
+        ...page,
+        name,
+        description: description || undefined,
+        reportLayout: { sections },
+      };
+      await onSave(updatedPage);
       onClose();
     } finally {
       setSaving(false);
     }
-  }, [sections, onSave, onClose]);
+  }, [page, name, description, sections, onSave, onClose]);
 
   // Get column label based on position and layout
   const getColumnLabel = (layout: SectionLayout, index: number): string => {
@@ -404,8 +417,30 @@ export default function ReportCustomizeDrawer({
 
       <DrawerBody className={styles.body}>
         <div className={styles.content}>
-          {/* Sections */}
+          {/* Basic Information */}
           <div className={styles.section}>
+            <Text className={styles.sectionTitle}>Basic Information</Text>
+
+            <Field label="Page Name" required>
+              <Input
+                value={name}
+                onChange={(_e, data) => setName(data.value)}
+              />
+            </Field>
+
+            <Field label="Description">
+              <Textarea
+                value={description}
+                onChange={(_e, data) => setDescription(data.value)}
+                rows={2}
+              />
+            </Field>
+          </div>
+
+          <Divider />
+
+          {/* Sections */}
+          <div className={styles.section} style={{ marginTop: '24px' }}>
             <div className={styles.sectionHeader}>
               <Text className={styles.sectionTitle}>Sections</Text>
               <Button
@@ -547,7 +582,11 @@ export default function ReportCustomizeDrawer({
           <Button appearance="secondary" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button appearance="primary" onClick={handleSave} disabled={saving}>
+          <Button
+            appearance="primary"
+            onClick={handleSave}
+            disabled={saving || !name.trim()}
+          >
             {saving ? 'Saving...' : 'Save'}
           </Button>
         </div>

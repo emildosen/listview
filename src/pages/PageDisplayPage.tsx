@@ -171,12 +171,10 @@ function PageDisplayPage() {
     });
   }, [items, filters, searchText, page?.searchConfig]);
 
-  // Handle report layout save
-  const handleReportLayoutSave = useCallback(async (layout: ReportLayoutConfig) => {
-    if (!page) return;
-    const updatedPage = { ...page, reportLayout: layout };
+  // Handle report page save
+  const handleReportPageSave = useCallback(async (updatedPage: PageDefinition) => {
     await savePage(updatedPage);
-  }, [page, savePage]);
+  }, [savePage]);
 
   // Handle web part config change
   const handleWebPartConfigChange = useCallback(
@@ -330,7 +328,7 @@ function PageDisplayPage() {
           page={page}
           open={customizeDrawerOpen}
           onClose={() => setCustomizeDrawerOpen(false)}
-          onSave={handleReportLayoutSave}
+          onSave={handleReportPageSave}
         />
       </div>
     );
