@@ -18,7 +18,7 @@ import { SettingsRegular } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { getListItems, type GraphListColumn, type GraphListItem } from '../auth/graphClient';
 import TableView from '../components/PageDisplay/TableView';
-import ItemDetailModal from '../components/PageDisplay/ItemDetailModal';
+import DetailModal from '../components/modals/DetailModal';
 import ReportPageCanvas from '../components/PageDisplay/ReportPageCanvas';
 import ReportCustomizeDrawer from '../components/PageDisplay/ReportCustomizeDrawer';
 import type { PageDefinition, ReportLayoutConfig, AnyWebPartConfig } from '../types/page';
@@ -405,12 +405,15 @@ function PageDisplayPage() {
               onSearchChange={setSearchText}
               spClient={spClient}
               onPageUpdate={handlePageUpdate}
+              onItemCreated={loadData}
+              onItemUpdated={loadData}
+              onItemDeleted={loadData}
             />
           </div>
 
           {/* Item Detail Modal */}
           {modalItem && page && (
-            <ItemDetailModal
+            <DetailModal
               listId={page.primarySource.listId}
               listName={page.primarySource.listName}
               siteId={page.primarySource.siteId}

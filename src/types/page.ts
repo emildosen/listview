@@ -251,9 +251,14 @@ export interface ListItemsWebPartConfig extends WebPartConfig {
 /**
  * Chart WebPart - displays a visualization
  */
+/**
+ * Available chart types
+ */
+export type ChartType = 'bar' | 'donut' | 'line' | 'horizontal-bar' | 'area' | 'gauge' | 'heatmap' | 'scatter' | 'gantt';
+
 export interface ChartWebPartConfig extends WebPartConfig {
   type: 'chart';
-  chartType?: 'bar' | 'donut' | 'line' | 'horizontal-bar';
+  chartType?: ChartType;
   dataSource?: WebPartDataSource;
   filters?: WebPartFilter[];
   joins?: WebPartJoin[];
@@ -265,12 +270,27 @@ export interface ChartWebPartConfig extends WebPartConfig {
 
   // Display options
   legendPosition?: LegendPosition;
+  legendLabel?: string; // Custom legend label (e.g., "Attendance Count")
   showLabels?: boolean;
   maxGroups?: number; // Limit number of groups (default: 10)
+  showOther?: boolean; // Combine excess groups into "Other" (default: true)
+  includeNull?: boolean; // Fill gaps with 0 values (e.g., missing dates in a range)
   sortBy?: 'label' | 'value';
   sortDirection?: 'asc' | 'desc';
   colorPalette?: string[]; // Custom colors
   xAxisLabelStyle?: XAxisLabelStyle; // Bar chart: 'normal' or 'angled' (shows all labels)
+
+  // Gauge chart options
+  gaugeMinValue?: number; // Minimum value (default: 0)
+  gaugeMaxValue?: number; // Maximum value (auto-calculated if not set)
+
+  // Heatmap chart options
+  secondaryGroupByColumn?: string; // Y-axis grouping for heatmap
+
+  // Gantt chart options
+  ganttStartColumn?: string; // Column with start date
+  ganttEndColumn?: string; // Column with end date
+  ganttLabelColumn?: string; // Column for bar labels
 }
 
 /**

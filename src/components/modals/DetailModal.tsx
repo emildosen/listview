@@ -35,12 +35,12 @@ import {
   OpenRegular,
 } from '@fluentui/react-icons';
 import { getListItems, type GraphListColumn, type GraphListItem } from '../../auth/graphClient';
-import { createListItem, updateListItem, deleteListItem, createSPClient, getColumnFormatting, parseColumnFormattingForLink } from '../../services/sharepoint';
+import { createListItem, updateListItem, deleteListItem, createSPClient } from '../../services/sharepoint';
 import type { PageDefinition, PageColumn, RelatedSection, DetailLayoutConfig, ListDetailConfig } from '../../types/page';
 import { useSettings } from '../../contexts/SettingsContext';
 import ItemFormModal from './ItemFormModal';
-import StatBox from './StatBox';
-import DetailCustomizeDrawer from './DetailCustomizeDrawer';
+import StatBox from '../PageDisplay/StatBox';
+import DetailCustomizeDrawer from '../PageDisplay/DetailCustomizeDrawer';
 import { SharePointLink } from '../common/SharePointLink';
 import { isSharePointUrl } from '../../auth/graphClient';
 
@@ -367,7 +367,7 @@ function createDefaultListDetailConfigFromColumns(
   };
 }
 
-interface ItemDetailModalProps {
+interface DetailModalProps {
   // List identification - required
   listId: string;
   listName: string;
@@ -376,33 +376,79 @@ interface ItemDetailModalProps {
   // Data
   columns: GraphListColumn[];
   item: GraphListItem;
-  spClient: SPFI | null;
+  spClient?: SPFI | null; // Deprecated, no longer used
   // Optional page for initial defaults (used by lookup pages)
   page?: PageDefinition;
   // Optional title column override
   titleColumnOverride?: string;
   // Callbacks
   onClose: () => void;
+  onItemUpdated?: () => void;
+  onItemDeleted?: () => void;
 }
 
-function ItemDetailModal({
+function DetailModal({
   listId,
   listName,
   siteId,
   siteUrl,
   columns,
   item,
-  spClient,
   page,
   titleColumnOverride,
-  onClose
-}: ItemDetailModalProps) {
+  onClose,
+  onItemUpdated,
+  onItemDeleted,
+}: DetailModalProps) {
   const styles = useStyles();
+  const { instance, accounts } = useMsal();
+  const account = accounts[0];
   const { getListDetailConfig, saveListDetailConfig } = useSettings();
   const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  // Track which columns have link formatting
-  const [linkFormattedColumns, setLinkFormattedColumns] = useState<Set<string>>(new Set());
+  // Related section form modal state - lifted here to render outside Dialog
+  const [relatedFormModal, setRelatedFormModal] = useState<{
+    open: boolean;
+    mode: 'create' | 'edit';
+    section: RelatedSection | null;
+    editingItem: GraphListItem | null;
+    saving: boolean;
+    saveHandler: ((fields: Record<string, unknown>) => Promise<void>) | null;
+  }>({
+    open: false,
+    mode: 'create',
+    section: null,
+    editingItem: null,
+    saving: false,
+    saveHandler: null,
+  });
+
+  // Create SP client for this list's site
+  const listSpClientRef = useRef<SPFI | null>(null);
+  const [listSpClientReady, setListSpClientReady] = useState(false);
+
+  useEffect(() => {
+    if (!account || !siteUrl) {
+      setListSpClientReady(false);
+      return;
+    }
+
+    const initClient = async () => {
+      try {
+        const client = await createSPClient(instance, account, siteUrl);
+        listSpClientRef.current = client;
+        setListSpClientReady(true);
+      } catch (err) {
+        console.error('Failed to create SP client for list:', err);
+        setListSpClientReady(false);
+      }
+    };
+
+    initClient();
+  }, [instance, account, siteUrl]);
 
   // Get or create list detail config - always uses list-level config, never page-specific
   const listDetailConfig = useMemo((): ListDetailConfig => {
@@ -415,28 +461,6 @@ function ItemDetailModal({
     // No saved config - create default from columns (ignoring any page-specific config)
     return createDefaultListDetailConfigFromColumns(listId, listName, siteId, siteUrl, columns);
   }, [getListDetailConfig, listId, listName, siteId, siteUrl, columns]);
-
-  // Fetch column formatting
-  useEffect(() => {
-    if (!spClient || !listId) return;
-
-    const fetchFormatting = async () => {
-      try {
-        const formatting = await getColumnFormatting(spClient, listId);
-        const linkCols = new Set<string>();
-        for (const col of formatting) {
-          if (parseColumnFormattingForLink(col.customFormatter)) {
-            linkCols.add(col.internalName);
-          }
-        }
-        setLinkFormattedColumns(linkCols);
-      } catch (err) {
-        console.error('Failed to fetch column formatting:', err);
-      }
-    };
-
-    fetchFormatting();
-  }, [spClient, listId]);
 
   // Get effective layout configuration
   const layoutConfig = useMemo(() =>
@@ -476,12 +500,11 @@ function ItemDetailModal({
       .filter((s): s is RelatedSection => s !== undefined);
   }, [listDetailConfig.relatedSections, layoutConfig.relatedSectionOrder]);
 
-  // Check if column should render as link
+  // Check if column should render as link (based on column type)
   const isLinkColumn = useCallback((columnName: string): boolean => {
     const col = columns.find((c) => c.name === columnName);
-    if (col?.hyperlinkOrPicture) return true;
-    return linkFormattedColumns.has(columnName);
-  }, [columns, linkFormattedColumns]);
+    return !!col?.hyperlinkOrPicture;
+  }, [columns]);
 
   const getDisplayValue = useCallback((columnName: string): string => {
     const value = item.fields[columnName];
@@ -542,6 +565,92 @@ function ItemDetailModal({
     setCustomizeOpen(false);
   };
 
+  // Handle edit item
+  const handleEdit = async (fields: Record<string, unknown>) => {
+    if (!listSpClientRef.current) return;
+
+    setSaving(true);
+    try {
+      await updateListItem(listSpClientRef.current, listId, parseInt(item.id, 10), fields);
+      setEditModalOpen(false);
+      onItemUpdated?.();
+    } catch (err) {
+      console.error('Failed to update item:', err);
+      throw err;
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Handle delete item
+  const handleDelete = async () => {
+    if (!listSpClientRef.current || !confirm('Are you sure you want to delete this item?')) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await deleteListItem(listSpClientRef.current, listId, parseInt(item.id, 10));
+      onItemDeleted?.();
+    } catch (err) {
+      console.error('Failed to delete item:', err);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Callbacks for related section form modal
+  const openRelatedFormModal = useCallback((
+    section: RelatedSection,
+    mode: 'create' | 'edit',
+    editingItem: GraphListItem | null,
+    saveHandler: (fields: Record<string, unknown>) => Promise<void>
+  ) => {
+    setRelatedFormModal({
+      open: true,
+      mode,
+      section,
+      editingItem,
+      saving: false,
+      saveHandler,
+    });
+  }, []);
+
+  const closeRelatedFormModal = useCallback(() => {
+    setRelatedFormModal(prev => ({ ...prev, open: false }));
+  }, []);
+
+  // Memoized initial values for related section form
+  const relatedFormInitialValues = useMemo(
+    () => relatedFormModal.editingItem?.fields || {},
+    [relatedFormModal.editingItem]
+  );
+
+  // Store save handler in a ref to avoid dependency issues
+  const relatedFormSaveHandlerRef = useRef<((fields: Record<string, unknown>) => Promise<void>) | null>(null);
+  relatedFormSaveHandlerRef.current = relatedFormModal.saveHandler;
+
+  // Handle save for related section form
+  const handleRelatedFormSave = useCallback(async (fields: Record<string, unknown>) => {
+    if (!relatedFormSaveHandlerRef.current) return;
+
+    setRelatedFormModal(prev => ({ ...prev, saving: true }));
+    try {
+      await relatedFormSaveHandlerRef.current(fields);
+      closeRelatedFormModal();
+    } catch (err) {
+      console.error('Failed to save related item:', err);
+      throw err;
+    } finally {
+      setRelatedFormModal(prev => ({ ...prev, saving: false }));
+    }
+  }, [closeRelatedFormModal]);
+
+  // Build SharePoint URL for opening item
+  const sharePointUrl = siteUrl
+    ? `${siteUrl}/_layouts/15/listform.aspx?PageType=4&ListId=${encodeURIComponent(listId)}&ID=${item.id}`
+    : null;
+
   const titleValue = getDisplayValue(titleColumn);
 
   return (
@@ -551,6 +660,32 @@ function ItemDetailModal({
           <DialogTitle className={styles.dialogTitle}>
             <Text className={styles.titleText}>{titleValue}</Text>
             <div className={styles.headerActions}>
+              {sharePointUrl && (
+                <Button
+                  as="a"
+                  href={sharePointUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  appearance="subtle"
+                  icon={<OpenRegular />}
+                  title="Open in SharePoint"
+                />
+              )}
+              <Button
+                appearance="subtle"
+                icon={<EditRegular />}
+                onClick={() => setEditModalOpen(true)}
+                disabled={!listSpClientReady}
+                title="Edit"
+              />
+              <Button
+                appearance="subtle"
+                icon={deleting ? <Spinner size="tiny" /> : <DeleteRegular />}
+                onClick={handleDelete}
+                disabled={!listSpClientReady || deleting}
+                title="Delete"
+                style={{ color: tokens.colorPaletteRedForeground1 }}
+              />
               <Button
                 appearance="subtle"
                 icon={<SettingsRegular />}
@@ -605,6 +740,7 @@ function ItemDetailModal({
                 key={section.id}
                 section={section}
                 parentItem={item}
+                onOpenFormModal={openRelatedFormModal}
               />
             ))}
           </DialogBody>
@@ -619,6 +755,33 @@ function ItemDetailModal({
         onClose={() => setCustomizeOpen(false)}
         onSave={handleSaveConfig}
       />
+
+      {/* Edit Modal */}
+      {editModalOpen && (
+        <ItemFormModal
+          mode="edit"
+          siteId={siteId}
+          listId={listId}
+          initialValues={item.fields}
+          saving={saving}
+          onSave={handleEdit}
+          onClose={() => setEditModalOpen(false)}
+        />
+      )}
+
+      {/* Related Section Form Modal - rendered outside Dialog to avoid focus trap conflicts */}
+      {relatedFormModal.open && relatedFormModal.section && (
+        <ItemFormModal
+          mode={relatedFormModal.mode}
+          siteId={relatedFormModal.section.source.siteId}
+          listId={relatedFormModal.section.source.listId}
+          initialValues={relatedFormInitialValues}
+          saving={relatedFormModal.saving}
+          onSave={handleRelatedFormSave}
+          onClose={closeRelatedFormModal}
+          prefillLookupField={relatedFormModal.section.lookupColumn}
+        />
+      )}
     </>
   );
 }
@@ -633,11 +796,18 @@ interface RowData {
 interface RelatedSectionComponentProps {
   section: RelatedSection;
   parentItem: GraphListItem;
+  onOpenFormModal: (
+    section: RelatedSection,
+    mode: 'create' | 'edit',
+    editingItem: GraphListItem | null,
+    saveHandler: (fields: Record<string, unknown>) => Promise<void>
+  ) => void;
 }
 
 function RelatedSectionComponent({
   section,
   parentItem,
+  onOpenFormModal,
 }: RelatedSectionComponentProps) {
   const styles = useStyles();
   const { instance, accounts } = useMsal();
@@ -645,17 +815,11 @@ function RelatedSectionComponent({
   const account = accounts[0];
 
   const [items, setItems] = useState<GraphListItem[]>([]);
-  const [columns, setColumns] = useState<GraphListColumn[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const spClientRef = useRef<SPFI | null>(null);
   const [spClientReady, setSpClientReady] = useState(false);
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<'create' | 'edit'>('create');
-  const [editingItem, setEditingItem] = useState<GraphListItem | null>(null);
-  const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const siteUrl = useMemo(() => {
@@ -734,7 +898,6 @@ function RelatedSectionComponent({
         });
       }
 
-      setColumns(result.columns);
       setItems(filteredItems);
     } catch (err) {
       console.error('Failed to load related items:', err);
@@ -748,17 +911,38 @@ function RelatedSectionComponent({
     loadRelatedItems();
   }, [loadRelatedItems]);
 
-  const handleCreate = () => {
-    setModalMode('create');
-    setEditingItem(null);
-    setModalOpen(true);
-  };
+  // Create a save handler that can be passed to the parent for the form modal
+  const createSaveHandler = useCallback((mode: 'create' | 'edit', editingItem: GraphListItem | null) => {
+    return async (fields: Record<string, unknown>) => {
+      if (!spClientRef.current) return;
+
+      const saveFields = {
+        ...fields,
+        [`${section.lookupColumn}Id`]: parseInt(parentItem.id, 10),
+      };
+
+      if (mode === 'create') {
+        await createListItem(spClientRef.current, section.source.listId, saveFields);
+      } else if (editingItem) {
+        await updateListItem(
+          spClientRef.current,
+          section.source.listId,
+          parseInt(editingItem.id, 10),
+          fields
+        );
+      }
+
+      await loadRelatedItems();
+    };
+  }, [section.lookupColumn, section.source.listId, parentItem.id, loadRelatedItems]);
+
+  const handleCreate = useCallback(() => {
+    onOpenFormModal(section, 'create', null, createSaveHandler('create', null));
+  }, [section, onOpenFormModal, createSaveHandler]);
 
   const handleEdit = useCallback((item: GraphListItem) => {
-    setModalMode('edit');
-    setEditingItem(item);
-    setModalOpen(true);
-  }, []);
+    onOpenFormModal(section, 'edit', item, createSaveHandler('edit', item));
+  }, [section, onOpenFormModal, createSaveHandler]);
 
   const handleDelete = useCallback(async (itemId: string) => {
     if (!spClientRef.current || !confirm('Are you sure you want to delete this item?')) {
@@ -775,37 +959,6 @@ function RelatedSectionComponent({
       setDeleting(null);
     }
   }, [section.source.listId, loadRelatedItems]);
-
-  const handleSave = async (fields: Record<string, unknown>) => {
-    if (!spClientRef.current) return;
-
-    setSaving(true);
-    try {
-      const saveFields = {
-        ...fields,
-        [`${section.lookupColumn}Id`]: parseInt(parentItem.id, 10),
-      };
-
-      if (modalMode === 'create') {
-        await createListItem(spClientRef.current, section.source.listId, saveFields);
-      } else if (editingItem) {
-        await updateListItem(
-          spClientRef.current,
-          section.source.listId,
-          parseInt(editingItem.id, 10),
-          fields
-        );
-      }
-
-      setModalOpen(false);
-      await loadRelatedItems();
-    } catch (err) {
-      console.error('Failed to save item:', err);
-      throw err;
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const formatCellValue = useCallback((value: unknown): string => {
     if (value === null || value === undefined) return '-';
@@ -960,21 +1113,8 @@ function RelatedSectionComponent({
           </DataGrid>
         </div>
       )}
-
-      {modalOpen && (
-        <ItemFormModal
-          mode={modalMode}
-          columns={columns.filter((c) =>
-            section.displayColumns.some((dc) => dc.internalName === c.name)
-          )}
-          initialValues={editingItem?.fields || {}}
-          saving={saving}
-          onSave={handleSave}
-          onClose={() => setModalOpen(false)}
-        />
-      )}
     </Card>
   );
 }
 
-export default ItemDetailModal;
+export default DetailModal;

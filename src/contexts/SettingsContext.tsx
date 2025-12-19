@@ -16,16 +16,11 @@ import {
   createSPClient,
   buildSiteUrl,
   getSite,
+  createCommunicationSite,
   findSettingsList,
   createSettingsList,
   getSettings,
   setSetting,
-  findViewsList,
-  createViewsList,
-  getViews,
-  createView,
-  updateView,
-  deleteView,
   findPagesList,
   createPagesList,
   getPages,
@@ -36,7 +31,6 @@ import {
   type SharePointList,
 } from '../services/sharepoint';
 import { getSharePointHostname } from '../auth/graphClient';
-import type { ViewDefinition } from '../types/view';
 import type { PageDefinition, ListDetailConfig } from '../types/page';
 
 export interface EnabledList {
@@ -57,6 +51,8 @@ type SetupStatus =
   | 'loading'
   | 'no-site-configured'   // Hostname detected, need to choose standard or custom site
   | 'site-not-found'       // Site URL set but site doesn't exist/not accessible
+  | 'creating-site'        // Currently creating the SharePoint site
+  | 'site-creation-failed' // Failed to create the site
   | 'list-not-found'       // Site exists but settings list not found, need to create
   | 'creating-list'        // Currently creating the settings list
   | 'list-creation-failed' // Failed to create the list
@@ -72,8 +68,6 @@ interface SettingsState {
   site: SharePointSite | null;
   settingsList: SharePointList | null;
   settings: Record<string, string>;
-  viewsList: SharePointList | null;
-  views: ViewDefinition[];
   pagesList: SharePointList | null;
   pages: PageDefinition[];
 }
@@ -82,16 +76,12 @@ interface SettingsContextValue extends SettingsState {
   spClient: SPFI | null;
   initialize: () => Promise<void>;
   configureSite: (sitePath: string, isCustom: boolean) => Promise<boolean>;
+  createSite: (sitePath: string, title: string) => Promise<boolean>;
   createList: () => Promise<boolean>;
   clearSiteOverride: () => void;
   getSetting: (key: string) => string | undefined;
   updateSetting: (key: string, value: string) => Promise<void>;
   enabledLists: EnabledList[];
-  // Views operations
-  createViewsList: () => Promise<boolean>;
-  loadViews: () => Promise<void>;
-  saveView: (view: ViewDefinition) => Promise<ViewDefinition>;
-  removeView: (id: string) => Promise<void>;
   // Pages operations
   createPagesList: () => Promise<boolean>;
   loadPages: () => Promise<void>;
@@ -117,8 +107,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     site: null,
     settingsList: null,
     settings: {},
-    viewsList: null,
-    views: [],
     pagesList: null,
     pages: [],
   });
@@ -188,8 +176,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           site,
           settingsList: null,
           settings: {},
-          viewsList: null,
-          views: [],
           pagesList: null,
           pages: [],
         });
@@ -198,13 +184,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
       // Load existing settings
       const settings = await getSettings(sp);
-
-      // Check for views list and load views
-      const viewsList = await findViewsList(sp, siteUrl);
-      let views: ViewDefinition[] = [];
-      if (viewsList) {
-        views = await getViews(sp);
-      }
 
       // Check for pages list and load pages
       const pagesList = await findPagesList(sp, siteUrl);
@@ -222,8 +201,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         site,
         settingsList,
         settings,
-        viewsList,
-        views,
         pagesList,
         pages,
       });
@@ -286,8 +263,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             site,
             settingsList: null,
             settings: {},
-            viewsList: null,
-            views: [],
             pagesList: null,
             pages: [],
           });
@@ -295,13 +270,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         }
 
         const settings = await getSettings(sp);
-
-        // Check for views list and load views
-        const viewsList = await findViewsList(sp, siteUrl);
-        let views: ViewDefinition[] = [];
-        if (viewsList) {
-          views = await getViews(sp);
-        }
 
         // Check for pages list and load pages
         const pagesList = await findPagesList(sp, siteUrl);
@@ -319,8 +287,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           site,
           settingsList,
           settings,
-          viewsList,
-          views,
           pagesList,
           pages,
         });
@@ -337,6 +303,56 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }
     },
     [instance, getAccount, state.hostname]
+  );
+
+  const createSiteCallback = useCallback(
+    async (sitePath: string, title: string): Promise<boolean> => {
+      const hostname = state.hostname;
+      if (!hostname) {
+        return false;
+      }
+
+      const account = accounts[0];
+      if (!account) {
+        return false;
+      }
+
+      setState((prev) => ({ ...prev, setupStatus: 'creating-site', error: null, sitePath }));
+
+      try {
+        // Create the site
+        const site = await createCommunicationSite(instance, account, hostname, {
+          title,
+          url: sitePath,
+          description: 'ListView application settings and data storage',
+        });
+
+        // Create SP client for the new site
+        const siteUrl = buildSiteUrl(hostname, sitePath);
+        const sp = await createSPClient(instance, account, siteUrl);
+        spClientRef.current = sp;
+
+        // Site created, now we need to create the lists
+        setState((prev) => ({
+          ...prev,
+          setupStatus: 'list-not-found',
+          site,
+          sitePath,
+          isCustomSite: sitePath !== DEFAULT_SETTINGS_SITE_PATH,
+        }));
+
+        return true;
+      } catch (error) {
+        console.error('Failed to create site:', error);
+        setState((prev) => ({
+          ...prev,
+          setupStatus: 'site-creation-failed',
+          error: error instanceof Error ? error.message : 'Failed to create SharePoint site',
+        }));
+        return false;
+      }
+    },
+    [instance, accounts, state.hostname]
   );
 
   const createList = useCallback(async (): Promise<boolean> => {
@@ -361,23 +377,27 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         spClientRef.current = sp;
       }
 
+      // Create all system lists
       const settingsList = await createSettingsList(sp, siteUrl);
       const settings = await getSettings(sp);
+      const pagesList = await createPagesList(sp, siteUrl);
 
       setState((prev) => ({
         ...prev,
         setupStatus: 'ready',
         settingsList,
         settings,
+        pagesList,
+        pages: [],
       }));
 
       return true;
     } catch (error) {
-      console.error('Failed to create settings list:', error);
+      console.error('Failed to create system lists:', error);
       setState((prev) => ({
         ...prev,
         setupStatus: 'list-creation-failed',
-        error: error instanceof Error ? error.message : 'Failed to create settings list',
+        error: error instanceof Error ? error.message : 'Failed to create system lists',
       }));
       return false;
     }
@@ -419,121 +439,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }));
     },
     []
-  );
-
-  // Views operations
-  const createViewsListCallback = useCallback(async (): Promise<boolean> => {
-    if (!state.site || !state.hostname || !state.sitePath) {
-      return false;
-    }
-
-    const sp = spClientRef.current;
-    if (!sp) {
-      return false;
-    }
-
-    try {
-      const siteUrl = buildSiteUrl(state.hostname, state.sitePath);
-      const viewsList = await createViewsList(sp, siteUrl);
-
-      setState((prev) => ({
-        ...prev,
-        viewsList,
-        views: [],
-      }));
-
-      return true;
-    } catch (error) {
-      console.error('Failed to create views list:', error);
-      return false;
-    }
-  }, [state.site, state.hostname, state.sitePath]);
-
-  const loadViewsCallback = useCallback(async (): Promise<void> => {
-    const sp = spClientRef.current;
-    if (!sp || !state.viewsList) {
-      return;
-    }
-
-    try {
-      const views = await getViews(sp);
-      setState((prev) => ({ ...prev, views }));
-    } catch (error) {
-      console.error('Failed to load views:', error);
-    }
-  }, [state.viewsList]);
-
-  const saveViewCallback = useCallback(
-    async (view: ViewDefinition): Promise<ViewDefinition> => {
-      const sp = spClientRef.current;
-      if (!sp) {
-        throw new Error('SharePoint client not initialized');
-      }
-
-      if (!state.hostname || !state.sitePath) {
-        throw new Error('Site not configured');
-      }
-
-      const siteUrl = buildSiteUrl(state.hostname, state.sitePath);
-
-      // If no views list exists, create it first
-      if (!state.viewsList) {
-        console.log('[Views] Creating LV-Views list at', siteUrl);
-        try {
-          const viewsList = await createViewsList(sp, siteUrl);
-          setState((prev) => ({ ...prev, viewsList }));
-          console.log('[Views] LV-Views list created successfully');
-        } catch (error) {
-          console.error('[Views] Failed to create LV-Views list:', error);
-          throw new Error('Failed to create views list. Please check your permissions.');
-        }
-      }
-
-      if (view.id) {
-        // Update existing view
-        await updateView(sp, view.id, view);
-        setState((prev) => ({
-          ...prev,
-          views: prev.views.map((v) => (v.id === view.id ? { ...v, ...view } : v)),
-        }));
-        return view;
-      } else {
-        // Create new view
-        const newView = await createView(sp, view);
-        setState((prev) => ({
-          ...prev,
-          views: [...prev.views, newView],
-        }));
-        return newView;
-      }
-    },
-    [state.viewsList, state.hostname, state.sitePath]
-  );
-
-  const removeViewCallback = useCallback(
-    async (id: string): Promise<void> => {
-      const sp = spClientRef.current;
-      if (!sp) {
-        throw new Error('SharePoint client not initialized');
-      }
-
-      if (!state.viewsList) {
-        // No views list, just remove from local state
-        setState((prev) => ({
-          ...prev,
-          views: prev.views.filter((v) => v.id !== id),
-        }));
-        return;
-      }
-
-      await deleteView(sp, id);
-
-      setState((prev) => ({
-        ...prev,
-        views: prev.views.filter((v) => v.id !== id),
-      }));
-    },
-    [state.viewsList]
   );
 
   // Pages operations
@@ -728,15 +633,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     spClient: spClientRef.current,
     initialize,
     configureSite,
+    createSite: createSiteCallback,
     createList,
     clearSiteOverride,
     getSetting: getSettingValue,
     updateSetting,
     enabledLists,
-    createViewsList: createViewsListCallback,
-    loadViews: loadViewsCallback,
-    saveView: saveViewCallback,
-    removeView: removeViewCallback,
     createPagesList: createPagesListCallback,
     loadPages: loadPagesCallback,
     savePage: savePageCallback,

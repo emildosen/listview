@@ -19,6 +19,7 @@ import {
   CheckmarkCircleRegular,
   SettingsRegular,
   EditRegular,
+  AddRegular,
 } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { DEFAULT_SETTINGS_SITE_PATH } from '../services/sharepoint';
@@ -34,6 +35,7 @@ const useStyles = makeStyles({
     minHeight: '400px',
   },
   loadingText: {
+    display: 'block',
     marginTop: '16px',
     color: tokens.colorNeutralForeground2,
   },
@@ -57,6 +59,7 @@ const useStyles = makeStyles({
     color: tokens.colorBrandForeground1,
   },
   headerDescription: {
+    display: 'block',
     color: tokens.colorNeutralForeground2,
     marginTop: '8px',
   },
@@ -81,6 +84,7 @@ const useStyles = makeStyles({
     marginBottom: '8px',
   },
   choiceDescription: {
+    display: 'block',
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground2,
     marginBottom: '8px',
@@ -143,6 +147,7 @@ const useStyles = makeStyles({
     flex: 1,
   },
   stepDescription: {
+    display: 'block',
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground2,
   },
@@ -211,6 +216,7 @@ export function SetupWizard() {
     site,
     error,
     configureSite,
+    createSite,
     createList,
     initialize,
   } = useSettings();
@@ -245,6 +251,11 @@ export function SetupWizard() {
     }
 
     setIsChecking(false);
+  };
+
+  const handleAutoCreateSite = async () => {
+    setCheckError(null);
+    await createSite(DEFAULT_SETTINGS_SITE_PATH, 'ListView');
   };
 
   const handleCheckCustomSite = async () => {
@@ -303,12 +314,22 @@ export function SetupWizard() {
     );
   }
 
+  // Creating site state
+  if (setupStatus === 'creating-site') {
+    return (
+      <div className={styles.loadingContainer}>
+        <Spinner size="large" />
+        <Text className={styles.loadingText}>Creating SharePoint site...</Text>
+      </div>
+    );
+  }
+
   // Creating list state
   if (setupStatus === 'creating-list') {
     return (
       <div className={styles.loadingContainer}>
         <Spinner size="large" />
-        <Text className={styles.loadingText}>Creating settings list...</Text>
+        <Text className={styles.loadingText}>Creating system lists...</Text>
       </div>
     );
   }
@@ -353,18 +374,17 @@ export function SetupWizard() {
               <div className={styles.siteIcon}>
                 <CheckmarkCircleRegular fontSize={20} />
               </div>
-              <div>
-                <Text weight="semibold">Site Connected</Text>
-                <Text className={styles.siteName}>{site?.displayName}</Text>
-              </div>
+              <Text weight="semibold">Site Connected</Text>
             </div>
 
             <Divider style={{ margin: '16px 0' }} />
 
-            <Text weight="semibold">Create Settings List</Text>
-            <Text className={styles.choiceDescription} style={{ marginTop: '4px' }}>
-              The site exists but doesn't have an LV-Settings list yet.
-              Click below to create it.
+            <Text weight="semibold">Create System Lists</Text>
+            <Text className={styles.choiceDescription} style={{ display: 'block', marginTop: '8px' }}>
+              The site exists but doesn't have the required ListView system lists yet.
+            </Text>
+            <Text className={styles.choiceDescription}>
+              Click below to create the LV-Settings and LV-Pages lists.
             </Text>
 
             <div className={styles.cardActions}>
@@ -372,8 +392,64 @@ export function SetupWizard() {
                 Back
               </Button>
               <Button appearance="primary" onClick={handleCreateList}>
-                Create Settings List
+                Create System Lists
               </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Site creation failed
+  if (setupStatus === 'site-creation-failed') {
+    return (
+      <div className={styles.cardBodySmall}>
+        <Card>
+          <div className={styles.cardBody}>
+            <div className={styles.siteConnected}>
+              <div className={`${styles.siteIcon} ${styles.errorIconSmall}`} style={{ backgroundColor: tokens.colorPaletteRedBackground2 }}>
+                <WarningRegular fontSize={20} />
+              </div>
+              <div>
+                <Text weight="semibold">Failed to Create Site</Text>
+                <Text className={styles.siteName}>
+                  Could not create the ListView SharePoint site
+                </Text>
+              </div>
+            </div>
+
+            <MessageBar intent="error" style={{ marginTop: '16px' }}>
+              <MessageBarBody>
+                <Text weight="semibold">Site Creation Failed</Text>
+                <br />
+                <Text size={200}>
+                  {error || 'You may not have permission to create sites in your organization.'}
+                </Text>
+              </MessageBarBody>
+            </MessageBar>
+
+            <div className={styles.instructionsBox}>
+              <Text weight="medium" size={200}>To fix this:</Text>
+              <ol className={styles.instructionsList}>
+                <li>Ask your SharePoint admin to grant you site creation permissions</li>
+                <li>Or ask them to create the site at /sites/ListView for you</li>
+                <li>Then click "I've created the site" below</li>
+              </ol>
+            </div>
+
+            <div className={styles.cardActions}>
+              <Button appearance="subtle" onClick={handleBackToChoice}>
+                Back
+              </Button>
+              <div className={styles.cardActionsEnd}>
+                <Button appearance="outline" onClick={handleAutoCreateSite}>
+                  Retry
+                </Button>
+                <Button appearance="primary" onClick={handleCheckStandardSite}>
+                  I've created the site
+                </Button>
+              </div>
             </div>
           </div>
         </Card>
@@ -392,9 +468,9 @@ export function SetupWizard() {
                 <WarningRegular fontSize={20} />
               </div>
               <div>
-                <Text weight="semibold">Failed to Create List</Text>
+                <Text weight="semibold">Failed to Create Lists</Text>
                 <Text className={styles.siteName}>
-                  Could not create the settings list on {site?.displayName}
+                  Could not create the system lists on {site?.displayName}
                 </Text>
               </div>
             </div>
@@ -413,7 +489,7 @@ export function SetupWizard() {
               <Text weight="medium" size={200}>To fix this:</Text>
               <ol className={styles.instructionsList}>
                 <li>Ask a site owner to add you as a site member with Edit permissions</li>
-                <li>Or create the "LV-Settings" list manually in SharePoint</li>
+                <li>Or create the "LV-Settings" and "LV-Pages" lists manually in SharePoint</li>
                 <li>Then click Retry below</li>
               </ol>
             </div>
@@ -499,64 +575,64 @@ export function SetupWizard() {
             <Text weight="semibold" size={500}>Create the ListView Site</Text>
             <Text className={styles.choiceDescription} style={{ marginTop: '4px' }}>
               A SharePoint site needs to be created at{' '}
-              <code>/sites/ListView</code> by a SharePoint admin.
+              <code>/sites/ListView</code> to store app settings.
             </Text>
 
             <Divider style={{ margin: '16px 0' }} />
 
-            <div className={styles.stepsList}>
-              <div className={styles.step}>
-                <Badge appearance="filled" color="brand" size="large" className={styles.stepNumber}>1</Badge>
-                <div className={styles.stepContent}>
-                  <Text weight="medium">Go to SharePoint Admin Center</Text>
-                  <Text className={styles.stepDescription}>
-                    Navigate to{' '}
+            {/* Auto-create option */}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <AddRegular fontSize={20} color={tokens.colorBrandForeground1} />
+                <Text weight="semibold">Create Automatically</Text>
+                <Badge appearance="filled" color="success">Recommended</Badge>
+              </div>
+              <Text className={styles.choiceDescription}>
+                Click the button below to automatically create the ListView site.
+                Requires site creation permissions in your organization.
+              </Text>
+              <Button
+                appearance="primary"
+                onClick={handleAutoCreateSite}
+                style={{ marginTop: '12px' }}
+                icon={<AddRegular />}
+              >
+                Create ListView Site
+              </Button>
+            </div>
+
+            <Divider style={{ margin: '16px 0' }}>
+              <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>or</Text>
+            </Divider>
+
+            {/* Manual option */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <SettingsRegular fontSize={20} />
+                <Text weight="semibold">Create Manually</Text>
+              </div>
+              <Text className={styles.choiceDescription} style={{ marginBottom: '12px' }}>
+                If you don't have site creation permissions, ask a SharePoint admin to create the site:
+              </Text>
+
+              <div className={styles.instructionsBox}>
+                <ol className={styles.instructionsList}>
+                  <li>
+                    Go to{' '}
                     <FluentLink
                       href="https://admin.microsoft.com/sharepoint"
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      admin.microsoft.com/sharepoint
+                      SharePoint Admin Center
                     </FluentLink>
-                  </Text>
-                </div>
-              </div>
-
-              <div className={styles.step}>
-                <Badge appearance="filled" color="brand" size="large" className={styles.stepNumber}>2</Badge>
-                <div className={styles.stepContent}>
-                  <Text weight="medium">Create a new Team site</Text>
-                  <Text className={styles.stepDescription}>
-                    Click "Create" and select "Team site"
-                  </Text>
-                </div>
-              </div>
-
-              <div className={styles.step}>
-                <Badge appearance="filled" color="brand" size="large" className={styles.stepNumber}>3</Badge>
-                <div className={styles.stepContent}>
-                  <Text weight="medium">Set the site address to "ListView"</Text>
-                  <Text className={styles.stepDescription}>
-                    The URL should be:{' '}
-                    {sharePointUrl ? (
-                      <code style={{ fontSize: tokens.fontSizeBase100 }}>{sharePointUrl}</code>
-                    ) : (
-                      <code style={{ fontSize: tokens.fontSizeBase100 }}>
-                        https://[tenant].sharepoint.com/sites/ListView
-                      </code>
-                    )}
-                  </Text>
-                </div>
-              </div>
-
-              <div className={styles.step}>
-                <Badge appearance="filled" color="brand" size="large" className={styles.stepNumber}>4</Badge>
-                <div className={styles.stepContent}>
-                  <Text weight="medium">Grant access to users</Text>
-                  <Text className={styles.stepDescription}>
-                    Add users who need to use ListView as site members
-                  </Text>
-                </div>
+                  </li>
+                  <li>Click "Create" and select "Communication site" or "Team site"</li>
+                  <li>
+                    Set the site address to "ListView" ({sharePointUrl || 'https://[tenant].sharepoint.com/sites/ListView'})
+                  </li>
+                  <li>Grant access to users who need ListView</li>
+                </ol>
               </div>
             </div>
 
@@ -571,12 +647,12 @@ export function SetupWizard() {
                 Back
               </Button>
               <Button
-                appearance="primary"
+                appearance="outline"
                 onClick={handleCheckStandardSite}
                 disabled={isChecking}
                 icon={isChecking ? <Spinner size="tiny" /> : undefined}
               >
-                {isChecking ? 'Checking...' : "I've created the site"}
+                {isChecking ? 'Checking...' : "I've created the site manually"}
               </Button>
             </div>
           </div>

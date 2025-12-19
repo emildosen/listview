@@ -5,15 +5,14 @@ import '@pnp/sp/lists';
 import '@pnp/sp/items';
 import '@pnp/sp/fields';
 import '@pnp/sp/views';
+import '@pnp/sp/sites';
 import type { IPublicClientApplication, AccountInfo } from '@azure/msal-browser';
 import { getSharePointToken } from '../auth/graphClient';
 import type { Queryable } from '@pnp/queryable';
-import type { ViewDefinition, ViewItem } from '../types/view';
 import type { PageDefinition, PageItem } from '../types/page';
 
 export const DEFAULT_SETTINGS_SITE_PATH = '/sites/ListView';
 const SETTINGS_LIST_NAME = 'LV-Settings';
-const VIEWS_LIST_NAME = 'LV-Views';
 const PAGES_LIST_NAME = 'LV-Pages';
 
 /**
@@ -22,7 +21,6 @@ const PAGES_LIST_NAME = 'LV-Pages';
  */
 export const SYSTEM_LIST_NAMES = [
   SETTINGS_LIST_NAME,
-  VIEWS_LIST_NAME,
   PAGES_LIST_NAME,
 ] as const;
 
@@ -125,6 +123,59 @@ export async function getSite(
     }
     throw error;
   }
+}
+
+export interface CreateSiteOptions {
+  title: string;
+  url: string;
+  description?: string;
+  lcid?: number; // Language code, defaults to 1033 (English)
+}
+
+/**
+ * Create a new Communication Site using PnP
+ * Uses the SPSiteManager/create endpoint which is available to any user
+ * with site creation permissions in the tenant
+ */
+export async function createCommunicationSite(
+  msalInstance: IPublicClientApplication,
+  account: AccountInfo,
+  hostname: string,
+  options: CreateSiteOptions
+): Promise<SharePointSite> {
+  // We need to connect to the root site to use the SPSiteManager endpoint
+  const rootUrl = `https://${hostname}`;
+  const sp = await createSPClient(msalInstance, account, rootUrl);
+
+  const fullUrl = `https://${hostname}${options.url}`;
+
+  console.log('[SharePoint] Creating communication site:', fullUrl);
+
+  // Create the communication site using PnP
+  // Note: siteDesignId should be a GUID or omitted for default template
+  const result = await sp.site.createCommunicationSite(
+    options.title,
+    options.lcid || 1033,      // Language (English)
+    false,                      // ShareByEmailEnabled
+    fullUrl,
+    options.description || '',
+    '',                         // Classification (empty = none)
+    undefined                   // SiteDesignId - undefined uses default template
+  );
+
+  console.log('[SharePoint] Site creation result:', result);
+
+  // Wait a moment for site provisioning to complete
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // Verify the site was created and return its details
+  const site = await getSite(msalInstance, account, hostname, options.url);
+
+  if (!site) {
+    throw new Error('Site was created but could not be accessed. Please try again in a moment.');
+  }
+
+  return site;
 }
 
 /**
@@ -292,212 +343,6 @@ export async function getRootSiteUrl(
   } catch {
     throw new Error('Unable to connect to SharePoint. Check your tenant name.');
   }
-}
-
-// ============================================
-// Views List Operations
-// ============================================
-
-/**
- * Find the views list if it exists
- */
-export async function findViewsList(
-  sp: SPFI,
-  siteUrl: string
-): Promise<SharePointList | null> {
-  try {
-    const list = await sp.web.lists.getByTitle(VIEWS_LIST_NAME)
-      .select('Id', 'Title', 'RootFolder/ServerRelativeUrl')
-      .expand('RootFolder')();
-
-    return {
-      id: list.Id,
-      name: VIEWS_LIST_NAME,
-      displayName: list.Title,
-      webUrl: `${siteUrl}/Lists/${VIEWS_LIST_NAME}`,
-    };
-  } catch (error: unknown) {
-    if (error && typeof error === 'object' && 'status' in error) {
-      const status = (error as { status: number }).status;
-      if (status === 404) {
-        return null;
-      }
-    }
-    throw error;
-  }
-}
-
-/**
- * Create the views list with custom columns
- */
-export async function createViewsList(
-  sp: SPFI,
-  siteUrl: string
-): Promise<SharePointList> {
-  const listAddResult = await sp.web.lists.add(
-    VIEWS_LIST_NAME,
-    'ListView custom views configuration',
-    100,
-    false
-  );
-
-  const list = sp.web.lists.getByTitle(VIEWS_LIST_NAME);
-
-  // Add ViewConfig column (multi-line text for JSON storage)
-  await list.fields.addMultilineText('ViewConfig', {
-    NumberOfLines: 10,
-    RichText: false,
-  });
-
-  // Add columns to default view
-  const views = await list.views.filter("DefaultView eq true")();
-  if (views.length > 0) {
-    const defaultViewId = views[0].Id;
-    await list.views.getById(defaultViewId).fields.add('ViewConfig');
-  }
-
-  return {
-    id: listAddResult.Id,
-    name: VIEWS_LIST_NAME,
-    displayName: VIEWS_LIST_NAME,
-    webUrl: `${siteUrl}/Lists/${VIEWS_LIST_NAME}`,
-  };
-}
-
-/**
- * Get all views from the list
- */
-export async function getViews(sp: SPFI): Promise<ViewDefinition[]> {
-  try {
-    const items: ViewItem[] = await sp.web.lists
-      .getByTitle(VIEWS_LIST_NAME)
-      .items
-      .select('Id', 'Title', 'ViewConfig')();
-
-    return items.map((item) => {
-      try {
-        const config = JSON.parse(item.ViewConfig || '{}') as Omit<ViewDefinition, 'id' | 'name'>;
-        return {
-          ...config,
-          id: String(item.Id),
-          name: item.Title,
-        };
-      } catch {
-        return {
-          id: String(item.Id),
-          name: item.Title,
-          mode: 'union' as const,
-          sources: [],
-          columns: [],
-        };
-      }
-    });
-  } catch (error: unknown) {
-    // Return empty array if list doesn't exist or other error
-    if (error && typeof error === 'object' && 'status' in error) {
-      const status = (error as { status: number }).status;
-      if (status === 404) {
-        console.log('[Views] LV-Views list does not exist yet');
-        return [];
-      }
-    }
-    console.error('[Views] Error fetching views:', error);
-    return [];
-  }
-}
-
-/**
- * Get a single view by ID
- */
-export async function getView(sp: SPFI, id: string): Promise<ViewDefinition | null> {
-  try {
-    const item: ViewItem = await sp.web.lists
-      .getByTitle(VIEWS_LIST_NAME)
-      .items
-      .getById(parseInt(id, 10))
-      .select('Id', 'Title', 'ViewConfig')();
-
-    const config = JSON.parse(item.ViewConfig || '{}') as Omit<ViewDefinition, 'id' | 'name'>;
-    return {
-      ...config,
-      id: String(item.Id),
-      name: item.Title,
-    };
-  } catch (error: unknown) {
-    if (error && typeof error === 'object' && 'status' in error) {
-      const status = (error as { status: number }).status;
-      if (status === 404) {
-        return null;
-      }
-    }
-    console.error('[Views] Error fetching view:', error);
-    return null;
-  }
-}
-
-/**
- * Create a new view
- */
-export async function createView(sp: SPFI, view: ViewDefinition): Promise<ViewDefinition> {
-  const { name, ...config } = view;
-
-  const result = await sp.web.lists
-    .getByTitle(VIEWS_LIST_NAME)
-    .items
-    .add({
-      Title: name,
-      ViewConfig: JSON.stringify({
-        ...config,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }),
-    });
-
-  return {
-    ...view,
-    id: String(result.Id),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-/**
- * Update an existing view
- */
-export async function updateView(
-  sp: SPFI,
-  id: string,
-  view: Partial<ViewDefinition>
-): Promise<void> {
-  const { name, ...config } = view;
-
-  const updateData: Record<string, unknown> = {
-    ViewConfig: JSON.stringify({
-      ...config,
-      updatedAt: new Date().toISOString(),
-    }),
-  };
-
-  if (name) {
-    updateData.Title = name;
-  }
-
-  await sp.web.lists
-    .getByTitle(VIEWS_LIST_NAME)
-    .items
-    .getById(parseInt(id, 10))
-    .update(updateData);
-}
-
-/**
- * Delete a view
- */
-export async function deleteView(sp: SPFI, id: string): Promise<void> {
-  await sp.web.lists
-    .getByTitle(VIEWS_LIST_NAME)
-    .items
-    .getById(parseInt(id, 10))
-    .delete();
 }
 
 // ============================================

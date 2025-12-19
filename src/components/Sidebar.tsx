@@ -271,12 +271,11 @@ const useStyles = makeStyles({
 function Sidebar() {
   const styles = useStyles();
   const { instance, accounts } = useMsal();
-  const { setupStatus, enabledLists, views, pages } = useSettings();
+  const { setupStatus, enabledLists, pages } = useSettings();
   const { theme, setTheme } = useTheme();
   const location = useLocation();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [listsExpanded, setListsExpanded] = useState(true);
-  const [viewsExpanded, setViewsExpanded] = useState(true);
   const [pagesExpanded, setPagesExpanded] = useState(true);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const profilePictureUrlRef = useRef<string | null>(null);
@@ -391,66 +390,6 @@ function Sidebar() {
             </Link>
           </li>
         </ul>
-
-        {/* Views Section */}
-        {isReady && (
-          <div className={styles.section}>
-            <div
-              className={styles.sectionHeader}
-              onMouseEnter={() => setSectionHover('views')}
-              onMouseLeave={() => setSectionHover(null)}
-            >
-              <button
-                onClick={() => setViewsExpanded(!viewsExpanded)}
-                className={styles.sectionTitle}
-              >
-                Views
-              </button>
-              <div
-                className={styles.sectionActions}
-                style={{ opacity: sectionHover === 'views' ? 1 : 0 }}
-              >
-                <Link
-                  to="/app/views/new"
-                  className={styles.sectionActionLink}
-                  title="Create View"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <AddRegular fontSize={16} />
-                </Link>
-                <Link
-                  to="/app/views"
-                  className={styles.sectionActionLink}
-                  title="Manage Views"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <EditRegular fontSize={16} />
-                </Link>
-              </div>
-            </div>
-            {viewsExpanded && views.length > 0 && (
-              <div className={styles.sectionContent}>
-                {views.map((view) => {
-                  const viewPath = `/app/views/${view.id}`;
-                  const isViewActive = location.pathname === viewPath;
-                  return (
-                    <Link
-                      key={view.id}
-                      to={viewPath}
-                      className={mergeClasses(
-                        styles.sectionLink,
-                        isViewActive && styles.sectionLinkActive
-                      )}
-                      title={view.description || view.name}
-                    >
-                      {view.name}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Pages Section */}
         {isReady && (

@@ -25,21 +25,47 @@ export interface ChartDataPoint {
   legend: string;
   data: number;
   color?: string;
+  sortKey?: number; // For sorting by original value (e.g., timestamp for dates)
 }
 
-// Default color palette for charts
-const DEFAULT_COLORS = [
-  '#0078d4', // Blue
-  '#00bcf2', // Light Blue
-  '#8764b8', // Purple
-  '#e3008c', // Magenta
-  '#d13438', // Red
-  '#ff8c00', // Orange
-  '#107c10', // Green
-  '#038387', // Teal
-  '#5c2d91', // Dark Purple
-  '#ca5010', // Dark Orange
-];
+export interface HeatmapDataPoint {
+  x: string;
+  y: string;
+  value: number;
+  rectText?: string;
+}
+
+export interface GanttDataPoint {
+  id: string;
+  label: string;
+  start: Date;
+  end: Date;
+  color?: string;
+}
+
+// Chart color palette
+export const CHART_COLORS = {
+  // Data series colors (default palette for charts)
+  data: [
+    '#56C596',
+    '#329D9C',
+    '#9FD3C7',
+    '#1ABC9C',
+    '#48D1A5',
+    '#73788B',
+    '#B4BAC3',
+  ],
+  // Semantic colors for conditional formatting
+  bad: '#9FD3C7',
+  neutral: '#56C596',
+  good: '#329D9C',
+  // Scale colors for gradients/gauges
+  minimum: '#9FD3C7',
+  center: '#56C596',
+  maximum: '#329D9C',
+};
+
+const DEFAULT_COLORS = CHART_COLORS.data;
 
 /**
  * Apply filter to a single item
@@ -294,6 +320,15 @@ function getDisplayValue(item: GraphListItem, columnName: string, columns: Graph
     return value ? 'Yes' : 'No';
   }
 
+  // Handle dateTime - format as date only (no time) for grouping
+  if (column?.dateTime) {
+    const date = new Date(String(value));
+    if (!isNaN(date.getTime())) {
+      // Format as locale date string (e.g., "Dec 18, 2025")
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+  }
+
   return String(value);
 }
 
@@ -366,23 +401,40 @@ export async function fetchChartWebPartData(
     items = applyFilters(items, config.filters, columns);
   }
 
+  // Check if grouping by a date column
+  const groupByCol = columns.find((c) => c.name === config.groupByColumn);
+  const isDateGrouping = !!groupByCol?.dateTime;
+
   // Group items by the groupByColumn
-  const groups = new Map<string, number[]>();
+  // For date columns, also track the timestamp for proper chronological sorting
+  const groups = new Map<string, { values: number[]; sortKey?: number }>();
 
   for (const item of items) {
     const groupKey = getDisplayValue(item, config.groupByColumn, columns) || '(Empty)';
 
     if (!groups.has(groupKey)) {
-      groups.set(groupKey, []);
+      // For date columns, store the timestamp as sort key
+      let sortKey: number | undefined;
+      if (isDateGrouping && groupKey !== '(Empty)') {
+        const rawValue = item.fields[config.groupByColumn];
+        if (rawValue) {
+          const date = new Date(String(rawValue));
+          if (!isNaN(date.getTime())) {
+            // Use start of day for consistent sorting
+            sortKey = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+          }
+        }
+      }
+      groups.set(groupKey, { values: [], sortKey });
     }
 
     // For count, we just track presence; for other aggregations, track the value column
     if (config.aggregation === 'count') {
-      groups.get(groupKey)!.push(1);
+      groups.get(groupKey)!.values.push(1);
     } else if (config.valueColumn) {
       const valueCol = columns.find((c) => c.name === config.valueColumn);
       const numValue = getNumericValue(item, config.valueColumn, valueCol);
-      groups.get(groupKey)!.push(numValue);
+      groups.get(groupKey)!.values.push(numValue);
     }
   }
 
@@ -392,12 +444,13 @@ export async function fetchChartWebPartData(
   let colorIndex = 0;
   const colors = config.colorPalette || DEFAULT_COLORS;
 
-  for (const [legend, values] of groups.entries()) {
-    const aggregatedValue = aggregate(values, config.aggregation || 'count');
+  for (const [legend, group] of groups.entries()) {
+    const aggregatedValue = aggregate(group.values, config.aggregation || 'count');
     dataPoints.push({
       legend,
       data: Math.round(aggregatedValue * 100) / 100, // Round to 2 decimal places
       color: colors[colorIndex % colors.length],
+      sortKey: group.sortKey,
     });
     colorIndex++;
   }
@@ -408,26 +461,88 @@ export async function fetchChartWebPartData(
       config.sortDirection === 'desc' ? b.data - a.data : a.data - b.data
     );
   } else {
-    // Sort by label
-    dataPoints.sort((a, b) =>
-      config.sortDirection === 'desc'
+    // Sort by label - use sortKey (timestamp) if available for chronological sorting
+    dataPoints.sort((a, b) => {
+      // If both have sortKeys (date columns), sort by timestamp
+      if (a.sortKey !== undefined && b.sortKey !== undefined) {
+        return config.sortDirection === 'desc'
+          ? b.sortKey - a.sortKey
+          : a.sortKey - b.sortKey;
+      }
+      // Otherwise fall back to alphabetical
+      return config.sortDirection === 'desc'
         ? b.legend.localeCompare(a.legend)
-        : a.legend.localeCompare(b.legend)
+        : a.legend.localeCompare(b.legend);
+    });
+  }
+
+  // Fill in missing dates if includeNull is enabled and grouping by date
+  if (config.includeNull && isDateGrouping && dataPoints.length >= 2) {
+    // Get all existing timestamps
+    const existingTimestamps = new Set(
+      dataPoints.filter((dp) => dp.sortKey !== undefined).map((dp) => dp.sortKey!)
     );
+
+    if (existingTimestamps.size >= 2) {
+      const sortedTimestamps = Array.from(existingTimestamps).sort((a, b) => a - b);
+      const minTimestamp = sortedTimestamps[0];
+      const maxTimestamp = sortedTimestamps[sortedTimestamps.length - 1];
+
+      // Generate all dates between min and max (by day)
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      const missingPoints: ChartDataPoint[] = [];
+
+      for (let ts = minTimestamp; ts <= maxTimestamp; ts += oneDayMs) {
+        if (!existingTimestamps.has(ts)) {
+          const date = new Date(ts);
+          const legend = date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          });
+          missingPoints.push({
+            legend,
+            data: 0,
+            color: colors[dataPoints.length % colors.length],
+            sortKey: ts,
+          });
+        }
+      }
+
+      // Add missing points and re-sort
+      if (missingPoints.length > 0) {
+        dataPoints = [...dataPoints, ...missingPoints];
+        // Re-sort by sortKey (chronological)
+        dataPoints.sort((a, b) => {
+          if (a.sortKey !== undefined && b.sortKey !== undefined) {
+            return config.sortDirection === 'desc'
+              ? b.sortKey - a.sortKey
+              : a.sortKey - b.sortKey;
+          }
+          return 0;
+        });
+      }
+    }
   }
 
   // Limit to max groups
   const maxGroups = config.maxGroups || 10;
+  const showOther = config.showOther !== false; // Default to true
   if (dataPoints.length > maxGroups) {
-    const topGroups = dataPoints.slice(0, maxGroups - 1);
-    const otherGroups = dataPoints.slice(maxGroups - 1);
-    const otherTotal = otherGroups.reduce((sum, dp) => sum + dp.data, 0);
-    topGroups.push({
-      legend: 'Other',
-      data: Math.round(otherTotal * 100) / 100,
-      color: colors[(maxGroups - 1) % colors.length],
-    });
-    dataPoints = topGroups;
+    if (showOther) {
+      const topGroups = dataPoints.slice(0, maxGroups - 1);
+      const otherGroups = dataPoints.slice(maxGroups - 1);
+      const otherTotal = otherGroups.reduce((sum, dp) => sum + dp.data, 0);
+      topGroups.push({
+        legend: 'Other',
+        data: Math.round(otherTotal * 100) / 100,
+        color: colors[(maxGroups - 1) % colors.length],
+      });
+      dataPoints = topGroups;
+    } else {
+      // Just truncate without "Other"
+      dataPoints = dataPoints.slice(0, maxGroups);
+    }
   }
 
   return dataPoints;
@@ -654,4 +769,139 @@ export async function executeJoins(
   }
 
   return { items: resultItems, columns: resultColumns };
+}
+
+/**
+ * Fetch heatmap data for a Chart web part with two grouping dimensions
+ */
+export async function fetchHeatmapData(
+  instance: IPublicClientApplication,
+  account: AccountInfo,
+  config: ChartWebPartConfig
+): Promise<HeatmapDataPoint[]> {
+  if (!config.dataSource?.siteId || !config.dataSource?.listId) {
+    return [];
+  }
+
+  if (!config.groupByColumn || !config.secondaryGroupByColumn) {
+    return [];
+  }
+
+  const { siteId, listId } = config.dataSource;
+
+  // Fetch items and columns
+  const result = await getListItems(instance, account, siteId, listId);
+  let { items } = result;
+  const { columns } = result;
+
+  // Apply filters
+  if (config.filters && config.filters.length > 0) {
+    items = applyFilters(items, config.filters, columns);
+  }
+
+  // Group items by both dimensions
+  const groups = new Map<string, number[]>();
+
+  for (const item of items) {
+    const xKey = getDisplayValue(item, config.groupByColumn, columns) || '(Empty)';
+    const yKey = getDisplayValue(item, config.secondaryGroupByColumn, columns) || '(Empty)';
+    const compositeKey = `${xKey}|||${yKey}`;
+
+    if (!groups.has(compositeKey)) {
+      groups.set(compositeKey, []);
+    }
+
+    // For count, we just track presence; for other aggregations, track the value column
+    if (config.aggregation === 'count') {
+      groups.get(compositeKey)!.push(1);
+    } else if (config.valueColumn) {
+      const valueCol = columns.find((c) => c.name === config.valueColumn);
+      const numValue = getNumericValue(item, config.valueColumn, valueCol);
+      groups.get(compositeKey)!.push(numValue);
+    }
+  }
+
+  // Convert to heatmap data points
+  const dataPoints: HeatmapDataPoint[] = [];
+
+  for (const [compositeKey, values] of groups.entries()) {
+    const [x, y] = compositeKey.split('|||');
+    const aggregatedValue = aggregate(values, config.aggregation || 'count');
+    const roundedValue = Math.round(aggregatedValue * 100) / 100;
+    dataPoints.push({
+      x,
+      y,
+      value: roundedValue,
+      rectText: String(roundedValue),
+    });
+  }
+
+  return dataPoints;
+}
+
+/**
+ * Fetch gantt chart data
+ */
+export async function fetchGanttData(
+  instance: IPublicClientApplication,
+  account: AccountInfo,
+  config: ChartWebPartConfig
+): Promise<GanttDataPoint[]> {
+  if (!config.dataSource?.siteId || !config.dataSource?.listId) {
+    return [];
+  }
+
+  if (!config.ganttStartColumn || !config.ganttEndColumn) {
+    return [];
+  }
+
+  const { siteId, listId } = config.dataSource;
+  const colors = config.colorPalette || CHART_COLORS.data;
+
+  // Fetch items and columns
+  const result = await getListItems(instance, account, siteId, listId);
+  let { items } = result;
+  const { columns } = result;
+
+  // Apply filters
+  if (config.filters && config.filters.length > 0) {
+    items = applyFilters(items, config.filters, columns);
+  }
+
+  // Limit items
+  const maxItems = config.maxGroups || 20;
+  items = items.slice(0, maxItems);
+
+  // Convert to gantt data points
+  const dataPoints: GanttDataPoint[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const startValue = item.fields[config.ganttStartColumn];
+    const endValue = item.fields[config.ganttEndColumn];
+
+    // Skip items without valid dates
+    if (!startValue || !endValue) continue;
+
+    const start = new Date(String(startValue));
+    const end = new Date(String(endValue));
+
+    // Skip invalid dates
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) continue;
+
+    // Get label from configured column or use item ID
+    const label = config.ganttLabelColumn
+      ? getDisplayValue(item, config.ganttLabelColumn, columns) || `Item ${item.id}`
+      : `Item ${item.id}`;
+
+    dataPoints.push({
+      id: item.id,
+      label,
+      start,
+      end,
+      color: colors[i % colors.length],
+    });
+  }
+
+  return dataPoints;
 }

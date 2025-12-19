@@ -23,7 +23,7 @@ import { fetchListWebPartData } from '../../../services/webPartData';
 import { createSPClient } from '../../../services/sharepoint';
 import WebPartHeader from './WebPartHeader';
 import WebPartSettingsDrawer from './WebPartSettingsDrawer';
-import ItemDetailModal from '../ItemDetailModal';
+import DetailModal from '../../modals/DetailModal';
 import { SharePointLink } from '../../common/SharePointLink';
 import { isSharePointUrl } from '../../../auth/graphClient';
 
@@ -314,7 +314,7 @@ export default function ListItemsWebPart({ config, onConfigChange }: ListItemsWe
 
       {/* Detail Modal */}
       {selectedItem && config.dataSource && (
-        <ItemDetailModal
+        <DetailModal
           listId={config.dataSource.listId}
           listName={config.dataSource.listName}
           siteId={config.dataSource.siteId}

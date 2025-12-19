@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useMsal } from '@azure/msal-react';
 import type { SPFI } from '@pnp/sp';
 import {
   makeStyles,
@@ -18,13 +19,16 @@ import {
   Field,
   Link,
 } from '@fluentui/react-components';
-import { SearchRegular, DismissRegular, DocumentRegular } from '@fluentui/react-icons';
+import { SearchRegular, DismissRegular, DocumentRegular, AddRegular } from '@fluentui/react-icons';
 import type { GraphListColumn, GraphListItem } from '../../auth/graphClient';
 import type { PageDefinition } from '../../types/page';
-import ItemDetailModal from './ItemDetailModal';
+import DetailModal from '../modals/DetailModal';
+import ItemFormModal from '../modals/ItemFormModal';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import { SharePointLink } from '../common/SharePointLink';
 import { isSharePointUrl } from '../../auth/graphClient';
+import { createListItem, createSPClient } from '../../services/sharepoint';
 
 // URL regex pattern
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
@@ -112,6 +116,9 @@ interface TableViewProps {
   onSearchChange: (text: string) => void;
   spClient: SPFI | null;
   onPageUpdate: (page: PageDefinition) => Promise<void>;
+  onItemCreated?: () => void;
+  onItemUpdated?: () => void;
+  onItemDeleted?: () => void;
 }
 
 const useStyles = makeStyles({
@@ -183,6 +190,8 @@ const useStyles = makeStyles({
   // Table container - Azure style: sharp edges, subtle shadow
   tableContainer: {
     flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
     overflow: 'hidden',
   },
   tableWrapper: {
@@ -191,7 +200,8 @@ const useStyles = makeStyles({
     border: '1px solid transparent',
     borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
     boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
-    height: '100%',
+    flex: 1,
+    minHeight: 0,
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
@@ -233,6 +243,17 @@ const useStyles = makeStyles({
     borderImage: 'none',
     border: '1px solid #333333',
   },
+  // Header with title and actions
+  tableCardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '12px',
+  },
+  tableCardTitle: {
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: tokens.fontSizeBase400,
+  },
 });
 
 function TableView({
@@ -244,11 +265,56 @@ function TableView({
   onFilterChange,
   onSearchChange,
   spClient,
+  onItemCreated,
+  onItemUpdated,
+  onItemDeleted,
 }: TableViewProps) {
   const styles = useStyles();
   const { theme } = useTheme();
+  const { instance, accounts } = useMsal();
+  const { enabledLists } = useSettings();
+  const account = accounts[0];
+
   const [selectedItem, setSelectedItem] = useState<GraphListItem | null>(null);
   const [filterOptions, setFilterOptions] = useState<Record<string, string[]>>({});
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Resolve siteUrl - from page source or look up from enabledLists
+  const siteUrl = useMemo(() => {
+    if (page.primarySource.siteUrl) {
+      return page.primarySource.siteUrl;
+    }
+    // Fallback: look up from enabledLists
+    const list = enabledLists.find(
+      (l) => l.siteId === page.primarySource.siteId && l.listId === page.primarySource.listId
+    );
+    return list?.siteUrl;
+  }, [page.primarySource.siteUrl, page.primarySource.siteId, page.primarySource.listId, enabledLists]);
+
+  // Create SP client for the primary source's site
+  const primarySpClientRef = useRef<SPFI | null>(null);
+  const [primarySpClientReady, setPrimarySpClientReady] = useState(false);
+
+  useEffect(() => {
+    if (!account || !siteUrl) {
+      setPrimarySpClientReady(false);
+      return;
+    }
+
+    const initClient = async () => {
+      try {
+        const client = await createSPClient(instance, account, siteUrl);
+        primarySpClientRef.current = client;
+        setPrimarySpClientReady(true);
+      } catch (err) {
+        console.error('Failed to create SP client for primary list:', err);
+        setPrimarySpClientReady(false);
+      }
+    };
+
+    initClient();
+  }, [instance, account, siteUrl]);
 
   // Load filter options
   useState(() => {
@@ -301,6 +367,46 @@ function TableView({
       return new Date(value).toLocaleDateString();
     }
     return String(value);
+  };
+
+  // Get initial values for new item form based on current filters
+  // Memoized to prevent re-renders from causing focus loss in the form modal
+  const createInitialValues = useMemo((): Record<string, unknown> => {
+    const initialValues: Record<string, unknown> = {};
+
+    // Map filter values to form fields
+    for (const [columnName, filterValue] of Object.entries(filters)) {
+      if (filterValue && filterValue !== '') {
+        const column = columns.find(c => c.name === columnName);
+        if (column) {
+          // For boolean columns, convert Yes/No to boolean
+          if (column.boolean) {
+            initialValues[columnName] = filterValue === 'Yes';
+          } else {
+            initialValues[columnName] = filterValue;
+          }
+        }
+      }
+    }
+
+    return initialValues;
+  }, [filters, columns]);
+
+  // Handle creating a new item
+  const handleCreate = async (fields: Record<string, unknown>) => {
+    if (!primarySpClientRef.current) return;
+
+    setSaving(true);
+    try {
+      await createListItem(primarySpClientRef.current, page.primarySource.listId, fields);
+      setCreateModalOpen(false);
+      onItemCreated?.();
+    } catch (err) {
+      console.error('Failed to create item:', err);
+      throw err;
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -383,6 +489,20 @@ function TableView({
 
         {/* Table */}
         <div className={styles.tableContainer}>
+          {/* Header with Title and Add Button */}
+          <div className={styles.tableCardHeader}>
+            <Text className={styles.tableCardTitle}>{page.primarySource.listName}</Text>
+            <Button
+              appearance="primary"
+              size="small"
+              icon={<AddRegular />}
+              onClick={() => setCreateModalOpen(true)}
+              disabled={!primarySpClientReady}
+            >
+              New
+            </Button>
+          </div>
+
           <div className={mergeClasses(styles.tableWrapper, theme === 'dark' && styles.panelDark)}>
             {items.length === 0 ? (
               <div className={styles.emptyTable}>
@@ -424,16 +544,37 @@ function TableView({
 
       {/* Detail Modal */}
       {selectedItem && (
-        <ItemDetailModal
+        <DetailModal
           listId={page.primarySource.listId}
           listName={page.primarySource.listName}
           siteId={page.primarySource.siteId}
-          siteUrl={page.primarySource.siteUrl}
+          siteUrl={siteUrl}
           columns={columns}
           item={selectedItem}
           spClient={spClient}
           page={page}
           onClose={() => setSelectedItem(null)}
+          onItemUpdated={() => {
+            setSelectedItem(null);
+            onItemUpdated?.();
+          }}
+          onItemDeleted={() => {
+            setSelectedItem(null);
+            onItemDeleted?.();
+          }}
+        />
+      )}
+
+      {/* Create Item Modal */}
+      {createModalOpen && (
+        <ItemFormModal
+          mode="create"
+          siteId={page.primarySource.siteId}
+          listId={page.primarySource.listId}
+          initialValues={createInitialValues}
+          saving={saving}
+          onSave={handleCreate}
+          onClose={() => setCreateModalOpen(false)}
         />
       )}
     </>

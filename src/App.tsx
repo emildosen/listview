@@ -5,37 +5,33 @@ import HomePage from './pages/HomePage';
 import SettingsPage from './pages/SettingsPage';
 import DataPage from './pages/DataPage';
 import ListViewPage from './pages/ListViewPage';
-import ViewsPage from './pages/ViewsPage';
-import ViewEditorPage from './pages/ViewEditorPage';
-import ViewDisplayPage from './pages/ViewDisplayPage';
 import PagesPage from './pages/PagesPage';
 import PageEditorPage from './pages/PageEditorPage';
 import PageDisplayPage from './pages/PageDisplayPage';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { FormConfigProvider } from './contexts/FormConfigContext';
 
 function App() {
   return (
     <BrowserRouter>
       <ThemeProvider>
         <SettingsProvider>
-          <Routes>
+          <FormConfigProvider>
+            <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/app" element={<AppShell />}>
               <Route index element={<HomePage />} />
               <Route path="lists" element={<DataPage />} />
               <Route path="lists/:siteId/:listId" element={<ListViewPage />} />
-              <Route path="views" element={<ViewsPage />} />
-              <Route path="views/new" element={<ViewEditorPage />} />
-              <Route path="views/:viewId" element={<ViewDisplayPage />} />
-              <Route path="views/:viewId/edit" element={<ViewEditorPage />} />
               <Route path="pages" element={<PagesPage />} />
               <Route path="pages/new" element={<PageEditorPage />} />
               <Route path="pages/:pageId" element={<PageDisplayPage />} />
               <Route path="pages/:pageId/edit" element={<PageEditorPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
-          </Routes>
+            </Routes>
+          </FormConfigProvider>
         </SettingsProvider>
       </ThemeProvider>
     </BrowserRouter>

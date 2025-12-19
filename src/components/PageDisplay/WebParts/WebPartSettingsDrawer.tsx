@@ -28,6 +28,7 @@ import type {
   WebPartJoin,
   WebPartSort,
   ChartAggregation,
+  ChartType,
   LegendPosition,
   XAxisLabelStyle,
 } from '../../../types/page';
@@ -134,7 +135,7 @@ export default function WebPartSettingsDrawer({
   );
 
   // Chart specific state
-  const [chartType, setChartType] = useState<'bar' | 'donut' | 'line' | 'horizontal-bar'>(
+  const [chartType, setChartType] = useState<ChartType>(
     webPart.type === 'chart' ? (webPart as ChartWebPartConfig).chartType || 'bar' : 'bar'
   );
   const [groupByColumn, setGroupByColumn] = useState<string | undefined>(
@@ -149,8 +150,17 @@ export default function WebPartSettingsDrawer({
   const [legendPosition, setLegendPosition] = useState<LegendPosition>(
     webPart.type === 'chart' ? (webPart as ChartWebPartConfig).legendPosition || 'on' : 'on'
   );
+  const [legendLabel, setLegendLabel] = useState(
+    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).legendLabel || '' : ''
+  );
   const [maxGroups, setMaxGroups] = useState(
     webPart.type === 'chart' ? (webPart as ChartWebPartConfig).maxGroups || 10 : 10
+  );
+  const [showOther, setShowOther] = useState(
+    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).showOther !== false : true
+  );
+  const [includeNull, setIncludeNull] = useState(
+    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).includeNull === true : false
   );
   const [xAxisLabelStyle, setXAxisLabelStyle] = useState<XAxisLabelStyle>(
     webPart.type === 'chart' ? (webPart as ChartWebPartConfig).xAxisLabelStyle || 'normal' : 'normal'
@@ -160,6 +170,27 @@ export default function WebPartSettingsDrawer({
   );
   const [chartSortDirection, setChartSortDirection] = useState<'asc' | 'desc'>(
     webPart.type === 'chart' ? (webPart as ChartWebPartConfig).sortDirection || 'asc' : 'asc'
+  );
+  // Gauge chart options
+  const [gaugeMinValue, setGaugeMinValue] = useState<number>(
+    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).gaugeMinValue ?? 0 : 0
+  );
+  const [gaugeMaxValue, setGaugeMaxValue] = useState<number>(
+    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).gaugeMaxValue ?? 100 : 100
+  );
+  // Heatmap chart options
+  const [secondaryGroupByColumn, setSecondaryGroupByColumn] = useState<string | undefined>(
+    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).secondaryGroupByColumn : undefined
+  );
+  // Gantt chart options
+  const [ganttStartColumn, setGanttStartColumn] = useState<string | undefined>(
+    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).ganttStartColumn : undefined
+  );
+  const [ganttEndColumn, setGanttEndColumn] = useState<string | undefined>(
+    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).ganttEndColumn : undefined
+  );
+  const [ganttLabelColumn, setGanttLabelColumn] = useState<string | undefined>(
+    webPart.type === 'chart' ? (webPart as ChartWebPartConfig).ganttLabelColumn : undefined
   );
 
   const [saving, setSaving] = useState(false);
@@ -209,10 +240,19 @@ export default function WebPartSettingsDrawer({
       setValueColumn(config.valueColumn);
       setAggregation(config.aggregation || 'count');
       setLegendPosition(config.legendPosition || 'on');
+      setLegendLabel(config.legendLabel || '');
       setMaxGroups(config.maxGroups || 10);
+      setShowOther(config.showOther !== false);
       setXAxisLabelStyle(config.xAxisLabelStyle || 'normal');
       setChartSortBy(config.sortBy || 'label');
       setChartSortDirection(config.sortDirection || 'asc');
+      // New chart-specific options
+      setGaugeMinValue(config.gaugeMinValue ?? 0);
+      setGaugeMaxValue(config.gaugeMaxValue ?? 100);
+      setSecondaryGroupByColumn(config.secondaryGroupByColumn);
+      setGanttStartColumn(config.ganttStartColumn);
+      setGanttEndColumn(config.ganttEndColumn);
+      setGanttLabelColumn(config.ganttLabelColumn);
     }
   }, [webPart]);
 
@@ -334,10 +374,20 @@ export default function WebPartSettingsDrawer({
           valueColumn,
           aggregation,
           legendPosition,
+          legendLabel: legendLabel || undefined,
           maxGroups,
+          showOther,
+          includeNull,
           xAxisLabelStyle,
           sortBy: chartSortBy,
           sortDirection: chartSortDirection,
+          // Chart-specific options
+          gaugeMinValue,
+          gaugeMaxValue,
+          secondaryGroupByColumn,
+          ganttStartColumn,
+          ganttEndColumn,
+          ganttLabelColumn,
         } as ChartWebPartConfig;
       }
 
@@ -361,10 +411,19 @@ export default function WebPartSettingsDrawer({
     valueColumn,
     aggregation,
     legendPosition,
+    legendLabel,
     maxGroups,
+    showOther,
+    includeNull,
     xAxisLabelStyle,
     chartSortBy,
     chartSortDirection,
+    gaugeMinValue,
+    gaugeMaxValue,
+    secondaryGroupByColumn,
+    ganttStartColumn,
+    ganttEndColumn,
+    ganttLabelColumn,
     onSave,
     onClose,
   ]);
@@ -541,20 +600,40 @@ export default function WebPartSettingsDrawer({
                       valueColumn={valueColumn}
                       aggregation={aggregation}
                       legendPosition={legendPosition}
+                      legendLabel={legendLabel}
                       maxGroups={maxGroups}
+                      showOther={showOther}
+                      includeNull={includeNull}
                       xAxisLabelStyle={xAxisLabelStyle}
                       sortBy={chartSortBy}
                       sortDirection={chartSortDirection}
                       columns={columns}
+                      // Chart-specific options
+                      gaugeMinValue={gaugeMinValue}
+                      gaugeMaxValue={gaugeMaxValue}
+                      secondaryGroupByColumn={secondaryGroupByColumn}
+                      ganttStartColumn={ganttStartColumn}
+                      ganttEndColumn={ganttEndColumn}
+                      ganttLabelColumn={ganttLabelColumn}
+                      // Callbacks
                       onChartTypeChange={setChartType}
                       onGroupByColumnChange={setGroupByColumn}
                       onValueColumnChange={setValueColumn}
                       onAggregationChange={setAggregation}
                       onLegendPositionChange={setLegendPosition}
+                      onLegendLabelChange={setLegendLabel}
                       onMaxGroupsChange={setMaxGroups}
+                      onShowOtherChange={setShowOther}
+                      onIncludeNullChange={setIncludeNull}
                       onXAxisLabelStyleChange={setXAxisLabelStyle}
                       onSortByChange={setChartSortBy}
                       onSortDirectionChange={setChartSortDirection}
+                      onGaugeMinValueChange={setGaugeMinValue}
+                      onGaugeMaxValueChange={setGaugeMaxValue}
+                      onSecondaryGroupByColumnChange={setSecondaryGroupByColumn}
+                      onGanttStartColumnChange={setGanttStartColumn}
+                      onGanttEndColumnChange={setGanttEndColumn}
+                      onGanttLabelColumnChange={setGanttLabelColumn}
                     />
                   </div>
 

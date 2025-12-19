@@ -1,17 +1,19 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import {
   makeStyles,
   tokens,
-  Checkbox,
   Input,
   Text,
   Button,
   Spinner,
+  Dropdown,
+  Option,
 } from '@fluentui/react-components';
 import {
   ReOrderDotsVerticalRegular,
   ArrowUpRegular,
   ArrowDownRegular,
+  DeleteRegular,
 } from '@fluentui/react-icons';
 import type { WebPartDisplayColumn } from '../../../types/page';
 import type { GraphListColumn } from '../../../auth/graphClient';
@@ -22,12 +24,8 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     gap: '8px',
   },
-  columnList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-    maxHeight: '200px',
-    overflowY: 'auto',
+  addColumnDropdown: {
+    width: '100%',
   },
   selectedColumnList: {
     display: 'flex',
@@ -41,9 +39,6 @@ const useStyles = makeStyles({
     padding: '8px',
     backgroundColor: tokens.colorNeutralBackground2,
     borderRadius: tokens.borderRadiusMedium,
-  },
-  selectedColumnItem: {
-    backgroundColor: tokens.colorNeutralBackground3,
   },
   dragHandle: {
     color: tokens.colorNeutralForeground3,
@@ -86,9 +81,6 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
-  selectedSection: {
-    marginTop: '12px',
-  },
   sectionLabel: {
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground2,
@@ -122,11 +114,12 @@ export default function ColumnSelector({
   loading,
 }: ColumnSelectorProps) {
   const styles = useStyles();
+  const [dropdownValue, setDropdownValue] = useState<string>('');
 
-  const handleToggleColumn = useCallback(
-    (column: GraphListColumn, checked: boolean) => {
-      if (checked) {
-        // Add column
+  const handleAddColumn = useCallback(
+    (columnName: string) => {
+      const column = availableColumns.find((c) => c.name === columnName);
+      if (column) {
         onChange([
           ...selectedColumns,
           {
@@ -134,10 +127,15 @@ export default function ColumnSelector({
             displayName: column.displayName,
           },
         ]);
-      } else {
-        // Remove column
-        onChange(selectedColumns.filter((c) => c.internalName !== column.name));
+        setDropdownValue('');
       }
+    },
+    [availableColumns, selectedColumns, onChange]
+  );
+
+  const handleRemoveColumn = useCallback(
+    (internalName: string) => {
+      onChange(selectedColumns.filter((c) => c.internalName !== internalName));
     },
     [selectedColumns, onChange]
   );
@@ -186,36 +184,16 @@ export default function ColumnSelector({
     return <div className={styles.emptyState}>No columns available</div>;
   }
 
-  const isSelected = (columnName: string) =>
-    selectedColumns.some((c) => c.internalName === columnName);
+  // Filter out already selected columns for the dropdown
+  const unselectedColumns = availableColumns.filter(
+    (col) => !selectedColumns.some((c) => c.internalName === col.name)
+  );
 
   return (
     <div className={styles.container}>
-      {/* Available columns */}
-      <Text className={styles.sectionLabel}>Available Columns</Text>
-      <div className={styles.columnList}>
-        {availableColumns.map((column) => (
-          <div
-            key={column.name}
-            className={`${styles.columnItem} ${
-              isSelected(column.name) ? styles.selectedColumnItem : ''
-            }`}
-          >
-            <Checkbox
-              checked={isSelected(column.name)}
-              onChange={(_, data) => handleToggleColumn(column, data.checked as boolean)}
-            />
-            <div className={styles.columnInfo}>
-              <Text className={styles.columnName}>{column.displayName}</Text>
-              <Text className={styles.columnType}>{getColumnTypeLabel(column)}</Text>
-            </div>
-          </div>
-        ))}
-      </div>
-
       {/* Selected columns with reordering */}
       {selectedColumns.length > 0 && (
-        <div className={styles.selectedSection}>
+        <>
           <Text className={styles.sectionLabel}>
             Selected Columns ({selectedColumns.length})
           </Text>
@@ -257,12 +235,42 @@ export default function ColumnSelector({
                       disabled={index === selectedColumns.length - 1}
                     />
                   </div>
+                  <Button
+                    appearance="subtle"
+                    size="small"
+                    icon={<DeleteRegular />}
+                    onClick={() => handleRemoveColumn(column.internalName)}
+                  />
                 </div>
               );
             })}
           </div>
-        </div>
+        </>
       )}
+
+      {/* Add column dropdown */}
+      <Dropdown
+        className={styles.addColumnDropdown}
+        placeholder="Add a column..."
+        value={dropdownValue}
+        selectedOptions={[]}
+        onOptionSelect={(_, data) => {
+          if (data.optionValue) {
+            handleAddColumn(data.optionValue);
+          }
+        }}
+        disabled={unselectedColumns.length === 0}
+      >
+        {unselectedColumns.map((column) => (
+          <Option
+            key={column.name}
+            value={column.name}
+            text={`${column.displayName} (${getColumnTypeLabel(column)})`}
+          >
+            {column.displayName} ({getColumnTypeLabel(column)})
+          </Option>
+        ))}
+      </Dropdown>
     </div>
   );
 }

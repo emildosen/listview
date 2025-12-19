@@ -57,6 +57,24 @@ export interface GraphListColumn {
   };
 }
 
+// Form field configuration from ContentType columnPositions (ordered for forms)
+export interface FormFieldConfig {
+  id: string;
+  name: string;
+  displayName: string;
+  required: boolean;
+  hidden: boolean;
+  readOnly: boolean;
+  text?: { allowMultipleLines?: boolean; maxLength?: number };
+  boolean?: Record<string, never>;
+  number?: { minimum?: number; maximum?: number };
+  dateTime?: { format?: string };
+  lookup?: { listId: string; columnName: string; allowMultipleValues?: boolean };
+  choice?: { choices: string[]; allowMultipleValues?: boolean };
+  hyperlinkOrPicture?: { isPicture?: boolean };
+  defaultValue?: { value?: string; formula?: string };
+}
+
 export interface GraphListItem {
   id: string;
   fields: Record<string, unknown>;
@@ -264,6 +282,94 @@ export async function getListColumns(
     });
 
   return columns;
+}
+
+/**
+ * Get form field configuration from ContentType columns.
+ * Returns fields in the order they appear in SharePoint's default edit/new forms.
+ */
+export async function getFormFieldConfig(
+  msalInstance: IPublicClientApplication,
+  account: AccountInfo,
+  siteId: string,
+  listId: string
+): Promise<{ contentTypeId: string; fields: FormFieldConfig[] }> {
+  const client = createGraphClient(msalInstance, account);
+
+  // Step 1: Get content types for this list
+  const contentTypesResponse = await client
+    .api(`/sites/${siteId}/lists/${listId}/contentTypes`)
+    .select('id,name,hidden')
+    .top(10)
+    .get();
+
+  // Find the default content type (usually "Item", first non-hidden one)
+  const contentTypes = contentTypesResponse.value || [];
+  const defaultContentType = contentTypes.find(
+    (ct: { hidden?: boolean; name?: string }) =>
+      !ct.hidden && ct.name !== 'Folder' && !ct.name?.startsWith('_')
+  ) || contentTypes[0];
+
+  if (!defaultContentType) {
+    throw new Error('No content type found for list');
+  }
+
+  const contentTypeId = defaultContentType.id;
+  // URL-encode the contentTypeId since it can contain special characters like 0x0100...
+  const encodedContentTypeId = encodeURIComponent(contentTypeId);
+
+  // Step 2: Get columns for this content type (they come in form order)
+  const columnsResponse = await client
+    .api(`/sites/${siteId}/lists/${listId}/contentTypes/${encodedContentTypeId}/columns`)
+    .select('id,name,displayName,hidden,readOnly,required,defaultValue,text,boolean,number,dateTime,lookup,choice,hyperlinkOrPicture')
+    .get();
+
+  const columns = columnsResponse.value || [];
+
+  // Map to FormFieldConfig, preserving order from columnPositions
+  const fields: FormFieldConfig[] = columns.map(
+    (col: GraphListColumn & { required?: boolean }) => {
+      const field: FormFieldConfig = {
+        id: col.id,
+        name: col.name,
+        displayName: col.displayName,
+        required: col.required ?? false,
+        hidden: col.hidden ?? false,
+        readOnly: col.readOnly ?? false,
+      };
+
+      if (col.defaultValue) field.defaultValue = col.defaultValue;
+      if (col.text) field.text = col.text;
+      if (col.boolean) field.boolean = col.boolean;
+      if (col.number) field.number = col.number;
+      if (col.dateTime) field.dateTime = col.dateTime;
+
+      if (col.lookup?.listId) {
+        field.lookup = {
+          listId: col.lookup.listId,
+          columnName: col.lookup.columnName || 'Title',
+          allowMultipleValues: col.lookup.allowMultipleValues,
+        };
+      }
+
+      if (col.choice?.choices) {
+        field.choice = {
+          choices: col.choice.choices,
+          allowMultipleValues: col.choice.allowMultipleValues,
+        };
+      }
+
+      if (col.hyperlinkOrPicture) {
+        field.hyperlinkOrPicture = {
+          isPicture: col.hyperlinkOrPicture.isPicture,
+        };
+      }
+
+      return field;
+    }
+  );
+
+  return { contentTypeId, fields };
 }
 
 /**
