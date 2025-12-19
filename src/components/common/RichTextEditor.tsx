@@ -116,18 +116,19 @@ function ensureTinyMCEGlobalStyles() {
     }
 
     .tox .tox-tbtn {
-      height: 26px !important;
-      width: 26px !important;
-      margin: 0 !important;
+      height: 28px !important;
+      width: 28px !important;
+      margin: 0 1px !important;
     }
 
     .tox .tox-tbtn svg {
-      width: 16px !important;
-      height: 16px !important;
+      width: 14px !important;
+      height: 14px !important;
     }
 
     .tox .tox-split-button {
-      height: 26px !important;
+      height: 28px !important;
+      margin: 0 1px !important;
     }
 
     .tox .tox-tbtn--bespoke {
@@ -139,7 +140,7 @@ function ensureTinyMCEGlobalStyles() {
     }
 
     .tox .tox-toolbar__group {
-      padding: 0 4px !important;
+      padding: 0 6px !important;
     }
   `;
   document.head.appendChild(style);
