@@ -286,19 +286,29 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
   // Track if this is the initial mount (to avoid triggering onChange on mount)
   const isInitialMount = useRef(true);
 
-  // Auto-save effect: call onChange immediately when any state changes
+  // Keep onChange in a ref to avoid triggering effect when callback identity changes
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  // Debounced auto-save effect: prevents rapid-fire saves that cause SharePoint conflicts
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
 
-    // Call onChange with current state
-    onChange(
-      { columnSettings, sectionOrder },
-      linkedLists
-    );
-  }, [columnSettings, linkedLists, sectionOrder, onChange]);
+    // Debounce saves by 300ms to batch rapid changes (e.g., during drag reordering)
+    const timeoutId = setTimeout(() => {
+      onChangeRef.current(
+        { columnSettings, sectionOrder },
+        linkedLists
+      );
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [columnSettings, linkedLists, sectionOrder]);
 
   const handleColumnVisibilityChange = useCallback((internalName: string, visible: boolean) => {
     setColumnSettings(prev => prev.map(s =>
