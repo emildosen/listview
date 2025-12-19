@@ -4,7 +4,7 @@ import { Checkbox } from '@fluentui/react-components';
 interface InlineEditBooleanProps {
   value: boolean;
   onChange: (value: boolean) => void;
-  onCommit: () => void;
+  onCommit: (value?: boolean) => void;
   onCancel: () => void;
 }
 
@@ -33,8 +33,8 @@ export function InlineEditBoolean({
   const handleChange = (_e: unknown, data: { checked: boolean | 'mixed' }) => {
     const newValue = data.checked === true;
     onChange(newValue);
-    // Commit immediately after toggle
-    setTimeout(() => onCommit(), 0);
+    // Commit immediately with the new value to avoid race condition
+    onCommit(newValue);
   };
 
   return (
@@ -43,7 +43,7 @@ export function InlineEditBoolean({
       checked={value}
       onChange={handleChange}
       onKeyDown={handleKeyDown}
-      onBlur={onCommit}
+      onBlur={() => onCommit()}
       label={value ? 'Yes' : 'No'}
     />
   );

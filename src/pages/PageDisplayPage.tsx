@@ -98,6 +98,7 @@ function PageDisplayPage() {
   const { pages, savePage } = useSettings();
 
   const [loading, setLoading] = useState(true);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<GraphListItem[]>([]);
   const [columns, setColumns] = useState<GraphListColumn[]>([]);
@@ -137,6 +138,7 @@ function PageDisplayPage() {
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
       setLoading(false);
+      setInitialLoadComplete(true);
     }
   }, [page, instance, account]);
 
@@ -360,15 +362,15 @@ function PageDisplayPage() {
         </MessageBar>
       )}
 
-      {/* Loading State */}
-      {loading && (
+      {/* Loading State - only show on initial load, not refreshes */}
+      {loading && !initialLoadComplete && (
         <div className={styles.loadingContainer}>
           <Spinner size="large" />
         </div>
       )}
 
-      {/* Main Content */}
-      {!loading && !error && (
+      {/* Main Content - keep mounted during refreshes to preserve modal state */}
+      {initialLoadComplete && !error && (
         <div className={styles.mainContent}>
           <TableView
             page={page}

@@ -42,7 +42,7 @@ import StatBox from '../../PageDisplay/StatBox';
 import DetailCustomizeDrawer from '../../PageDisplay/DetailCustomizeDrawer';
 import { SharePointLink } from '../../common/SharePointLink';
 import { useListFormConfig } from '../../../hooks/useListFormConfig';
-import type { LookupOption } from '../../../contexts/FormConfigContext';
+import { useFormConfigContext, type LookupOption } from '../../../contexts/FormConfigContext';
 
 const useStyles = makeStyles({
   surface: {
@@ -197,6 +197,7 @@ function UnifiedDetailModalContent({
 
   // UI state
   const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [columnsLoading, setColumnsLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [spClient, setSpClient] = useState<SPFI | null>(null);
@@ -209,6 +210,7 @@ function UnifiedDetailModalContent({
 
   // Form config for field metadata and lookup options
   const { fields: formFields, getLookupOptions } = useListFormConfig(currentSiteId, currentListId);
+  const { getCachedListColumns } = useFormConfigContext();
   const [lookupOptions, setLookupOptions] = useState<Record<string, LookupOption[]>>({});
 
   // Initialize SP client
@@ -347,7 +349,11 @@ function UnifiedDetailModalContent({
 
   // Auto-save handler
   const handleSaveField = useCallback(async (fieldName: string, value: unknown) => {
-    if (!spClient) return;
+    if (!spClient) {
+      const message = 'Unable to save: SharePoint connection not available';
+      setFieldErrors(prev => ({ ...prev, [fieldName]: message }));
+      throw new Error(message);
+    }
 
     setSavingFields(prev => new Set(prev).add(fieldName));
     setFieldErrors(prev => {
@@ -369,10 +375,26 @@ function UnifiedDetailModalContent({
 
       await updateListItem(spClient, currentListId, parseInt(currentItem.id, 10), payload);
 
-      // Update local item state
+      // Update local item state with display-friendly format for lookups
+      let displayValue = value;
+      if (formField?.lookup) {
+        const options = lookupOptions[fieldName] ?? [];
+        if (formField.lookup.allowMultipleValues && Array.isArray(value)) {
+          // Multi-select: convert IDs to array of lookup objects
+          displayValue = value.map(id => {
+            const option = options.find(o => o.id === id);
+            return { LookupId: id, LookupValue: option?.value ?? String(id) };
+          });
+        } else if (typeof value === 'number') {
+          // Single select: convert ID to lookup object
+          const option = options.find(o => o.id === value);
+          displayValue = { LookupId: value, LookupValue: option?.value ?? String(value) };
+        }
+      }
+
       setCurrentItem(prev => ({
         ...prev,
-        fields: { ...prev.fields, [fieldName]: value },
+        fields: { ...prev.fields, [fieldName]: displayValue },
       }));
 
       onItemUpdated?.();
@@ -387,11 +409,14 @@ function UnifiedDetailModalContent({
         return next;
       });
     }
-  }, [spClient, currentListId, currentItem.id, getFormField, onItemUpdated]);
+  }, [spClient, currentListId, currentItem.id, getFormField, lookupOptions, onItemUpdated]);
 
   // Handle delete
   const handleDelete = async () => {
-    if (!spClient) return;
+    if (!spClient) {
+      setError('Unable to delete: SharePoint connection not available');
+      return;
+    }
 
     setDeleting(true);
     try {
@@ -420,6 +445,64 @@ function UnifiedDetailModalContent({
     // Persist changes in background
     saveListDetailConfig(updatedConfig);
   }, [listDetailConfig, saveListDetailConfig]);
+
+  // Handle opening customize drawer - fetch fresh columns first
+  const handleOpenCustomize = useCallback(async () => {
+    setColumnsLoading(true);
+    setCustomizeOpen(true);
+
+    try {
+      const freshColumns = await getCachedListColumns(currentSiteId, currentListId);
+      setCurrentColumns(freshColumns);
+
+      // Sync listDetailConfig with fresh columns
+      if (listDetailConfig) {
+        const freshColumnNames = new Set(freshColumns.filter(c => !c.hidden && !c.name.startsWith('_')).map(c => c.name));
+        const existingColumnNames = new Set(listDetailConfig.displayColumns.map(c => c.internalName));
+
+        // Remove deleted columns from displayColumns
+        const updatedDisplayColumns = listDetailConfig.displayColumns.filter(c =>
+          freshColumnNames.has(c.internalName)
+        );
+
+        // Add new columns (not selected by default)
+        const newColumns = freshColumns
+          .filter(c => !c.hidden && !c.name.startsWith('_') && !existingColumnNames.has(c.name))
+          .map(c => ({
+            internalName: c.name,
+            displayName: c.displayName,
+            editable: !c.readOnly,
+          }));
+
+        // Update detailLayout.columnSettings - remove deleted, add new with visible: false
+        const existingSettings = listDetailConfig.detailLayout?.columnSettings ?? [];
+        const updatedColumnSettings = existingSettings.filter(s =>
+          freshColumnNames.has(s.internalName)
+        );
+        const newColumnSettings = newColumns.map(c => ({
+          internalName: c.internalName,
+          visible: false, // New columns not selected by default
+          displayStyle: 'list' as const,
+        }));
+
+        const updatedConfig: ListDetailConfig = {
+          ...listDetailConfig,
+          displayColumns: [...updatedDisplayColumns, ...newColumns],
+          detailLayout: {
+            ...listDetailConfig.detailLayout,
+            columnSettings: [...updatedColumnSettings, ...newColumnSettings],
+          },
+        };
+
+        setListDetailConfig(updatedConfig);
+        saveListDetailConfig(updatedConfig);
+      }
+    } catch (err) {
+      console.error('Failed to refresh columns:', err);
+    } finally {
+      setColumnsLoading(false);
+    }
+  }, [currentSiteId, currentListId, getCachedListColumns, listDetailConfig, saveListDetailConfig]);
 
   // Get stat value as string (for StatBox)
   const getStatValue = (fieldName: string, value: unknown): string => {
@@ -474,7 +557,17 @@ function UnifiedDetailModalContent({
 
   if (!listDetailConfig || !layoutConfig) {
     return (
-      <Dialog open onOpenChange={(_, data) => !data.open && onClose()}>
+      <Dialog
+        open
+        modalType="alert"
+        onOpenChange={(_, data) => {
+          // Only close on explicit ESC key press
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if (!data.open && (data as any).type === 'escapeKeyDown') {
+            onClose();
+          }
+        }}
+      >
         <DialogSurface className={styles.surface}>
           <div className={styles.loadingContainer}>
             <Spinner size="medium" />
@@ -486,7 +579,18 @@ function UnifiedDetailModalContent({
 
   return (
     <>
-      <Dialog open onOpenChange={(_, data) => !data.open && onClose()}>
+      <Dialog
+        open
+        modalType="alert"
+        onOpenChange={(_, data) => {
+          // Only close on explicit ESC key press, not backdrop clicks or focus loss
+          // This prevents the modal from closing when TinyMCE opens dropdowns/dialogs
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          if (!data.open && (data as any).type === 'escapeKeyDown') {
+            onClose();
+          }
+        }}
+      >
         <DialogSurface className={styles.surface}>
           <DialogTitle className={styles.dialogTitle}>
             {/* Navigation buttons */}
@@ -535,7 +639,7 @@ function UnifiedDetailModalContent({
                 appearance="subtle"
                 size="small"
                 icon={<SettingsRegular />}
-                onClick={() => setCustomizeOpen(true)}
+                onClick={handleOpenCustomize}
                 title="Customize"
               />
               <Button
@@ -659,6 +763,7 @@ function UnifiedDetailModalContent({
         columnMetadata={currentColumns}
         titleColumn={titleColumn}
         open={customizeOpen}
+        loading={columnsLoading}
         onClose={() => setCustomizeOpen(false)}
         onChange={handleConfigChange}
       />
@@ -741,9 +846,11 @@ function DetailFieldEdit({
     loadOptions();
   }, [isEditing, formField, fieldName, siteId, getLookupOptions, lookupOptions, setLookupOptions]);
 
-  const handleCommit = async () => {
+  const handleCommit = async (directValue?: unknown) => {
     try {
-      await onSave(fieldName, editValue);
+      // Use directly passed value if provided (avoids race condition with state updates)
+      const valueToSave = directValue !== undefined ? directValue : editValue;
+      await onSave(fieldName, valueToSave);
       onCancelEdit();
     } catch {
       // Error is handled in parent

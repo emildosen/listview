@@ -1,3 +1,10 @@
+@font-face {
+  font-family: 'Anta';
+  src: url('./assets/Anta-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
 /* Fluent UI handles its own styling, minimal reset needed */
 *, *::before, *::after {
   box-sizing: border-box;
