@@ -769,9 +769,11 @@ function DetailFieldEdit({
     loadOptions();
   }, [isEditing, formField, fieldName, siteId, getLookupOptions, lookupOptions, setLookupOptions]);
 
-  const handleCommit = async () => {
+  const handleCommit = async (directValue?: unknown) => {
     try {
-      await onSave(fieldName, editValue);
+      // Use directly passed value if provided (avoids race condition with state updates)
+      const valueToSave = directValue !== undefined ? directValue : editValue;
+      await onSave(fieldName, valueToSave);
       onCancelEdit();
     } catch {
       // Error is handled in parent
