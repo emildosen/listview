@@ -647,8 +647,9 @@ function UnifiedDetailModalContent({
         </DialogSurface>
       </Dialog>
 
-      {/* Customize drawer */}
+      {/* Customize drawer - key forces remount when list changes */}
       <DetailCustomizeDrawer
+        key={currentListId}
         listDetailConfig={listDetailConfig}
         columnMetadata={currentColumns}
         titleColumn={titleColumn}
