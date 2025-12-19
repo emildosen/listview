@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { Editor } from '@tinymce/tinymce-react';
 import { makeStyles, tokens, mergeClasses } from '@fluentui/react-components';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -39,10 +39,14 @@ const useStyles = makeStyles({
     ':hover': {
       border: `1px solid ${tokens.colorNeutralStroke1Hover}`,
     },
-  },
-  containerFocused: {
-    border: `1px solid ${tokens.colorBrandStroke1}`,
-    backgroundColor: tokens.colorNeutralBackground1,
+    // Style TinyMCE to match container
+    '& .tox-tinymce': {
+      border: 'none !important',
+      borderRadius: `${tokens.borderRadiusMedium} !important`,
+    },
+    '& .tox-editor-header': {
+      borderBottom: 'none !important',
+    },
   },
   containerDark: {
     backgroundColor: '#1a1a1a',
@@ -50,10 +54,6 @@ const useStyles = makeStyles({
     ':hover': {
       border: '1px solid #444444',
     },
-  },
-  containerDarkFocused: {
-    border: `1px solid ${tokens.colorBrandStroke1}`,
-    backgroundColor: '#1a1a1a',
   },
   placeholder: {
     position: 'absolute',
@@ -76,6 +76,23 @@ interface RichTextEditorProps {
   showToolbar?: boolean;
 }
 
+// Convert HTML to plain text
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"');
+}
+
+// Convert plain text to HTML for display
+function plainTextToHtml(text: string): string {
+  return text.replace(/\n/g, '<br>');
+}
+
 export function RichTextEditor({
   value,
   onChange,
@@ -89,34 +106,37 @@ export function RichTextEditor({
   const { theme } = useTheme();
   const editorRef = useRef<TinyMCEEditor | null>(null);
   const isDark = theme === 'dark';
+  const lastExternalValue = useRef(value);
 
-  const handleEditorChange = useCallback((content: string) => {
-    if (showToolbar) {
-      // Rich text mode - keep HTML
-      onChange(content);
-    } else {
-      // Plain text mode - strip HTML, convert <br> to newlines
-      const plainText = content
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<[^>]*>/g, '')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"');
-      onChange(plainText);
+  // Update editor content when external value changes (e.g., from parent reset)
+  useEffect(() => {
+    if (editorRef.current && value !== lastExternalValue.current) {
+      const displayValue = showToolbar ? value : plainTextToHtml(value);
+      editorRef.current.setContent(displayValue);
+      lastExternalValue.current = value;
     }
-  }, [onChange, showToolbar]);
+  }, [value, showToolbar]);
 
   const handleBlur = useCallback(() => {
-    onBlur?.();
-  }, [onBlur]);
+    if (!editorRef.current) return;
 
-  // Check if content is empty (TinyMCE may have empty paragraphs)
+    const content = editorRef.current.getContent();
+    const outputValue = showToolbar ? content : htmlToPlainText(content);
+
+    // Only trigger onChange if value actually changed
+    if (outputValue !== lastExternalValue.current) {
+      lastExternalValue.current = outputValue;
+      onChange(outputValue);
+    }
+
+    onBlur?.();
+  }, [onChange, onBlur, showToolbar]);
+
+  // Check if content is empty
   const isEmpty = !value || value === '<p></p>' || value === '<p><br></p>';
 
-  // For plain text mode, convert newlines to <br> for display in editor
-  const displayValue = showToolbar ? value : value.replace(/\n/g, '<br>');
+  // Initial value for editor (only used on mount)
+  const initialValue = showToolbar ? value : plainTextToHtml(value);
 
   return (
     <div className={mergeClasses(styles.container, isDark && styles.containerDark)}>
@@ -128,16 +148,15 @@ export function RichTextEditor({
         onInit={(_evt, editor) => {
           editorRef.current = editor;
         }}
-        value={displayValue}
-        onEditorChange={handleEditorChange}
+        initialValue={initialValue}
         onBlur={handleBlur}
         disabled={readOnly}
         init={{
           // Appearance - use oxide-dark skin for dark mode
           skin: isDark ? 'oxide-dark' : 'oxide',
-          content_css: false, // Don't load external CSS, use content_style instead
+          content_css: false,
 
-          // Inline mode for seamless editing
+          // Editor mode
           inline: false,
           menubar: false,
           statusbar: false,
@@ -153,12 +172,12 @@ export function RichTextEditor({
             : false,
           toolbar_mode: 'sliding',
 
-          // Plugins (no table/image for SP compatibility)
+          // Plugins
           plugins: showToolbar
             ? 'lists link autolink autoresize code charmap emoticons'
             : 'autoresize',
 
-          // For plain text mode (no toolbar), don't wrap in <p> tags
+          // For plain text mode, don't wrap in <p> tags
           forced_root_block: showToolbar ? 'p' : '',
           newline_behavior: showToolbar ? 'default' : 'linebreak',
 
@@ -186,7 +205,6 @@ export function RichTextEditor({
 
           // Keyboard shortcuts
           setup: (editor) => {
-            // Save on Ctrl/Cmd + Enter
             editor.addShortcut('meta+enter', 'Blur editor', () => {
               editor.fire('blur');
             });

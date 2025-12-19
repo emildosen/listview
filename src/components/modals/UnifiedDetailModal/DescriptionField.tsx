@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import {
   makeStyles,
   tokens,
@@ -55,35 +55,37 @@ export function DescriptionField({
   onSave,
 }: DescriptionFieldProps) {
   const styles = useStyles();
-  const [localValue, setLocalValue] = useState(value);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const lastSavedValue = useRef(value);
+  const pendingValue = useRef<string | null>(null);
 
-  // Sync local value with prop when external changes occur
-  useEffect(() => {
-    if (value !== lastSavedValue.current) {
-      setLocalValue(value);
-      lastSavedValue.current = value;
-    }
-  }, [value]);
+  // Called when editor content changes (on blur)
+  const handleChange = useCallback((newValue: string) => {
+    pendingValue.current = newValue;
+  }, []);
 
-  const handleSave = useCallback(async () => {
-    if (localValue === lastSavedValue.current) {
-      return; // No changes to save
+  // Called after onChange, triggers save
+  const handleBlur = useCallback(async () => {
+    const newValue = pendingValue.current;
+    pendingValue.current = null;
+
+    // No pending change or same as last saved
+    if (newValue === null || newValue === lastSavedValue.current) {
+      return;
     }
 
     setSaving(true);
     setError(null);
     try {
-      await onSave(localValue);
-      lastSavedValue.current = localValue;
+      await onSave(newValue);
+      lastSavedValue.current = newValue;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setSaving(false);
     }
-  }, [localValue, onSave]);
+  }, [onSave]);
 
   const showSaving = isSaving || saving;
 
@@ -92,12 +94,12 @@ export function DescriptionField({
       <Text className={styles.label}>Description</Text>
       <div className={styles.editorWrapper}>
         <RichTextEditor
-          value={localValue}
-          onChange={setLocalValue}
-          onBlur={handleSave}
+          value={value}
+          onChange={handleChange}
+          onBlur={handleBlur}
           placeholder={placeholder}
           readOnly={readOnly}
-          minHeight={400}
+          minHeight={200}
           showToolbar={isRichText}
         />
         {showSaving && <Spinner size="tiny" className={styles.savingIndicator} />}
