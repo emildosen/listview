@@ -203,6 +203,11 @@ function PageDisplayPage() {
     [page, savePage]
   );
 
+  // Handle lookup page save
+  const handleLookupPageSave = useCallback(async (updatedPage: PageDefinition) => {
+    await savePage(updatedPage);
+  }, [savePage]);
+
   // Loading state for pages
   if (pages.length === 0) {
     return (
@@ -330,11 +335,6 @@ function PageDisplayPage() {
       </div>
     );
   }
-
-  // Handle lookup page save
-  const handleLookupPageSave = useCallback(async (updatedPage: PageDefinition) => {
-    await savePage(updatedPage);
-  }, [savePage]);
 
   return (
     <div className={styles.container}>
