@@ -446,7 +446,7 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
 
       <DrawerBody>
         {/* Detail Columns Section */}
-        <div className={styles.section}>
+        <div className={styles.section} style={{ marginTop: '8px' }}>
           <Text className={styles.sectionTitle}>Detail Columns</Text>
           <Text className={styles.sectionHint}>
             Configure which columns appear in Details and their display style
@@ -519,7 +519,7 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
         <div className={styles.section} style={{ marginTop: '24px' }}>
           <Text className={styles.sectionTitle}>Customize Layout</Text>
           <Text className={styles.sectionHint}>
-            Drag to reorder how sections appear in the detail view
+            Drag to reorder sections. Add linked lists to show related data.
           </Text>
 
           {visibleSections.map((sectionId, index) => {
