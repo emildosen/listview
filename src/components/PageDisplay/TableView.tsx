@@ -270,7 +270,20 @@ function TableView({
   const { instance, accounts } = useMsal();
   const account = accounts[0];
 
+  // Debug: log mount/unmount
+  useEffect(() => {
+    console.log('[TableView] MOUNTED');
+    return () => {
+      console.log('[TableView] UNMOUNTED');
+    };
+  }, []);
+
   const [selectedItem, setSelectedItemState] = useState<GraphListItem | null>(null);
+
+  // Debug: log selectedItem changes
+  useEffect(() => {
+    console.log('[TableView] selectedItem changed:', selectedItem ? `item ${selectedItem.id}` : 'null');
+  }, [selectedItem]);
 
   // Wrap setSelectedItem to add debug logging
   const setSelectedItem = useCallback((item: GraphListItem | null) => {

@@ -179,6 +179,14 @@ function UnifiedDetailModalContent({
   onItemUpdated,
   onItemDeleted,
 }: UnifiedDetailModalProps) {
+  // Debug: log mount/unmount
+  useEffect(() => {
+    console.log('[UnifiedDetailModal] MOUNTED');
+    return () => {
+      console.log('[UnifiedDetailModal] UNMOUNTED');
+    };
+  }, []);
+
   // Wrap onClose to add debug logging
   const onClose = useCallback(() => {
     console.log('[UnifiedDetailModal] onClose called');
