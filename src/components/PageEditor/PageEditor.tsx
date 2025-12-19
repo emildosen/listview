@@ -934,11 +934,6 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
                             onClick={() => handleColumnToggle(col)}
                           >
                             <Text size={200}>{col.displayName}</Text>
-                            {col.hidden && (
-                              <Badge appearance="outline" size="small" color="subtle">
-                                hidden
-                              </Badge>
-                            )}
                             {col.readOnly && (
                               <Badge appearance="outline" size="small">
                                 read-only
