@@ -94,7 +94,7 @@ const useStyles = makeStyles({
     display: 'flex',
     flexWrap: 'wrap',
     gap: '8px',
-    marginTop: '10px',
+    marginTop: '15px',
   },
   detailsCard: {
     padding: '16px',
