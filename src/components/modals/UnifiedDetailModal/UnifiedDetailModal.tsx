@@ -347,7 +347,11 @@ function UnifiedDetailModalContent({
 
   // Auto-save handler
   const handleSaveField = useCallback(async (fieldName: string, value: unknown) => {
-    if (!spClient) return;
+    if (!spClient) {
+      const message = 'Unable to save: SharePoint connection not available';
+      setFieldErrors(prev => ({ ...prev, [fieldName]: message }));
+      throw new Error(message);
+    }
 
     setSavingFields(prev => new Set(prev).add(fieldName));
     setFieldErrors(prev => {
@@ -391,7 +395,10 @@ function UnifiedDetailModalContent({
 
   // Handle delete
   const handleDelete = async () => {
-    if (!spClient) return;
+    if (!spClient) {
+      setError('Unable to delete: SharePoint connection not available');
+      return;
+    }
 
     setDeleting(true);
     try {
