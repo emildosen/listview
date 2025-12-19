@@ -295,6 +295,50 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
 
   // Track if this is the initial mount (to avoid triggering onChange on mount)
   const isInitialMount = useRef(true);
+  const prevLoadingRef = useRef(loading);
+
+  // Sync column settings when loading completes (columns were refreshed)
+  useEffect(() => {
+    const wasLoading = prevLoadingRef.current;
+    prevLoadingRef.current = loading;
+
+    // Only sync when loading transitions from true to false
+    if (wasLoading && !loading) {
+      const nonTitleColumns = displayColumns.filter(col => col.internalName !== titleColumn);
+
+      if (existingDetailLayout?.columnSettings) {
+        const existingSettings = existingDetailLayout.columnSettings.filter(
+          s => s.internalName !== titleColumn
+        );
+        const existingNames = new Set(existingSettings.map(s => s.internalName));
+
+        // New columns are not selected by default
+        const newColumns = nonTitleColumns
+          .filter(col => !existingNames.has(col.internalName))
+          .map(col => ({
+            internalName: col.internalName,
+            visible: false,
+            displayStyle: 'list' as const,
+          }));
+
+        // Filter out any settings for columns that no longer exist
+        const validExisting = existingSettings.filter(s =>
+          nonTitleColumns.some(col => col.internalName === s.internalName)
+        );
+
+        setColumnSettings([...validExisting, ...newColumns]);
+      } else {
+        setColumnSettings(nonTitleColumns.map(col => ({
+          internalName: col.internalName,
+          visible: true,
+          displayStyle: 'list' as const,
+        })));
+      }
+
+      // Also sync linked lists
+      setLinkedLists([...existingLinkedLists]);
+    }
+  }, [loading, displayColumns, existingDetailLayout, existingLinkedLists, titleColumn]);
 
   // Keep onChange in a ref to avoid triggering effect when callback identity changes
   const onChangeRef = useRef(onChange);
