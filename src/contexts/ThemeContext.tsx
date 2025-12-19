@@ -69,6 +69,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, theme);
+    // Apply theme class to document for global CSS styling (scrollbars, etc.)
+    document.documentElement.classList.toggle('dark-theme', theme === 'dark');
   }, [theme]);
 
   const fluentTheme = useMemo(

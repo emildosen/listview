@@ -8,8 +8,6 @@ import {
   Input,
   Textarea,
   Checkbox,
-  Radio,
-  RadioGroup,
   Dropdown,
   Option,
   Text,
@@ -29,8 +27,8 @@ import {
   CheckmarkRegular,
   ArrowRightRegular,
 } from '@fluentui/react-icons';
-import { useSettings, type EnabledList } from '../../contexts/SettingsContext';
 import { getListColumns, type GraphListColumn } from '../../auth/graphClient';
+import DataSourcePicker from '../PageDisplay/WebParts/DataSourcePicker';
 import type {
   PageDefinition,
   PageSource,
@@ -39,6 +37,7 @@ import type {
   FilterColumn,
   RelatedSection,
   PageType,
+  WebPartDataSource,
 } from '../../types/page';
 
 interface PageEditorProps {
@@ -298,7 +297,6 @@ const useStyles = makeStyles({
 function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
   const styles = useStyles();
   const { instance, accounts } = useMsal();
-  const { enabledLists } = useSettings();
   const account = accounts[0];
 
   // Current step
@@ -369,21 +367,23 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
     loadColumns();
   }, [instance, account, primarySource]);
 
-  const handlePrimarySourceSelect = useCallback((list: EnabledList) => {
+  const handlePrimarySourceChange = useCallback((source: WebPartDataSource) => {
+    // Only clear columns if the list actually changed
+    if (source.listId !== primarySource?.listId) {
+      setDisplayColumns([]);
+      setSearchConfig({
+        tableColumns: [],
+        textSearchColumns: [],
+        filterColumns: [],
+      });
+    }
     setPrimarySource({
-      siteId: list.siteId,
-      siteUrl: list.siteUrl,
-      listId: list.listId,
-      listName: list.listName,
+      siteId: source.siteId,
+      siteUrl: source.siteUrl,
+      listId: source.listId,
+      listName: source.listName,
     });
-    // Clear columns when source changes
-    setDisplayColumns([]);
-    setSearchConfig({
-      tableColumns: [],
-      textSearchColumns: [],
-      filterColumns: [],
-    });
-  }, []);
+  }, [primarySource?.listId]);
 
   const handleColumnToggle = useCallback((col: ColumnWithMeta) => {
     setDisplayColumns((prev) => {
@@ -730,46 +730,20 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
         {/* Primary List Step */}
         {currentStep === 'primary' && (
           <div className={styles.formSection}>
-            <Text className={styles.sectionTitle}>Select Primary List</Text>
+            <Text className={styles.sectionTitle}>Select Data Source</Text>
             <Text className={styles.helperText}>
-              Choose the main data source for this page (e.g., Students, Customers).
+              Choose the site and list for this page (e.g., Students, Customers).
             </Text>
 
-            {enabledLists.length === 0 ? (
-              <MessageBar intent="warning">
-                <MessageBarBody>
-                  No lists enabled. Enable lists in the Data page first.
-                </MessageBarBody>
-              </MessageBar>
-            ) : (
-              <RadioGroup
-                value={primarySource?.listId || ''}
-                onChange={(_e, data) => {
-                  const list = enabledLists.find((l) => l.listId === data.value);
-                  if (list) handlePrimarySourceSelect(list);
-                }}
-              >
-                <div className={styles.sourceList}>
-                  {enabledLists.map((list) => (
-                    <div
-                      key={`${list.siteId}-${list.listId}`}
-                      className={`${styles.sourceItem} ${
-                        primarySource?.listId === list.listId ? styles.sourceItemSelected : ''
-                      }`}
-                      onClick={() => handlePrimarySourceSelect(list)}
-                    >
-                      <Radio value={list.listId} />
-                      <div className={styles.sourceInfo}>
-                        <Text weight="medium">{list.listName}</Text>
-                        <Text size={200} style={{ color: tokens.colorNeutralForeground2 }}>
-                          {list.siteName}
-                        </Text>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </RadioGroup>
-            )}
+            <DataSourcePicker
+              value={primarySource ? {
+                siteId: primarySource.siteId,
+                siteUrl: primarySource.siteUrl,
+                listId: primarySource.listId,
+                listName: primarySource.listName,
+              } : undefined}
+              onChange={handlePrimarySourceChange}
+            />
           </div>
         )}
 
@@ -981,7 +955,6 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
                   <RelatedSectionEditor
                     key={section.id}
                     section={section}
-                    enabledLists={enabledLists}
                     primaryListId={primarySource?.listId || ''}
                     onUpdate={(updates) => handleUpdateRelatedSection(index, updates)}
                     onRemove={() => handleRemoveRelatedSection(index)}
@@ -1120,7 +1093,6 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
 // Sub-component for editing a related section
 interface RelatedSectionEditorProps {
   section: RelatedSection;
-  enabledLists: EnabledList[];
   primaryListId: string;
   onUpdate: (updates: Partial<RelatedSection>) => void;
   onRemove: () => void;
@@ -1176,7 +1148,6 @@ const useRelatedStyles = makeStyles({
 
 function RelatedSectionEditor({
   section,
-  enabledLists,
   primaryListId,
   onUpdate,
   onRemove,
@@ -1244,41 +1215,26 @@ function RelatedSectionEditor({
         </Field>
 
         <Field label="Related List">
-          <Dropdown
-            value={section.source.listName || ''}
-            selectedOptions={section.source.listId ? [`${section.source.siteId}|${section.source.listId}`] : []}
-            onOptionSelect={(_e, data) => {
-              const [siteId, listId] = (data.optionValue as string).split('|');
-              const list = enabledLists.find(
-                (l) => l.siteId === siteId && l.listId === listId
-              );
-              if (list) {
-                onUpdate({
-                  source: {
-                    siteId: list.siteId,
-                    siteUrl: list.siteUrl,
-                    listId: list.listId,
-                    listName: list.listName,
-                  },
-                  lookupColumn: '',
-                  displayColumns: [],
-                });
-              }
+          <DataSourcePicker
+            value={section.source.listId ? {
+              siteId: section.source.siteId,
+              siteUrl: section.source.siteUrl,
+              listId: section.source.listId,
+              listName: section.source.listName,
+            } : undefined}
+            onChange={(source) => {
+              onUpdate({
+                source: {
+                  siteId: source.siteId,
+                  siteUrl: source.siteUrl,
+                  listId: source.listId,
+                  listName: source.listName,
+                },
+                lookupColumn: '',
+                displayColumns: [],
+              });
             }}
-            placeholder="Select a list"
-            size="small"
-          >
-            {enabledLists
-              .filter((l) => l.listId !== primaryListId)
-              .map((list) => (
-                <Option
-                  key={`${list.siteId}-${list.listId}`}
-                  value={`${list.siteId}|${list.listId}`}
-                >
-                  {list.listName}
-                </Option>
-              ))}
-          </Dropdown>
+          />
         </Field>
 
         {section.source.listId && (

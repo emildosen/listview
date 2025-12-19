@@ -33,15 +33,6 @@ import {
 import { getSharePointHostname } from '../auth/graphClient';
 import type { PageDefinition, ListDetailConfig } from '../types/page';
 
-export interface EnabledList {
-  siteId: string;
-  siteName: string;
-  siteUrl: string;
-  listId: string;
-  listName: string;
-}
-
-const ENABLED_LISTS_KEY = 'EnabledLists';
 const LIST_DETAIL_CONFIGS_KEY = 'ListDetailConfigs';
 
 const LOCAL_STORAGE_KEY = 'listview-settings-site-override';
@@ -81,7 +72,6 @@ interface SettingsContextValue extends SettingsState {
   clearSiteOverride: () => void;
   getSetting: (key: string) => string | undefined;
   updateSetting: (key: string, value: string) => Promise<void>;
-  enabledLists: EnabledList[];
   // Pages operations
   createPagesList: () => Promise<boolean>;
   loadPages: () => Promise<void>;
@@ -563,21 +553,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [accounts.length, initialize]);
 
-  // Parse enabled lists from settings
-  const enabledLists = useMemo((): EnabledList[] => {
-    const json = state.settings[ENABLED_LISTS_KEY];
-    if (!json) return [];
-    try {
-      const parsed = JSON.parse(json);
-      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
-        return parsed as EnabledList[];
-      }
-      return [];
-    } catch {
-      return [];
-    }
-  }, [state.settings]);
-
   // Parse list detail configs from settings (per-list popup configurations)
   const listDetailConfigs = useMemo((): Record<string, ListDetailConfig> => {
     const json = state.settings[LIST_DETAIL_CONFIGS_KEY];
@@ -638,7 +613,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     clearSiteOverride,
     getSetting: getSettingValue,
     updateSetting,
-    enabledLists,
     createPagesList: createPagesListCallback,
     loadPages: loadPagesCallback,
     savePage: savePageCallback,

@@ -445,7 +445,7 @@ export async function getListItems(
 
 // SharePoint URL resolution types and utilities
 
-export type SharePointResourceType = 'file' | 'page' | 'list-item' | 'folder' | 'generic';
+export type SharePointResourceType = 'file' | 'page' | 'list-item' | 'list-attachment' | 'folder' | 'generic';
 
 export interface SharePointUrlInfo {
   displayName: string;
@@ -493,6 +493,17 @@ export function parseSharePointUrl(url: string): SharePointUrlInfo {
         displayName: pageName,
         type: 'page',
         resolved: false,
+      };
+    }
+
+    // Check for list attachments: /Lists/{ListName}/Attachments/{ItemId}/{Filename}
+    // These are NOT stored in drives, so we handle them separately
+    const listAttachmentMatch = path.match(/\/Lists\/[^/]+\/Attachments\/\d+\/([^/]+\.[a-zA-Z0-9]{2,5})$/i);
+    if (listAttachmentMatch) {
+      return {
+        displayName: listAttachmentMatch[1],
+        type: 'list-attachment',
+        resolved: true, // Mark as resolved since we can't fetch more info via drive API
       };
     }
 

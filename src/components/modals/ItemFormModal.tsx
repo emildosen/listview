@@ -74,6 +74,7 @@ const useStyles = makeStyles({
   },
   dialogBody: {
     display: 'block',
+    paddingTop: '16px',
     paddingBottom: '24px',
   },
   formFields: {

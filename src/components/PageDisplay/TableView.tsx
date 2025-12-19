@@ -25,7 +25,6 @@ import type { PageDefinition } from '../../types/page';
 import DetailModal from '../modals/DetailModal';
 import ItemFormModal from '../modals/ItemFormModal';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useSettings } from '../../contexts/SettingsContext';
 import { SharePointLink } from '../common/SharePointLink';
 import { isSharePointUrl } from '../../auth/graphClient';
 import { createListItem, createSPClient } from '../../services/sharepoint';
@@ -272,7 +271,6 @@ function TableView({
   const styles = useStyles();
   const { theme } = useTheme();
   const { instance, accounts } = useMsal();
-  const { enabledLists } = useSettings();
   const account = accounts[0];
 
   const [selectedItem, setSelectedItem] = useState<GraphListItem | null>(null);
@@ -280,17 +278,7 @@ function TableView({
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Resolve siteUrl - from page source or look up from enabledLists
-  const siteUrl = useMemo(() => {
-    if (page.primarySource.siteUrl) {
-      return page.primarySource.siteUrl;
-    }
-    // Fallback: look up from enabledLists
-    const list = enabledLists.find(
-      (l) => l.siteId === page.primarySource.siteId && l.listId === page.primarySource.listId
-    );
-    return list?.siteUrl;
-  }, [page.primarySource.siteUrl, page.primarySource.siteId, page.primarySource.listId, enabledLists]);
+  const siteUrl = page.primarySource.siteUrl;
 
   // Create SP client for the primary source's site
   const primarySpClientRef = useRef<SPFI | null>(null);

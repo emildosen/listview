@@ -26,6 +26,7 @@ interface SharePointLinkProps {
 function getIconForType(type: SharePointResourceType) {
   switch (type) {
     case 'file':
+    case 'list-attachment':
       return <DocumentRegular style={{ fontSize: '12px' }} />;
     case 'page':
       return <DocumentTextRegular style={{ fontSize: '12px' }} />;
@@ -41,7 +42,7 @@ function getIconForType(type: SharePointResourceType) {
 
 // Get the href for the link, adding web=1 for files to open in browser
 function getHref(url: string, type: SharePointResourceType): string {
-  if (type === 'file') {
+  if (type === 'file' || type === 'list-attachment') {
     // Add web=1 parameter to open files in browser instead of downloading
     try {
       const urlObj = new URL(url.trim());
