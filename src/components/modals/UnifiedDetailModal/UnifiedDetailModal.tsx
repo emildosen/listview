@@ -375,10 +375,26 @@ function UnifiedDetailModalContent({
 
       await updateListItem(spClient, currentListId, parseInt(currentItem.id, 10), payload);
 
-      // Update local item state
+      // Update local item state with display-friendly format for lookups
+      let displayValue = value;
+      if (formField?.lookup) {
+        const options = lookupOptions[fieldName] ?? [];
+        if (formField.lookup.allowMultipleValues && Array.isArray(value)) {
+          // Multi-select: convert IDs to array of lookup objects
+          displayValue = value.map(id => {
+            const option = options.find(o => o.id === id);
+            return { LookupId: id, LookupValue: option?.value ?? String(id) };
+          });
+        } else if (typeof value === 'number') {
+          // Single select: convert ID to lookup object
+          const option = options.find(o => o.id === value);
+          displayValue = { LookupId: value, LookupValue: option?.value ?? String(value) };
+        }
+      }
+
       setCurrentItem(prev => ({
         ...prev,
-        fields: { ...prev.fields, [fieldName]: value },
+        fields: { ...prev.fields, [fieldName]: displayValue },
       }));
 
       onItemUpdated?.();
@@ -393,7 +409,7 @@ function UnifiedDetailModalContent({
         return next;
       });
     }
-  }, [spClient, currentListId, currentItem.id, getFormField, onItemUpdated]);
+  }, [spClient, currentListId, currentItem.id, getFormField, lookupOptions, onItemUpdated]);
 
   // Handle delete
   const handleDelete = async () => {
