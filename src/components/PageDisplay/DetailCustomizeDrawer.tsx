@@ -422,12 +422,12 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
   // Check if description section should be shown (has a description column)
   const showDescriptionSection = hasDescriptionColumn(columnSettings);
 
-  // Filter section order to only include valid sections
-  const visibleSections = sectionOrder.filter(id => {
-    if (id === DETAILS_SECTION_ID) return true;
-    if (id === DESCRIPTION_SECTION_ID) return showDescriptionSection;
-    return linkedLists.some(s => s.id === id);
-  });
+  // Check if a section should be visible in the reorder UI
+  const isSectionVisible = (sectionId: string): boolean => {
+    if (sectionId === DETAILS_SECTION_ID) return true;
+    if (sectionId === DESCRIPTION_SECTION_ID) return showDescriptionSection;
+    return linkedLists.some(s => s.id === sectionId);
+  };
 
   return (
   <>
@@ -530,7 +530,10 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
             Drag to reorder sections. Add linked lists to show related data.
           </Text>
 
-          {visibleSections.map((sectionId, index) => {
+          {sectionOrder.map((sectionId, index) => {
+            // Skip invisible sections but keep indices aligned with sectionOrder
+            if (!isSectionVisible(sectionId)) return null;
+
             const isLinkedList = isLinkedListSection(sectionId);
             const linkedList = isLinkedList ? getLinkedListById(sectionId) : null;
 
