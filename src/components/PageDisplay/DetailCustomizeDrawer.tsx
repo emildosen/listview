@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   makeStyles,
   tokens,
@@ -149,14 +149,6 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground3,
     borderRadius: tokens.borderRadiusMedium,
   },
-  footer: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-    gap: '8px',
-    padding: '16px 0',
-    borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
-    marginTop: 'auto',
-  },
 });
 
 interface DetailCustomizeDrawerProps {
@@ -169,10 +161,11 @@ interface DetailCustomizeDrawerProps {
   titleColumn?: string;
   open: boolean;
   onClose: () => void;
-  onSave: (config: DetailLayoutConfig, relatedSections?: RelatedSection[]) => Promise<void>;
+  // Called immediately on every change for real-time updates
+  onChange: (config: DetailLayoutConfig, relatedSections?: RelatedSection[]) => void;
 }
 
-function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleColumn: titleColumnProp, open, onClose, onSave }: DetailCustomizeDrawerProps) {
+function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleColumn: titleColumnProp, open, onClose, onChange }: DetailCustomizeDrawerProps) {
   const styles = useStyles();
 
   // Get display columns from either source
@@ -290,6 +283,23 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
   const [flyoutOpen, setFlyoutOpen] = useState(false);
   const [editingLinkedList, setEditingLinkedList] = useState<RelatedSection | null>(null);
 
+  // Track if this is the initial mount (to avoid triggering onChange on mount)
+  const isInitialMount = useRef(true);
+
+  // Auto-save effect: call onChange immediately when any state changes
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    // Call onChange with current state
+    onChange(
+      { columnSettings, sectionOrder },
+      linkedLists
+    );
+  }, [columnSettings, linkedLists, sectionOrder, onChange]);
+
   const handleColumnVisibilityChange = useCallback((internalName: string, visible: boolean) => {
     setColumnSettings(prev => prev.map(s =>
       s.internalName === internalName ? { ...s, visible } : s
@@ -374,18 +384,6 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
     });
     setFlyoutOpen(false);
   }, []);
-
-  const handleSave = async () => {
-    // Check if linked lists changed
-    const listsChanged = JSON.stringify(linkedLists) !== JSON.stringify(existingLinkedLists);
-    await onSave(
-      {
-        columnSettings,
-        sectionOrder,
-      },
-      listsChanged ? linkedLists : undefined
-    );
-  };
 
   // Get display name for a column
   const getColumnDisplayName = (internalName: string): string => {
@@ -581,16 +579,6 @@ function DetailCustomizeDrawer({ page, listDetailConfig, columnMetadata, titleCo
             style={{ alignSelf: 'flex-start', marginTop: '4px' }}
           >
             Add Linked List
-          </Button>
-        </div>
-
-        {/* Footer */}
-        <div className={styles.footer}>
-          <Button appearance="secondary" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button appearance="primary" onClick={handleSave}>
-            Save
           </Button>
         </div>
       </DrawerBody>

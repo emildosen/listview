@@ -405,8 +405,8 @@ function UnifiedDetailModalContent({
     }
   };
 
-  // Handle customize save
-  const handleSaveConfig = async (config: DetailLayoutConfig, relatedSections?: RelatedSection[]) => {
+  // Handle real-time config changes from customize drawer
+  const handleConfigChange = useCallback((config: DetailLayoutConfig, relatedSections?: RelatedSection[]) => {
     if (!listDetailConfig) return;
 
     const updatedConfig: ListDetailConfig = {
@@ -415,10 +415,11 @@ function UnifiedDetailModalContent({
       relatedSections: relatedSections ?? listDetailConfig.relatedSections,
     };
 
-    await saveListDetailConfig(updatedConfig);
+    // Update local state immediately for real-time preview
     setListDetailConfig(updatedConfig);
-    setCustomizeOpen(false);
-  };
+    // Persist changes in background
+    saveListDetailConfig(updatedConfig);
+  }, [listDetailConfig, saveListDetailConfig]);
 
   // Get stat value as string (for StatBox)
   const getStatValue = (fieldName: string, value: unknown): string => {
@@ -659,7 +660,7 @@ function UnifiedDetailModalContent({
         titleColumn={titleColumn}
         open={customizeOpen}
         onClose={() => setCustomizeOpen(false)}
-        onSave={handleSaveConfig}
+        onChange={handleConfigChange}
       />
     </>
   );
