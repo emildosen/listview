@@ -106,6 +106,41 @@ function ensureTinyMCEGlobalStyles() {
     .tox-tinymce-aux {
       z-index: 1000001 !important;
     }
+
+    /* Compact toolbar styling */
+    .tox .tox-toolbar,
+    .tox .tox-toolbar__overflow,
+    .tox .tox-toolbar__primary {
+      background: none !important;
+      padding: 2px 4px !important;
+    }
+
+    .tox .tox-tbtn {
+      height: 26px !important;
+      width: 26px !important;
+      margin: 0 !important;
+    }
+
+    .tox .tox-tbtn svg {
+      width: 16px !important;
+      height: 16px !important;
+    }
+
+    .tox .tox-split-button {
+      height: 26px !important;
+    }
+
+    .tox .tox-tbtn--bespoke {
+      width: auto !important;
+    }
+
+    .tox .tox-toolbar-overlord {
+      padding: 0 !important;
+    }
+
+    .tox .tox-toolbar__group {
+      padding: 0 4px !important;
+    }
   `;
   document.head.appendChild(style);
 }
