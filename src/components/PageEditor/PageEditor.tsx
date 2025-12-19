@@ -179,6 +179,7 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase500,
     fontWeight: tokens.fontWeightSemibold,
     marginBottom: '4px',
+    display: 'block',
   },
   helperText: {
     fontSize: tokens.fontSizeBase200,
