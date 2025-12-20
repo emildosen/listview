@@ -699,7 +699,7 @@ function UnifiedDetailModalContent({
                           onStartEdit={() => setEditingField(col.internalName)}
                           onCancelEdit={(field) => {
                             // Only clear if no field specified or if it matches current editing field
-                            if (!field || editingField === field) setEditingField(null);
+                            setEditingField(current => (!field || current === field) ? null : current);
                           }}
                           onSave={handleSaveField}
                           onMouseEnter={() => setHoveredField(col.internalName)}
@@ -743,7 +743,7 @@ function UnifiedDetailModalContent({
                               onStartEdit={() => setEditingField(col.internalName)}
                               onCancelEdit={(field) => {
                                 // Only clear if no field specified or if it matches current editing field
-                                if (!field || editingField === field) setEditingField(null);
+                                setEditingField(current => (!field || current === field) ? null : current);
                               }}
                               onSave={handleSaveField}
                               onMouseEnter={() => setHoveredField(col.internalName)}
