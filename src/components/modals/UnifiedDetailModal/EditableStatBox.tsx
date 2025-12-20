@@ -94,6 +94,22 @@ const useStyles = makeStyles({
     width: '100%',
     minWidth: '120px',
   },
+  editRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  cancelButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    color: tokens.colorNeutralForeground3,
+    flexShrink: 0,
+    '&:hover': {
+      color: tokens.colorNeutralForeground1,
+    },
+  },
 });
 
 interface EditableStatBoxProps {
@@ -392,7 +408,17 @@ export function EditableStatBox({
       </div>
       {isEditing ? (
         <div className={styles.editContainer}>
-          {renderEditComponent()}
+          <div className={styles.editRow}>
+            {renderEditComponent()}
+            <DismissCircleRegular
+              className={styles.cancelButton}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCancelEdit();
+              }}
+              title="Cancel (Esc)"
+            />
+          </div>
         </div>
       ) : (
         <div className={styles.valueRow}>

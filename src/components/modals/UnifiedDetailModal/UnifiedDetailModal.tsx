@@ -1008,6 +1008,7 @@ function DetailFieldEdit({
       error={error}
       readOnly={isReadOnly}
       onStartEdit={onStartEdit}
+      onCancel={onCancelEdit}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClearError={onClearError}
