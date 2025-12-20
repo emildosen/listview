@@ -412,7 +412,8 @@ export function EditableStatBox({
             {renderEditComponent()}
             <DismissCircleRegular
               className={styles.cancelButton}
-              onClick={(e) => {
+              onMouseDown={(e) => {
+                e.preventDefault(); // Prevent blur from firing on the input
                 e.stopPropagation();
                 onCancelEdit();
               }}
