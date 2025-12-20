@@ -128,7 +128,7 @@ interface EditableStatBoxProps {
   lookupOptions: Record<string, LookupOption[]>;
   setLookupOptions: React.Dispatch<React.SetStateAction<Record<string, LookupOption[]>>>;
   onStartEdit: () => void;
-  onCancelEdit: () => void;
+  onCancelEdit: (fieldName?: string) => void;
   onSave: (fieldName: string, value: unknown) => Promise<void>;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -232,7 +232,8 @@ export function EditableStatBox({
       // Use directly passed value if provided, otherwise use ref (avoids race condition)
       const valueToSave = directValue !== undefined ? directValue : editValueRef.current;
       await onSave(fieldName, valueToSave);
-      onCancelEdit();
+      // Only close if this field is still being edited (user may have clicked another field)
+      onCancelEdit(fieldName);
     } catch {
       // Error is handled in parent
     }

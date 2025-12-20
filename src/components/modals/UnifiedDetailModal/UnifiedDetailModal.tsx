@@ -697,7 +697,10 @@ function UnifiedDetailModalContent({
                           lookupOptions={lookupOptions}
                           setLookupOptions={setLookupOptions}
                           onStartEdit={() => setEditingField(col.internalName)}
-                          onCancelEdit={() => setEditingField(null)}
+                          onCancelEdit={(field) => {
+                            // Only clear if no field specified or if it matches current editing field
+                            if (!field || editingField === field) setEditingField(null);
+                          }}
                           onSave={handleSaveField}
                           onMouseEnter={() => setHoveredField(col.internalName)}
                           onMouseLeave={() => setHoveredField(null)}
@@ -738,7 +741,10 @@ function UnifiedDetailModalContent({
                               lookupOptions={lookupOptions}
                               setLookupOptions={setLookupOptions}
                               onStartEdit={() => setEditingField(col.internalName)}
-                              onCancelEdit={() => setEditingField(null)}
+                              onCancelEdit={(field) => {
+                                // Only clear if no field specified or if it matches current editing field
+                                if (!field || editingField === field) setEditingField(null);
+                              }}
                               onSave={handleSaveField}
                               onMouseEnter={() => setHoveredField(col.internalName)}
                               onMouseLeave={() => setHoveredField(null)}
@@ -819,7 +825,7 @@ interface DetailFieldEditProps {
   lookupOptions: Record<string, LookupOption[]>;
   setLookupOptions: React.Dispatch<React.SetStateAction<Record<string, LookupOption[]>>>;
   onStartEdit: () => void;
-  onCancelEdit: () => void;
+  onCancelEdit: (fieldName?: string) => void;
   onSave: (fieldName: string, value: unknown) => Promise<void>;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -883,7 +889,8 @@ function DetailFieldEdit({
       // Use directly passed value if provided (avoids race condition with state updates)
       const valueToSave = directValue !== undefined ? directValue : editValue;
       await onSave(fieldName, valueToSave);
-      onCancelEdit();
+      // Only close if this field is still being edited (user may have clicked another field)
+      onCancelEdit(fieldName);
     } catch {
       // Error is handled in parent
     }
