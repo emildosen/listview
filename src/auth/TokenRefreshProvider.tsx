@@ -2,13 +2,17 @@ import { useEffect, useRef, useCallback, useState, type ReactNode } from 'react'
 import { useIsAuthenticated, useMsal } from '@azure/msal-react';
 import { InteractionRequiredAuthError } from '@azure/msal-browser';
 import { graphScopes, getSharePointScopes } from './msalConfig';
+import { useAuthError } from '../contexts/AuthErrorContext';
 
 // Refresh tokens 15 minutes before they expire
 // Access tokens typically expire in 1 hour, so refresh every 45 minutes
 const TOKEN_REFRESH_INTERVAL_MS = 45 * 60 * 1000; // 45 minutes
 
-// Also refresh shortly after the app becomes visible again (after being in background)
-const VISIBILITY_REFRESH_DELAY_MS = 5000; // 5 seconds after becoming visible
+// Force refresh if the tab has been hidden for longer than this
+const LONG_INACTIVITY_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+// Delay before refreshing after visibility change (avoid rapid tab switches)
+const VISIBILITY_REFRESH_DELAY_MS = 2000; // 2 seconds
 
 // LocalStorage key for SharePoint hostname (must match SettingsContext)
 const HOSTNAME_STORAGE_KEY = 'listview-sharepoint-hostname';
@@ -24,15 +28,17 @@ interface TokenRefreshProviderProps {
  * Features:
  * - Refreshes tokens every 45 minutes (before 1-hour access token expiry)
  * - Refreshes when the browser tab becomes visible after being hidden
+ * - Forces refresh after long inactivity (> 30 minutes)
  * - Handles both Microsoft Graph and SharePoint tokens
- * - Reads SharePoint hostname from localStorage (set by SettingsContext)
- * - Gracefully handles token refresh failures
+ * - Shows session expired modal when token refresh fails
  */
 export function TokenRefreshProvider({ children }: TokenRefreshProviderProps) {
   const isAuthenticated = useIsAuthenticated();
   const { instance, accounts } = useMsal();
+  const { setSessionExpired } = useAuthError();
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastRefreshRef = useRef<number>(0);
+  const lastRefreshRef = useRef<number>(Date.now());
+  const lastVisibleRef = useRef<number>(Date.now());
 
   // Track SharePoint hostname from localStorage
   const [sharePointHostname, setSharePointHostname] = useState<string | null>(
@@ -101,6 +107,8 @@ export function TokenRefreshProvider({ children }: TokenRefreshProviderProps) {
 
       console.debug('[TokenRefresh] Tokens refreshed successfully');
     } catch (error) {
+      console.warn('[TokenRefresh] Silent token refresh failed:', error);
+
       if (error instanceof InteractionRequiredAuthError) {
         // Token refresh failed and user interaction is required
         // This typically means the refresh token is expired or revoked
@@ -112,17 +120,37 @@ export function TokenRefreshProvider({ children }: TokenRefreshProviderProps) {
             scopes: graphScopes,
             account,
           });
+
+          // Also refresh SharePoint token if needed
+          if (currentHostname) {
+            const spScopes = getSharePointScopes(currentHostname);
+            await instance.acquireTokenPopup({
+              scopes: spScopes,
+              account,
+            });
+          }
+
           console.info('[TokenRefresh] Token refreshed via popup');
         } catch (popupError) {
           console.error('[TokenRefresh] Failed to refresh token via popup:', popupError);
-          // At this point, the user will need to sign in again when they try to use the app
-          // The existing error handling in graphClient.ts will handle this
+          // Show session expired modal
+          setSessionExpired('Your SharePoint session has expired. Please reload the app to sign in again.');
         }
       } else {
-        console.error('[TokenRefresh] Token refresh failed:', error);
+        // Check if this is a token expiration error
+        const errorStr = String(error);
+        if (
+          errorStr.includes('Invalid JWT') ||
+          errorStr.includes('token is expired') ||
+          errorStr.includes('Token has expired')
+        ) {
+          setSessionExpired('Your SharePoint session has expired. Please reload the app to sign in again.');
+        } else {
+          console.error('[TokenRefresh] Token refresh failed:', error);
+        }
       }
     }
-  }, [instance, accounts]);
+  }, [instance, accounts, setSessionExpired]);
 
   // Set up periodic token refresh
   useEffect(() => {
@@ -151,7 +179,7 @@ export function TokenRefreshProvider({ children }: TokenRefreshProviderProps) {
     };
   }, [isAuthenticated, accounts.length, refreshTokens]);
 
-  // Refresh tokens when the page becomes visible (user returns to the tab)
+  // Handle visibility changes - refresh when returning to tab
   useEffect(() => {
     if (!isAuthenticated) {
       return;
@@ -159,12 +187,27 @@ export function TokenRefreshProvider({ children }: TokenRefreshProviderProps) {
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
+        const now = Date.now();
+        const timeSinceLastVisible = now - lastVisibleRef.current;
+        const timeSinceLastRefresh = now - lastRefreshRef.current;
+
+        console.debug('[TokenRefresh] Tab became visible', {
+          timeSinceLastVisible: Math.round(timeSinceLastVisible / 1000) + 's',
+          timeSinceLastRefresh: Math.round(timeSinceLastRefresh / 1000) + 's',
+        });
+
+        // Force refresh if we've been away for a long time
+        const shouldForceRefresh = timeSinceLastVisible > LONG_INACTIVITY_THRESHOLD_MS;
+
         // Delay slightly to avoid refreshing during rapid tab switches
         setTimeout(() => {
           if (document.visibilityState === 'visible') {
-            refreshTokens();
+            refreshTokens(shouldForceRefresh);
           }
         }, VISIBILITY_REFRESH_DELAY_MS);
+      } else {
+        // Tab is becoming hidden, record the time
+        lastVisibleRef.current = Date.now();
       }
     };
 

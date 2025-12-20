@@ -25,7 +25,7 @@ import {
 } from '@fluentui/react-icons';
 import { getListItems, isSharePointUrl, type GraphListColumn, type GraphListItem } from '../../../auth/graphClient';
 import { updateListItem, deleteListItem, createSPClient } from '../../../services/sharepoint';
-import type { PageDefinition, PageColumn, DetailLayoutConfig, ListDetailConfig, RelatedSection } from '../../../types/page';
+import type { PageDefinition, PageColumn, DetailLayoutConfig, DetailColumnSetting, ListDetailConfig, RelatedSection } from '../../../types/page';
 import { useSettings } from '../../../contexts/SettingsContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { ModalNavigationProvider, useModalNavigation, type NavigationEntry } from './ModalNavigationContext';
@@ -38,7 +38,7 @@ import { InlineEditDate, formatDateForInput, formatDateTimeForInput, formatDateF
 import { InlineEditBoolean } from './InlineEditBoolean';
 import { DescriptionField } from './DescriptionField';
 import { RelatedSectionView } from './RelatedSectionView';
-import StatBox from '../../PageDisplay/StatBox';
+import { EditableStatBox } from './EditableStatBox';
 import DetailCustomizeDrawer from '../../PageDisplay/DetailCustomizeDrawer';
 import { SharePointLink } from '../../common/SharePointLink';
 import { useListFormConfig } from '../../../hooks/useListFormConfig';
@@ -94,7 +94,7 @@ const useStyles = makeStyles({
     display: 'flex',
     flexWrap: 'wrap',
     gap: '8px',
-    marginTop: '10px',
+    marginTop: '15px',
   },
   detailsCard: {
     padding: '16px',
@@ -475,15 +475,24 @@ function UnifiedDetailModalContent({
           }));
 
         // Update detailLayout.columnSettings - remove deleted, add new with visible: false
+        // Deduplicate by internalName (keep first occurrence to preserve order)
         const existingSettings = listDetailConfig.detailLayout?.columnSettings ?? [];
-        const updatedColumnSettings = existingSettings.filter(s =>
-          freshColumnNames.has(s.internalName)
-        );
-        const newColumnSettings = newColumns.map(c => ({
-          internalName: c.internalName,
-          visible: false, // New columns not selected by default
-          displayStyle: 'list' as const,
-        }));
+        const seenColumnNames = new Set<string>();
+        const updatedColumnSettings = existingSettings.filter(s => {
+          if (!freshColumnNames.has(s.internalName) || seenColumnNames.has(s.internalName)) {
+            return false;
+          }
+          seenColumnNames.add(s.internalName);
+          return true;
+        });
+        // Only add columns that aren't already in columnSettings
+        const newColumnSettings = newColumns
+          .filter(c => !seenColumnNames.has(c.internalName))
+          .map(c => ({
+            internalName: c.internalName,
+            visible: false, // New columns not selected by default
+            displayStyle: 'list' as const,
+          }));
 
         const updatedConfig: ListDetailConfig = {
           ...listDetailConfig,
@@ -671,10 +680,35 @@ function UnifiedDetailModalContent({
                     {statColumns.map(col => {
                       const value = currentItem.fields[col.internalName];
                       return (
-                        <StatBox
+                        <EditableStatBox
                           key={col.internalName}
+                          fieldName={col.internalName}
                           label={getDisplayName(col.internalName)}
-                          value={getStatValue(col.internalName, value)}
+                          value={value}
+                          displayValue={getStatValue(col.internalName, value)}
+                          formField={getFormField(col.internalName)}
+                          columnMetadata={getColumnMetadata(col.internalName)}
+                          isEditing={editingField === col.internalName}
+                          isHovered={hoveredField === col.internalName}
+                          isSaving={savingFields.has(col.internalName)}
+                          error={fieldErrors[col.internalName] ?? null}
+                          siteId={currentSiteId}
+                          getLookupOptions={getLookupOptions}
+                          lookupOptions={lookupOptions}
+                          setLookupOptions={setLookupOptions}
+                          onStartEdit={() => setEditingField(col.internalName)}
+                          onCancelEdit={(field) => {
+                            // Only clear if no field specified or if it matches current editing field
+                            setEditingField(current => (!field || current === field) ? null : current);
+                          }}
+                          onSave={handleSaveField}
+                          onMouseEnter={() => setHoveredField(col.internalName)}
+                          onMouseLeave={() => setHoveredField(null)}
+                          onClearError={() => setFieldErrors(prev => {
+                            const next = { ...prev };
+                            delete next[col.internalName];
+                            return next;
+                          })}
                         />
                       );
                     })}
@@ -707,7 +741,10 @@ function UnifiedDetailModalContent({
                               lookupOptions={lookupOptions}
                               setLookupOptions={setLookupOptions}
                               onStartEdit={() => setEditingField(col.internalName)}
-                              onCancelEdit={() => setEditingField(null)}
+                              onCancelEdit={(field) => {
+                                // Only clear if no field specified or if it matches current editing field
+                                setEditingField(current => (!field || current === field) ? null : current);
+                              }}
                               onSave={handleSaveField}
                               onMouseEnter={() => setHoveredField(col.internalName)}
                               onMouseLeave={() => setHoveredField(null)}
@@ -730,6 +767,7 @@ function UnifiedDetailModalContent({
                     return (
                       <DescriptionField
                         key={sectionId}
+                        label={getDisplayName(descriptionColumn.internalName)}
                         value={String(currentItem.fields[descriptionColumn.internalName] ?? '')}
                         isRichText={getColumnMetadata(descriptionColumn.internalName)?.text?.textType === 'richText'}
                         isSaving={savingFields.has(descriptionColumn.internalName)}
@@ -787,7 +825,7 @@ interface DetailFieldEditProps {
   lookupOptions: Record<string, LookupOption[]>;
   setLookupOptions: React.Dispatch<React.SetStateAction<Record<string, LookupOption[]>>>;
   onStartEdit: () => void;
-  onCancelEdit: () => void;
+  onCancelEdit: (fieldName?: string) => void;
   onSave: (fieldName: string, value: unknown) => Promise<void>;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -851,7 +889,8 @@ function DetailFieldEdit({
       // Use directly passed value if provided (avoids race condition with state updates)
       const valueToSave = directValue !== undefined ? directValue : editValue;
       await onSave(fieldName, valueToSave);
-      onCancelEdit();
+      // Only close if this field is still being edited (user may have clicked another field)
+      onCancelEdit(fieldName);
     } catch {
       // Error is handled in parent
     }
@@ -976,6 +1015,7 @@ function DetailFieldEdit({
       error={error}
       readOnly={isReadOnly}
       onStartEdit={onStartEdit}
+      onCancel={onCancelEdit}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClearError={onClearError}
@@ -1029,40 +1069,37 @@ function getEffectiveLayoutConfig(
   displayColumns: PageColumn[],
   relatedSections: RelatedSection[]
 ): DetailLayoutConfig {
-  const defaultSettings = displayColumns.map(col => ({
-    internalName: col.internalName,
-    visible: true,
-    displayStyle: 'list' as const,
-  }));
-
   const linkedListIds = relatedSections.map(s => s.id);
   const defaultSectionOrder = [DETAILS_SECTION_ID, DESCRIPTION_SECTION_ID, ...linkedListIds];
 
-  if (!existingLayout) {
-    return {
-      columnSettings: defaultSettings,
-      sectionOrder: defaultSectionOrder,
-    };
+  // Build a map of existing settings for quick lookup
+  const existingSettingsMap = new Map<string, DetailColumnSetting>();
+  if (existingLayout?.columnSettings) {
+    for (const setting of existingLayout.columnSettings) {
+      // Only keep first occurrence (deduplication)
+      if (!existingSettingsMap.has(setting.internalName)) {
+        existingSettingsMap.set(setting.internalName, setting);
+      }
+    }
   }
 
-  const validColumnNames = new Set(displayColumns.map(c => c.internalName));
-  const existingNames = new Set(existingLayout.columnSettings.map(s => s.internalName));
-
-  const existingSettings = existingLayout.columnSettings.filter(s =>
-    validColumnNames.has(s.internalName)
-  );
-
-  const newColumns = displayColumns
-    .filter(col => !existingNames.has(col.internalName))
-    .map(col => ({
+  // Build column settings based on displayColumns, using existing settings where available
+  const columnSettings: DetailColumnSetting[] = displayColumns.map(col => {
+    const existing = existingSettingsMap.get(col.internalName);
+    if (existing) {
+      return existing;
+    }
+    // Default settings for columns not in existing config
+    return {
       internalName: col.internalName,
       visible: true,
       displayStyle: 'list' as const,
-    }));
+    };
+  });
 
   // Build section order
   let sectionOrder: string[];
-  if (existingLayout.sectionOrder) {
+  if (existingLayout?.sectionOrder) {
     // Use new sectionOrder, validate and merge
     const validIds = new Set([DETAILS_SECTION_ID, DESCRIPTION_SECTION_ID, ...linkedListIds]);
     sectionOrder = existingLayout.sectionOrder.filter(id => validIds.has(id));
@@ -1080,7 +1117,7 @@ function getEffectiveLayoutConfig(
       const detailsIdx = sectionOrder.indexOf(DETAILS_SECTION_ID);
       sectionOrder.splice(detailsIdx + 1, 0, DESCRIPTION_SECTION_ID);
     }
-  } else if (existingLayout.relatedSectionOrder) {
+  } else if (existingLayout?.relatedSectionOrder) {
     // Legacy: convert relatedSectionOrder to sectionOrder
     const validLinkedListIds = existingLayout.relatedSectionOrder.filter(id =>
       linkedListIds.includes(id)
@@ -1092,7 +1129,7 @@ function getEffectiveLayoutConfig(
   }
 
   return {
-    columnSettings: [...existingSettings, ...newColumns],
+    columnSettings,
     sectionOrder,
   };
 }

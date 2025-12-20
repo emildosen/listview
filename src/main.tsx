@@ -5,6 +5,8 @@ import './index.css';
 import App from './App.tsx';
 import { msalConfig } from './auth/msalConfig';
 import { TokenRefreshProvider } from './auth/TokenRefreshProvider';
+import { AuthErrorProvider } from './contexts/AuthErrorContext';
+import { SessionExpiredModal } from './components/modals/SessionExpiredModal';
 
 const msalInstance = new PublicClientApplication(msalConfig);
 
@@ -23,10 +25,13 @@ msalInstance.initialize().then(() => {
   });
 
   createRoot(document.getElementById('root')!).render(
-    <MsalProvider instance={msalInstance}>
-      <TokenRefreshProvider>
-        <App />
-      </TokenRefreshProvider>
-    </MsalProvider>
+    <AuthErrorProvider>
+      <MsalProvider instance={msalInstance}>
+        <TokenRefreshProvider>
+          <App />
+          <SessionExpiredModal />
+        </TokenRefreshProvider>
+      </MsalProvider>
+    </AuthErrorProvider>
   );
 });

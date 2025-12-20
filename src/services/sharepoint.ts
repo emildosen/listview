@@ -11,6 +11,94 @@ import { getSharePointToken } from '../auth/graphClient';
 import type { Queryable } from '@pnp/queryable';
 import type { PageDefinition, PageItem } from '../types/page';
 
+// Global callback for auth errors (set by AuthErrorContext)
+let onAuthError: ((message: string) => void) | null = null;
+
+/**
+ * Register a callback to be called when authentication errors occur.
+ * This is set by the AuthErrorContext to show the session expired modal.
+ */
+export function registerAuthErrorCallback(callback: (message: string) => void): void {
+  onAuthError = callback;
+}
+
+/**
+ * Unregister the auth error callback
+ */
+export function unregisterAuthErrorCallback(): void {
+  onAuthError = null;
+}
+
+/**
+ * Check if an error indicates an expired or invalid token
+ */
+function isTokenExpiredError(error: unknown): boolean {
+  if (!error) return false;
+
+  const errorStr = String(error);
+  const errorMessage = error instanceof Error ? error.message : '';
+
+  // Check error response body for JSON error
+  if (typeof error === 'object' && error !== null) {
+    const err = error as Record<string, unknown>;
+    // Check for error_description in response
+    if (typeof err.error_description === 'string') {
+      if (
+        err.error_description.includes('Invalid JWT') ||
+        err.error_description.includes('token is expired') ||
+        err.error_description.includes('Token has expired')
+      ) {
+        return true;
+      }
+    }
+    // Check for nested response body
+    if (err.response && typeof err.response === 'object') {
+      const response = err.response as Record<string, unknown>;
+      if (typeof response.error_description === 'string') {
+        if (response.error_description.includes('Invalid JWT') ||
+            response.error_description.includes('token is expired')) {
+          return true;
+        }
+      }
+    }
+  }
+
+  const expiredPatterns = [
+    'Invalid JWT token',
+    'token is expired',
+    'Token has expired',
+    'access_token is expired',
+    'AADSTS700024',
+    'AADSTS50173',
+    'AADSTS500133',
+  ];
+
+  for (const pattern of expiredPatterns) {
+    if (errorStr.includes(pattern) || errorMessage.includes(pattern)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Wrap an async function to catch token errors and show the modal
+ */
+async function withTokenErrorHandling<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (isTokenExpiredError(error)) {
+      console.error('[SharePoint] Token expired error detected:', error);
+      if (onAuthError) {
+        onAuthError('Your SharePoint session has expired. Please reload the app to sign in again.');
+      }
+    }
+    throw error;
+  }
+}
+
 export const DEFAULT_SETTINGS_SITE_PATH = '/sites/ListView';
 const SETTINGS_LIST_NAME = 'LV-Settings';
 const PAGES_LIST_NAME = 'LV-Pages';
@@ -103,7 +191,7 @@ export async function getSite(
 
   try {
     const sp = await createSPClient(msalInstance, account, siteUrl);
-    const web = await sp.web.select('Id', 'Title', 'Url')();
+    const web = await withTokenErrorHandling(() => sp.web.select('Id', 'Title', 'Url')());
 
     return {
       id: web.Id,
@@ -186,9 +274,11 @@ export async function findSettingsList(
   siteUrl: string
 ): Promise<SharePointList | null> {
   try {
-    const list = await sp.web.lists.getByTitle(SETTINGS_LIST_NAME)
-      .select('Id', 'Title', 'RootFolder/ServerRelativeUrl')
-      .expand('RootFolder')();
+    const list = await withTokenErrorHandling(() =>
+      sp.web.lists.getByTitle(SETTINGS_LIST_NAME)
+        .select('Id', 'Title', 'RootFolder/ServerRelativeUrl')
+        .expand('RootFolder')()
+    );
 
     return {
       id: list.Id,
@@ -260,10 +350,12 @@ export async function getSettings(
   sp: SPFI
 ): Promise<Record<string, string>> {
   try {
-    const items = await sp.web.lists
-      .getByTitle(SETTINGS_LIST_NAME)
-      .items
-      .select('SettingKey', 'SettingValue')();
+    const items = await withTokenErrorHandling(() =>
+      sp.web.lists
+        .getByTitle(SETTINGS_LIST_NAME)
+        .items
+        .select('SettingKey', 'SettingValue')()
+    );
 
     const settings: Record<string, string> = {};
     for (const item of items) {
@@ -469,10 +561,12 @@ export async function createPagesList(
  */
 export async function getPages(sp: SPFI): Promise<PageDefinition[]> {
   try {
-    const items: PageItem[] = await sp.web.lists
-      .getByTitle(PAGES_LIST_NAME)
-      .items
-      .select('Id', 'Title', 'PageConfig')();
+    const items: PageItem[] = await withTokenErrorHandling(() =>
+      sp.web.lists
+        .getByTitle(PAGES_LIST_NAME)
+        .items
+        .select('Id', 'Title', 'PageConfig')()
+    );
 
     return items.map((item) => {
       try {

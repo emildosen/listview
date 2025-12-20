@@ -54,6 +54,7 @@ interface DescriptionFieldProps {
   isSaving?: boolean;
   readOnly?: boolean;
   placeholder?: string;
+  label?: string;
   onSave: (value: string) => Promise<void>;
 }
 
@@ -63,6 +64,7 @@ export function DescriptionField({
   isSaving = false,
   readOnly = false,
   placeholder = 'Add a description...',
+  label = 'Description',
   onSave,
 }: DescriptionFieldProps) {
   const styles = useStyles();
@@ -146,7 +148,7 @@ export function DescriptionField({
   return (
     <div className={styles.container}>
       <div className={styles.labelContainer}>
-        <Text className={styles.label}>Description</Text>
+        <Text className={styles.label}>{label}</Text>
         <span className={styles.labelStatus}>{renderLabelStatus()}</span>
       </div>
       <div className={styles.editorWrapper}>

@@ -85,6 +85,23 @@ const useStyles = makeStyles({
   editIconVisible: {
     opacity: 1,
   },
+  editRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    flex: 1,
+  },
+  cancelButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    color: tokens.colorNeutralForeground3,
+    flexShrink: 0,
+    '&:hover': {
+      color: tokens.colorNeutralForeground1,
+    },
+  },
 });
 
 interface InlineEditFieldProps {
@@ -97,6 +114,7 @@ interface InlineEditFieldProps {
   children: ReactNode;
   editComponent: ReactNode;
   onStartEdit: () => void;
+  onCancel?: () => void;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
   onClearError: () => void;
@@ -112,6 +130,7 @@ export function InlineEditField({
   children,
   editComponent,
   onStartEdit,
+  onCancel,
   onMouseEnter,
   onMouseLeave,
   onClearError,
@@ -211,7 +230,20 @@ export function InlineEditField({
         aria-label={readOnly ? undefined : `Edit ${label}`}
       >
         {isEditing ? (
-          editComponent
+          <div className={styles.editRow}>
+            {editComponent}
+            {onCancel && (
+              <DismissCircleRegular
+                className={styles.cancelButton}
+                onMouseDown={(e) => {
+                  e.preventDefault(); // Prevent blur from firing on the input
+                  e.stopPropagation();
+                  onCancel();
+                }}
+                title="Cancel (Esc)"
+              />
+            )}
+          </div>
         ) : (
           <>
             <span className={styles.value}>{children}</span>
