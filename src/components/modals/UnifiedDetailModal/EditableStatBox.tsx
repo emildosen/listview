@@ -94,6 +94,22 @@ const useStyles = makeStyles({
     width: '100%',
     minWidth: '120px',
   },
+  editRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  cancelButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    color: tokens.colorNeutralForeground3,
+    flexShrink: 0,
+    '&:hover': {
+      color: tokens.colorNeutralForeground1,
+    },
+  },
 });
 
 interface EditableStatBoxProps {
@@ -112,7 +128,7 @@ interface EditableStatBoxProps {
   lookupOptions: Record<string, LookupOption[]>;
   setLookupOptions: React.Dispatch<React.SetStateAction<Record<string, LookupOption[]>>>;
   onStartEdit: () => void;
-  onCancelEdit: () => void;
+  onCancelEdit: (fieldName?: string) => void;
   onSave: (fieldName: string, value: unknown) => Promise<void>;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
@@ -216,7 +232,8 @@ export function EditableStatBox({
       // Use directly passed value if provided, otherwise use ref (avoids race condition)
       const valueToSave = directValue !== undefined ? directValue : editValueRef.current;
       await onSave(fieldName, valueToSave);
-      onCancelEdit();
+      // Only close if this field is still being edited (user may have clicked another field)
+      onCancelEdit(fieldName);
     } catch {
       // Error is handled in parent
     }
@@ -392,7 +409,18 @@ export function EditableStatBox({
       </div>
       {isEditing ? (
         <div className={styles.editContainer}>
-          {renderEditComponent()}
+          <div className={styles.editRow}>
+            {renderEditComponent()}
+            <DismissCircleRegular
+              className={styles.cancelButton}
+              onMouseDown={(e) => {
+                e.preventDefault(); // Prevent blur from firing on the input
+                e.stopPropagation();
+                onCancelEdit();
+              }}
+              title="Cancel (Esc)"
+            />
+          </div>
         </div>
       ) : (
         <div className={styles.valueRow}>
