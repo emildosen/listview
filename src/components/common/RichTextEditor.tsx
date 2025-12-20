@@ -1,28 +1,35 @@
-import { useRef, useCallback, useEffect, useLayoutEffect } from 'react';
-import { Editor } from '@tinymce/tinymce-react';
-import { makeStyles, tokens, mergeClasses } from '@fluentui/react-components';
+import { useRef, useCallback, useEffect, useState } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import { BubbleMenu, FloatingMenu } from '@tiptap/react/menus';
+import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
+import Link from '@tiptap/extension-link';
+import { TextStyle } from '@tiptap/extension-text-style';
+import { Color } from '@tiptap/extension-color';
+import Highlight from '@tiptap/extension-highlight';
+import Underline from '@tiptap/extension-underline';
+import { Extension } from '@tiptap/core';
+import Suggestion from '@tiptap/suggestion';
+import { makeStyles, tokens, mergeClasses, Tooltip } from '@fluentui/react-components';
+import type { EditorState } from '@tiptap/pm/state';
+import {
+  AddRegular,
+  TextBoldRegular,
+  TextItalicRegular,
+  TextUnderlineRegular,
+  TextStrikethroughRegular,
+  LinkRegular,
+  TextHeader1Regular,
+  TextHeader2Regular,
+  TextBulletListLtrRegular,
+  TextNumberListLtrRegular,
+  TextParagraphRegular,
+  HighlightRegular,
+  DismissRegular,
+} from '@fluentui/react-icons';
 import { useTheme } from '../../contexts/ThemeContext';
-
-// Import TinyMCE core and required modules for self-hosted bundling
-import 'tinymce/tinymce';
-import 'tinymce/themes/silver';
-import 'tinymce/icons/default';
-import 'tinymce/models/dom';
-
-// Import plugins (no table/image for SP compatibility)
-import 'tinymce/plugins/lists';
-import 'tinymce/plugins/link';
-import 'tinymce/plugins/autolink';
-import 'tinymce/plugins/autoresize';
-import 'tinymce/plugins/charmap';
-import 'tinymce/plugins/emoticons';
-import 'tinymce/plugins/emoticons/js/emojis';
-
-// Import skins
-import 'tinymce/skins/ui/oxide/skin.min.css';
-import 'tinymce/skins/ui/oxide-dark/skin.min.css';
-
-import type { Editor as TinyMCEEditor } from 'tinymce';
+import type { Editor, Range } from '@tiptap/core';
+import type { ReactNode } from 'react';
 
 const useStyles = makeStyles({
   container: {
@@ -38,14 +45,6 @@ const useStyles = makeStyles({
     ':hover': {
       border: `1px solid ${tokens.colorNeutralStroke1Hover}`,
     },
-    // Style TinyMCE to match container
-    '& .tox-tinymce': {
-      border: 'none !important',
-      borderRadius: `${tokens.borderRadiusMedium} !important`,
-    },
-    '& .tox-editor-header': {
-      borderBottom: 'none !important',
-    },
   },
   containerDark: {
     backgroundColor: '#1a1a1a',
@@ -54,14 +53,226 @@ const useStyles = makeStyles({
       border: '1px solid #444444',
     },
   },
-  placeholder: {
+  editorContent: {
+    fontFamily: "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
+    fontSize: '14px',
+    lineHeight: '1.5',
+    padding: '12px 16px',
+    paddingLeft: '40px', // Space for floating + button
+    outline: 'none',
+    minHeight: 'var(--editor-min-height, 80px)',
+    maxHeight: '600px',
+    overflowY: 'auto',
+    color: tokens.colorNeutralForeground1,
+    '& .ProseMirror': {
+      outline: 'none',
+      minHeight: 'inherit',
+    },
+    '& .ProseMirror p': {
+      margin: '0 0 8px 0',
+    },
+    '& .ProseMirror p:last-child': {
+      marginBottom: 0,
+    },
+    '& .ProseMirror ul, & .ProseMirror ol': {
+      margin: '0 0 8px 0',
+      paddingLeft: '24px',
+    },
+    '& .ProseMirror a': {
+      color: '#0078d4',
+      textDecoration: 'none',
+      ':hover': {
+        textDecoration: 'underline',
+      },
+    },
+    '& .ProseMirror h1': {
+      fontSize: '1.5em',
+      fontWeight: 600,
+      margin: '0 0 12px 0',
+    },
+    '& .ProseMirror h2': {
+      fontSize: '1.25em',
+      fontWeight: 600,
+      margin: '0 0 10px 0',
+    },
+    '& .ProseMirror mark': {
+      backgroundColor: '#fff3bf',
+      borderRadius: '2px',
+      padding: '0 2px',
+    },
+    '& .ProseMirror p.is-editor-empty:first-child::before': {
+      content: 'attr(data-placeholder)',
+      float: 'left',
+      color: tokens.colorNeutralForeground4,
+      fontStyle: 'italic',
+      pointerEvents: 'none',
+      height: 0,
+    },
+  },
+  editorContentDark: {
+    color: '#ffffff',
+    '& .ProseMirror mark': {
+      backgroundColor: '#5c4800',
+    },
+  },
+  editorContentPlain: {
+    paddingLeft: '16px', // No space needed for + button in plain mode
+  },
+  bubbleMenu: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '2px',
+    padding: '4px',
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: tokens.borderRadiusMedium,
+    boxShadow: tokens.shadow16,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+  },
+  bubbleMenuDark: {
+    backgroundColor: '#2a2a2a',
+    border: '1px solid #444444',
+  },
+  bubbleButton: {
+    minWidth: '28px',
+    height: '28px',
+    padding: '4px',
+    borderRadius: tokens.borderRadiusSmall,
+    backgroundColor: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: tokens.colorNeutralForeground1,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground3,
+    },
+  },
+  bubbleButtonActive: {
+    backgroundColor: tokens.colorNeutralBackground3,
+    color: tokens.colorBrandForeground1,
+  },
+  bubbleButtonDark: {
+    color: '#ffffff',
+    ':hover': {
+      backgroundColor: '#3a3a3a',
+    },
+  },
+  bubbleButtonActiveDark: {
+    backgroundColor: '#3a3a3a',
+    color: '#60cdff',
+  },
+  floatingMenu: {
     position: 'absolute',
-    top: '12px',
-    left: '16px',
-    color: tokens.colorNeutralForeground4,
-    fontStyle: 'italic',
-    pointerEvents: 'none',
-    zIndex: 1,
+    left: '8px',
+    marginTop: '-2px',
+  },
+  plusButton: {
+    width: '24px',
+    height: '24px',
+    minWidth: '24px',
+    padding: 0,
+    borderRadius: tokens.borderRadiusSmall,
+    backgroundColor: 'transparent',
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: tokens.colorNeutralForeground3,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground3,
+      color: tokens.colorNeutralForeground1,
+    },
+  },
+  plusButtonDark: {
+    border: '1px solid #444444',
+    color: '#888888',
+    ':hover': {
+      backgroundColor: '#3a3a3a',
+      color: '#ffffff',
+    },
+  },
+  slashMenu: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: tokens.borderRadiusMedium,
+    boxShadow: tokens.shadow16,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    maxHeight: '300px',
+    overflowY: 'auto',
+    minWidth: '200px',
+    padding: '4px',
+    zIndex: 1000001,
+  },
+  slashMenuDark: {
+    backgroundColor: '#1a1a1a',
+    border: '1px solid #333333',
+  },
+  slashMenuItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '8px 12px',
+    cursor: 'pointer',
+    borderRadius: tokens.borderRadiusSmall,
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground3,
+    },
+  },
+  slashMenuItemDark: {
+    ':hover': {
+      backgroundColor: '#252525',
+    },
+  },
+  slashMenuItemActive: {
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  slashMenuItemActiveDark: {
+    backgroundColor: '#252525',
+  },
+  slashMenuItemIcon: {
+    width: '20px',
+    height: '20px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: tokens.colorNeutralForeground2,
+  },
+  slashMenuItemText: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  slashMenuItemTitle: {
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground1,
+  },
+  slashMenuItemDescription: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground3,
+  },
+  colorPicker: {
+    display: 'flex',
+    gap: '4px',
+    padding: '8px',
+    backgroundColor: tokens.colorNeutralBackground1,
+    borderRadius: tokens.borderRadiusMedium,
+    boxShadow: tokens.shadow16,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+  },
+  colorPickerDark: {
+    backgroundColor: '#2a2a2a',
+    border: '1px solid #444444',
+  },
+  colorSwatch: {
+    width: '20px',
+    height: '20px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    border: '1px solid rgba(0,0,0,0.1)',
+    ':hover': {
+      transform: 'scale(1.1)',
+    },
   },
 });
 
@@ -73,6 +284,211 @@ interface RichTextEditorProps {
   readOnly?: boolean;
   minHeight?: number;
   showToolbar?: boolean;
+}
+
+// Slash command items
+interface SlashCommandItem {
+  title: string;
+  description: string;
+  icon: ReactNode;
+  command: (editor: Editor) => void;
+}
+
+const slashCommands: SlashCommandItem[] = [
+  {
+    title: 'Text',
+    description: 'Plain text paragraph',
+    icon: <TextParagraphRegular />,
+    command: (editor) => editor.chain().focus().setParagraph().run(),
+  },
+  {
+    title: 'Heading 1',
+    description: 'Large heading',
+    icon: <TextHeader1Regular />,
+    command: (editor) => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+  },
+  {
+    title: 'Heading 2',
+    description: 'Medium heading',
+    icon: <TextHeader2Regular />,
+    command: (editor) => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+  },
+  {
+    title: 'Bullet List',
+    description: 'Unordered list',
+    icon: <TextBulletListLtrRegular />,
+    command: (editor) => editor.chain().focus().toggleBulletList().run(),
+  },
+  {
+    title: 'Numbered List',
+    description: 'Ordered list',
+    icon: <TextNumberListLtrRegular />,
+    command: (editor) => editor.chain().focus().toggleOrderedList().run(),
+  },
+];
+
+// Create slash command extension
+function createSlashCommandExtension(isDark: boolean) {
+  return Extension.create({
+    name: 'slashCommand',
+    addOptions() {
+      return {
+        suggestion: {
+          char: '/',
+          command: ({ editor, range, props }: { editor: Editor; range: Range; props: SlashCommandItem }) => {
+            props.command(editor);
+            editor.chain().focus().deleteRange(range).run();
+          },
+          items: ({ query }: { query: string }) => {
+            return slashCommands.filter((item) =>
+              item.title.toLowerCase().includes(query.toLowerCase())
+            );
+          },
+          render: () => {
+            let component: HTMLDivElement | null = null;
+            let selectedIndex = 0;
+            let items: SlashCommandItem[] = [];
+
+            const updateMenu = () => {
+              if (!component) return;
+
+              // Re-render the menu
+              const menuHtml = items.map((item, index) => `
+                <div class="slash-menu-item ${index === selectedIndex ? 'active' : ''}" data-index="${index}">
+                  <span class="slash-menu-icon"></span>
+                  <div class="slash-menu-text">
+                    <span class="slash-menu-title">${item.title}</span>
+                    <span class="slash-menu-desc">${item.description}</span>
+                  </div>
+                </div>
+              `).join('');
+              component.innerHTML = menuHtml;
+            };
+
+            return {
+              onStart: (props: { clientRect: () => DOMRect | null; items: SlashCommandItem[]; command: (item: SlashCommandItem) => void }) => {
+                items = props.items;
+                selectedIndex = 0;
+
+                component = document.createElement('div');
+                component.className = `slash-command-menu ${isDark ? 'dark' : ''}`;
+                component.style.cssText = `
+                  position: fixed;
+                  z-index: 1000001;
+                  background: ${isDark ? '#1a1a1a' : '#ffffff'};
+                  border: 1px solid ${isDark ? '#333333' : '#e0e0e0'};
+                  border-radius: 6px;
+                  box-shadow: 0 4px 16px rgba(0,0,0,0.16);
+                  min-width: 200px;
+                  max-height: 300px;
+                  overflow-y: auto;
+                  padding: 4px;
+                `;
+
+                const rect = props.clientRect?.();
+                if (rect) {
+                  component.style.left = `${rect.left}px`;
+                  component.style.top = `${rect.bottom + 4}px`;
+                }
+
+                // Add styles for menu items
+                const style = document.createElement('style');
+                style.textContent = `
+                  .slash-command-menu .slash-menu-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 8px 12px;
+                    cursor: pointer;
+                    border-radius: 4px;
+                  }
+                  .slash-command-menu .slash-menu-item:hover,
+                  .slash-command-menu .slash-menu-item.active {
+                    background: ${isDark ? '#252525' : '#f5f5f5'};
+                  }
+                  .slash-command-menu .slash-menu-text {
+                    display: flex;
+                    flex-direction: column;
+                  }
+                  .slash-command-menu .slash-menu-title {
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: ${isDark ? '#ffffff' : '#242424'};
+                  }
+                  .slash-command-menu .slash-menu-desc {
+                    font-size: 12px;
+                    color: ${isDark ? '#888888' : '#666666'};
+                  }
+                `;
+                document.head.appendChild(style);
+
+                updateMenu();
+
+                // Add click handlers
+                component.addEventListener('click', (e) => {
+                  const target = (e.target as HTMLElement).closest('.slash-menu-item');
+                  if (target) {
+                    const index = parseInt(target.getAttribute('data-index') || '0');
+                    props.command(items[index]);
+                  }
+                });
+
+                document.body.appendChild(component);
+              },
+              onUpdate: (props: { clientRect: () => DOMRect | null; items: SlashCommandItem[] }) => {
+                items = props.items;
+                selectedIndex = 0;
+                updateMenu();
+
+                const rect = props.clientRect?.();
+                if (rect && component) {
+                  component.style.left = `${rect.left}px`;
+                  component.style.top = `${rect.bottom + 4}px`;
+                }
+              },
+              onKeyDown: (props: { event: KeyboardEvent }) => {
+                if (props.event.key === 'ArrowUp') {
+                  selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+                  updateMenu();
+                  return true;
+                }
+                if (props.event.key === 'ArrowDown') {
+                  selectedIndex = (selectedIndex + 1) % items.length;
+                  updateMenu();
+                  return true;
+                }
+                if (props.event.key === 'Enter') {
+                  if (items[selectedIndex]) {
+                    // We need to trigger the command through the suggestion plugin
+                    return true;
+                  }
+                  return false;
+                }
+                if (props.event.key === 'Escape') {
+                  return true;
+                }
+                return false;
+              },
+              onExit: () => {
+                if (component) {
+                  component.remove();
+                  component = null;
+                }
+              },
+            };
+          },
+        },
+      };
+    },
+    addProseMirrorPlugins() {
+      return [
+        Suggestion({
+          editor: this.editor,
+          ...this.options.suggestion,
+        }),
+      ];
+    },
+  });
 }
 
 // Convert HTML to plain text
@@ -92,29 +508,11 @@ function plainTextToHtml(text: string): string {
   return text.replace(/\n/g, '<br>');
 }
 
-// Inject global styles for TinyMCE floating elements (color pickers, etc.)
-// These need high z-index to appear above Fluent UI Dialogs
-const TINYMCE_GLOBAL_STYLES_ID = 'tinymce-global-styles';
-
-function ensureTinyMCEGlobalStyles() {
-  if (document.getElementById(TINYMCE_GLOBAL_STYLES_ID)) return;
-
-  const style = document.createElement('style');
-  style.id = TINYMCE_GLOBAL_STYLES_ID;
-  style.textContent = `
-    /* TinyMCE floating elements (color pickers, menus, dialogs) need high z-index */
-    .tox-tinymce-aux {
-      z-index: 1000001 !important;
-    }
-
-    /* Compact toolbar */
-    .tox-toolbar__primary {
-      height: 32px !important;
-      margin-top: -7px !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
+// Highlight colors
+const highlightColors = [
+  '#fff3bf', '#ffd6d6', '#ffe0c2', '#d4edda', '#cce5ff',
+  '#e2d9f3', '#f8d7da', '#d1ecf1', '#fff3cd', '#e2e3e5',
+];
 
 export function RichTextEditor({
   value,
@@ -127,142 +525,317 @@ export function RichTextEditor({
 }: RichTextEditorProps) {
   const styles = useStyles();
   const { theme } = useTheme();
-  const editorRef = useRef<TinyMCEEditor | null>(null);
   const isDark = theme === 'dark';
   const lastExternalValue = useRef(value);
+  const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
 
-  // Ensure global styles are injected for TinyMCE floating elements
-  useLayoutEffect(() => {
-    ensureTinyMCEGlobalStyles();
-  }, []);
+  // Configure extensions based on mode
+  const extensions = [
+    StarterKit.configure({
+      heading: showToolbar ? { levels: [1, 2] } : false,
+      bulletList: showToolbar ? {} : false,
+      orderedList: showToolbar ? {} : false,
+    }),
+    Placeholder.configure({
+      placeholder,
+    }),
+    Link.configure({
+      openOnClick: false,
+      HTMLAttributes: {
+        target: '_blank',
+        rel: 'noopener noreferrer',
+      },
+    }),
+    TextStyle,
+    Color,
+    Highlight.configure({
+      multicolor: true,
+    }),
+    Underline,
+    ...(showToolbar ? [createSlashCommandExtension(isDark)] : []),
+  ];
 
-  // Update editor content when external value changes (e.g., from parent reset)
+  const editor = useEditor({
+    extensions,
+    content: showToolbar ? value : plainTextToHtml(value),
+    editable: !readOnly,
+    editorProps: {
+      attributes: {
+        class: 'tiptap-editor',
+      },
+    },
+    onBlur: ({ editor }) => {
+      const html = editor.getHTML();
+      const outputValue = showToolbar ? html : htmlToPlainText(html);
+
+      if (outputValue !== lastExternalValue.current) {
+        lastExternalValue.current = outputValue;
+        onChange(outputValue);
+      }
+
+      onBlur?.();
+    },
+  });
+
+  // Add keyboard shortcut for blur
   useEffect(() => {
-    if (editorRef.current && value !== lastExternalValue.current) {
+    if (!editor) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+        editor.commands.blur();
+      }
+    };
+
+    const editorElement = editor.view.dom;
+    editorElement.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      editorElement.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [editor]);
+
+  // Update editor content when external value changes
+  useEffect(() => {
+    if (editor && value !== lastExternalValue.current) {
       const displayValue = showToolbar ? value : plainTextToHtml(value);
-      editorRef.current.setContent(displayValue);
+      editor.commands.setContent(displayValue);
       lastExternalValue.current = value;
     }
-  }, [value, showToolbar]);
+  }, [value, editor, showToolbar]);
 
-  const handleBlur = useCallback(() => {
-    if (!editorRef.current) return;
+  const handleBubbleButtonClick = useCallback(
+    (action: () => void) => (e: React.MouseEvent) => {
+      e.preventDefault();
+      action();
+    },
+    []
+  );
 
-    const content = editorRef.current.getContent();
-    const outputValue = showToolbar ? content : htmlToPlainText(content);
+  const handleSetLink = useCallback(() => {
+    if (!editor) return;
 
-    // Only trigger onChange if value actually changed
-    if (outputValue !== lastExternalValue.current) {
-      lastExternalValue.current = outputValue;
-      onChange(outputValue);
+    const previousUrl = editor.getAttributes('link').href;
+    const url = window.prompt('Enter URL', previousUrl);
+
+    if (url === null) return;
+
+    if (url === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+    } else {
+      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
     }
+  }, [editor]);
 
-    onBlur?.();
-  }, [onChange, onBlur, showToolbar]);
+  const handleHighlightSelect = useCallback(
+    (color: string) => {
+      if (!editor) return;
+      editor.chain().focus().toggleHighlight({ color }).run();
+      setShowHighlightPicker(false);
+    },
+    [editor]
+  );
 
-  // Check if content is empty
-  const isEmpty = !value || value === '<p></p>' || value === '<p><br></p>';
+  const handlePlusMenuCommand = useCallback(
+    (item: SlashCommandItem) => {
+      if (!editor) return;
+      item.command(editor);
+      setShowPlusMenu(false);
+      editor.commands.focus();
+    },
+    [editor]
+  );
 
-  // Initial value for editor (only used on mount)
-  const initialValue = showToolbar ? value : plainTextToHtml(value);
+  if (!editor) {
+    return null;
+  }
 
   return (
     <div className={mergeClasses(styles.container, isDark && styles.containerDark)}>
-      {isEmpty && !readOnly && (
-        <span className={styles.placeholder}>{placeholder}</span>
+      {/* Bubble menu for text selection - only in rich text mode */}
+      {showToolbar && (
+        <BubbleMenu
+          editor={editor}
+          className={mergeClasses(styles.bubbleMenu, isDark && styles.bubbleMenuDark)}
+        >
+          <Tooltip content="Bold" relationship="label">
+            <button
+              type="button"
+              onClick={handleBubbleButtonClick(() => editor.chain().focus().toggleBold().run())}
+              className={mergeClasses(
+                styles.bubbleButton,
+                isDark && styles.bubbleButtonDark,
+                editor.isActive('bold') && styles.bubbleButtonActive,
+                editor.isActive('bold') && isDark && styles.bubbleButtonActiveDark
+              )}
+            >
+              <TextBoldRegular />
+            </button>
+          </Tooltip>
+          <Tooltip content="Italic" relationship="label">
+            <button
+              type="button"
+              onClick={handleBubbleButtonClick(() => editor.chain().focus().toggleItalic().run())}
+              className={mergeClasses(
+                styles.bubbleButton,
+                isDark && styles.bubbleButtonDark,
+                editor.isActive('italic') && styles.bubbleButtonActive,
+                editor.isActive('italic') && isDark && styles.bubbleButtonActiveDark
+              )}
+            >
+              <TextItalicRegular />
+            </button>
+          </Tooltip>
+          <Tooltip content="Underline" relationship="label">
+            <button
+              type="button"
+              onClick={handleBubbleButtonClick(() => editor.chain().focus().toggleUnderline().run())}
+              className={mergeClasses(
+                styles.bubbleButton,
+                isDark && styles.bubbleButtonDark,
+                editor.isActive('underline') && styles.bubbleButtonActive,
+                editor.isActive('underline') && isDark && styles.bubbleButtonActiveDark
+              )}
+            >
+              <TextUnderlineRegular />
+            </button>
+          </Tooltip>
+          <Tooltip content="Strikethrough" relationship="label">
+            <button
+              type="button"
+              onClick={handleBubbleButtonClick(() => editor.chain().focus().toggleStrike().run())}
+              className={mergeClasses(
+                styles.bubbleButton,
+                isDark && styles.bubbleButtonDark,
+                editor.isActive('strike') && styles.bubbleButtonActive,
+                editor.isActive('strike') && isDark && styles.bubbleButtonActiveDark
+              )}
+            >
+              <TextStrikethroughRegular />
+            </button>
+          </Tooltip>
+          <Tooltip content="Highlight" relationship="label">
+            <button
+              type="button"
+              onClick={handleBubbleButtonClick(() => setShowHighlightPicker(!showHighlightPicker))}
+              className={mergeClasses(
+                styles.bubbleButton,
+                isDark && styles.bubbleButtonDark,
+                editor.isActive('highlight') && styles.bubbleButtonActive,
+                editor.isActive('highlight') && isDark && styles.bubbleButtonActiveDark
+              )}
+            >
+              <HighlightRegular />
+            </button>
+          </Tooltip>
+          <Tooltip content="Link" relationship="label">
+            <button
+              type="button"
+              onClick={handleBubbleButtonClick(handleSetLink)}
+              className={mergeClasses(
+                styles.bubbleButton,
+                isDark && styles.bubbleButtonDark,
+                editor.isActive('link') && styles.bubbleButtonActive,
+                editor.isActive('link') && isDark && styles.bubbleButtonActiveDark
+              )}
+            >
+              <LinkRegular />
+            </button>
+          </Tooltip>
+        </BubbleMenu>
       )}
-      <Editor
-        licenseKey="gpl"
-        onInit={(_evt, editor) => {
-          editorRef.current = editor;
-        }}
-        initialValue={initialValue}
-        onBlur={handleBlur}
-        disabled={readOnly}
-        init={{
-          // Appearance - use oxide-dark skin for dark mode
-          skin: isDark ? 'oxide-dark' : 'oxide',
-          content_css: false,
 
-          // Editor mode
-          inline: false,
-          menubar: false,
-          statusbar: false,
+      {/* Highlight color picker popup */}
+      {showHighlightPicker && (
+        <div
+          className={mergeClasses(styles.colorPicker, isDark && styles.colorPickerDark)}
+          style={{ position: 'fixed', zIndex: 1000002 }}
+        >
+          {highlightColors.map((color) => (
+            <div
+              key={color}
+              className={styles.colorSwatch}
+              style={{ backgroundColor: color }}
+              onClick={() => handleHighlightSelect(color)}
+            />
+          ))}
+          <button
+            type="button"
+            className={styles.bubbleButton}
+            onClick={() => {
+              editor.chain().focus().unsetHighlight().run();
+              setShowHighlightPicker(false);
+            }}
+          >
+            <DismissRegular />
+          </button>
+        </div>
+      )}
 
-          // Size
-          min_height: minHeight,
-          max_height: 600,
-          autoresize_bottom_margin: 0,
+      {/* Floating plus menu - only in rich text mode */}
+      {showToolbar && (
+        <FloatingMenu
+          editor={editor}
+          options={{
+            placement: 'left-start',
+            offset: { mainAxis: 8, crossAxis: 0 },
+          }}
+          shouldShow={({ state }: { editor: Editor; state: EditorState }) => {
+            const { $from } = state.selection;
+            const currentNode = $from.parent;
+            return (
+              currentNode.type.name === 'paragraph' &&
+              currentNode.textContent === '' &&
+              state.selection.empty
+            );
+          }}
+          className={styles.floatingMenu}
+        >
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              className={mergeClasses(styles.plusButton, isDark && styles.plusButtonDark)}
+              onClick={() => setShowPlusMenu(!showPlusMenu)}
+            >
+              <AddRegular style={{ fontSize: '14px' }} />
+            </button>
+            {showPlusMenu && (
+              <div
+                className={mergeClasses(styles.slashMenu, isDark && styles.slashMenuDark)}
+                style={{ position: 'absolute', left: '32px', top: 0 }}
+              >
+                {slashCommands.map((item) => (
+                  <div
+                    key={item.title}
+                    className={mergeClasses(
+                      styles.slashMenuItem,
+                      isDark && styles.slashMenuItemDark
+                    )}
+                    onClick={() => handlePlusMenuCommand(item)}
+                  >
+                    <span className={styles.slashMenuItemIcon}>{item.icon}</span>
+                    <div className={styles.slashMenuItemText}>
+                      <span className={styles.slashMenuItemTitle}>{item.title}</span>
+                      <span className={styles.slashMenuItemDescription}>{item.description}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </FloatingMenu>
+      )}
 
-          // Toolbar - SP-compatible features (no tables/images)
-          toolbar: showToolbar
-            ? 'bold italic underline strikethrough | forecolor backcolor | bullist numlist | link | emoticons charmap | removeformat inlinecode'
-            : false,
-          toolbar_mode: 'sliding',
-
-          // Plugins
-          plugins: showToolbar
-            ? 'lists link autolink autoresize charmap emoticons'
-            : 'autoresize',
-
-          // For plain text mode, don't wrap in <p> tags
-          forced_root_block: showToolbar ? 'p' : '',
-          newline_behavior: showToolbar ? 'default' : 'linebreak',
-
-          // Link settings
-          link_default_target: '_blank',
-          link_assume_external_targets: true,
-
-          // Content styling to match Fluent UI theme
-          content_style: `
-            body {
-              font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-              font-size: 14px;
-              line-height: 1.5;
-              margin: 12px 16px;
-              padding: 0;
-              color: ${isDark ? '#ffffff' : '#242424'};
-              background-color: ${isDark ? '#1a1a1a' : '#ffffff'};
-            }
-            p { margin: 0 0 8px 0; }
-            p:last-child { margin-bottom: 0; }
-            ul, ol { margin: 0 0 8px 0; padding-left: 24px; }
-            a { color: #0078d4; text-decoration: none; }
-            a:hover { text-decoration: underline; }
-            code {
-              font-family: 'Consolas', 'Monaco', monospace;
-              font-size: 0.9em;
-              background-color: ${isDark ? '#2d2d2d' : '#f0f0f0'};
-              padding: 2px 6px;
-              border-radius: 3px;
-            }
-          `,
-
-          // Keyboard shortcuts and custom buttons
-          setup: (editor) => {
-            editor.addShortcut('meta+enter', 'Blur editor', () => {
-              editor.fire('blur');
-            });
-            editor.addShortcut('ctrl+enter', 'Blur editor', () => {
-              editor.fire('blur');
-            });
-
-            // Custom inline code button (toggles <code> tag)
-            editor.ui.registry.addToggleButton('inlinecode', {
-              icon: 'sourcecode',
-              tooltip: 'Inline code',
-              onAction: () => {
-                editor.execCommand('mceToggleFormat', false, 'code');
-              },
-              onSetup: (api) => {
-                const changed = editor.formatter.formatChanged('code', (state) => {
-                  api.setActive(state);
-                });
-                return () => changed.unbind();
-              },
-            });
-          },
-        }}
+      {/* Editor content */}
+      <EditorContent
+        editor={editor}
+        className={mergeClasses(
+          styles.editorContent,
+          isDark && styles.editorContentDark,
+          !showToolbar && styles.editorContentPlain
+        )}
+        style={{ '--editor-min-height': `${minHeight}px` } as React.CSSProperties}
       />
     </div>
   );

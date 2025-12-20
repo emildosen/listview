@@ -54,3 +54,17 @@ body {
 .dark-theme ::-webkit-scrollbar-corner {
   background: #1a1a1a;
 }
+
+/* Tiptap editor styles */
+.ProseMirror {
+  outline: none;
+}
+
+.ProseMirror:focus {
+  outline: none;
+}
+
+/* Tiptap floating menus need high z-index to appear above Fluent UI dialogs */
+.tippy-box {
+  z-index: 1000001 !important;
+}
