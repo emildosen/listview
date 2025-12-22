@@ -464,14 +464,16 @@ export function SetupWizard() {
 
           <div className={styles.infoBox}>
             <InfoRegular fontSize={16} style={{ flexShrink: 0, marginTop: '2px' }} />
-            <div>
-              <Text className={styles.infoBoxText}>
-                <strong>Tip:</strong> Consider creating a dedicated "ListView" site in SharePoint Admin just for app settings.
-              </Text>
-              <Text className={styles.infoBoxText} style={{ marginTop: '4px' }}>
-                This doesn't limit which SharePoint sites you can pull data from in the app.
-              </Text>
-            </div>
+            <Text className={styles.infoBoxText}>
+              <strong>Tip:</strong> Consider creating a dedicated "ListView" site in SharePoint Admin just for app settings.
+            </Text>
+          </div>
+
+          <div className={styles.infoBox}>
+            <InfoRegular fontSize={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+            <Text className={styles.infoBoxText}>
+              This doesn't limit which SharePoint sites you can pull data from in the app.
+            </Text>
           </div>
 
           <div className={styles.cardActions}>
