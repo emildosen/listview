@@ -529,6 +529,8 @@ export function RichTextEditor({
   const lastExternalValue = useRef(value);
   const [showHighlightPicker, setShowHighlightPicker] = useState(false);
   const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Configure extensions based on mode
   const extensions = [
@@ -556,6 +558,43 @@ export function RichTextEditor({
     ...(showToolbar ? [createSlashCommandExtension(isDark)] : []),
   ];
 
+  // Handle blur with delay to check if focus moved to a related element (menus, etc.)
+  const handleEditorBlur = useCallback((editorInstance: Editor) => {
+    // Clear any pending blur timeout
+    if (blurTimeoutRef.current) {
+      clearTimeout(blurTimeoutRef.current);
+    }
+
+    // Delay blur handling to allow focus to settle
+    blurTimeoutRef.current = setTimeout(() => {
+      // Check if focus is still within the editor container or moved to a floating menu
+      const activeElement = document.activeElement;
+      const container = containerRef.current;
+
+      // Check if focus is inside our container
+      if (container && container.contains(activeElement)) {
+        return; // Focus is still within editor, don't trigger blur
+      }
+
+      // Check if focus moved to a Tiptap floating menu (rendered outside container)
+      const isInFloatingMenu = activeElement?.closest('.tippy-box, .slash-command-menu, [data-tippy-root]');
+      if (isInFloatingMenu) {
+        return; // Focus is in a menu, don't trigger blur
+      }
+
+      // Actual blur - process the content
+      const html = editorInstance.getHTML();
+      const outputValue = showToolbar ? html : htmlToPlainText(html);
+
+      if (outputValue !== lastExternalValue.current) {
+        lastExternalValue.current = outputValue;
+        onChange(outputValue);
+      }
+
+      onBlur?.();
+    }, 100);
+  }, [onChange, onBlur, showToolbar]);
+
   const editor = useEditor({
     extensions,
     content: showToolbar ? value : plainTextToHtml(value),
@@ -566,17 +605,18 @@ export function RichTextEditor({
       },
     },
     onBlur: ({ editor }) => {
-      const html = editor.getHTML();
-      const outputValue = showToolbar ? html : htmlToPlainText(html);
-
-      if (outputValue !== lastExternalValue.current) {
-        lastExternalValue.current = outputValue;
-        onChange(outputValue);
-      }
-
-      onBlur?.();
+      handleEditorBlur(editor);
     },
   });
+
+  // Cleanup blur timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current) {
+        clearTimeout(blurTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Add keyboard shortcut for blur
   useEffect(() => {
@@ -652,7 +692,7 @@ export function RichTextEditor({
   }
 
   return (
-    <div className={mergeClasses(styles.container, isDark && styles.containerDark)}>
+    <div ref={containerRef} className={mergeClasses(styles.container, isDark && styles.containerDark)}>
       {/* Bubble menu for text selection - only in rich text mode */}
       {showToolbar && (
         <BubbleMenu
