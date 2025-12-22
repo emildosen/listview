@@ -12,11 +12,9 @@ import {
 import { useMsal } from '@azure/msal-react';
 import type { SPFI } from '@pnp/sp';
 import {
-  DEFAULT_SETTINGS_SITE_PATH,
   createSPClient,
   buildSiteUrl,
   getSite,
-  createCommunicationSite,
   findSettingsList,
   createSettingsList,
   getSettings,
@@ -35,7 +33,7 @@ import type { PageDefinition, ListDetailConfig } from '../types/page';
 
 const LIST_DETAIL_CONFIGS_KEY = 'ListDetailConfigs';
 
-const LOCAL_STORAGE_KEY = 'listview-settings-site-override';
+const LOCAL_STORAGE_KEY = 'listview-primary-site';
 const HOSTNAME_STORAGE_KEY = 'listview-sharepoint-hostname';
 
 type SetupStatus =
@@ -66,10 +64,9 @@ interface SettingsState {
 interface SettingsContextValue extends SettingsState {
   spClient: SPFI | null;
   initialize: () => Promise<void>;
-  configureSite: (sitePath: string, isCustom: boolean) => Promise<boolean>;
-  createSite: (sitePath: string, title: string) => Promise<boolean>;
+  configureSite: (sitePath: string) => Promise<boolean>;
   createList: () => Promise<boolean>;
-  clearSiteOverride: () => void;
+  changePrimarySite: () => void;
   getSetting: (key: string) => string | undefined;
   updateSetting: (key: string, value: string) => Promise<void>;
   // Pages operations
@@ -124,21 +121,33 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(HOSTNAME_STORAGE_KEY, hostname);
       }
 
-      // Check for custom site override in localStorage
-      const override = localStorage.getItem(LOCAL_STORAGE_KEY);
-      const sitePath = override || DEFAULT_SETTINGS_SITE_PATH;
-      const isCustomSite = !!override;
+      // Check for primary site in localStorage - user must explicitly choose
+      const sitePath = localStorage.getItem(LOCAL_STORAGE_KEY);
 
-      // Try to access the site
+      if (!sitePath) {
+        // No primary site configured - show site picker
+        setState((prev) => ({
+          ...prev,
+          setupStatus: 'no-site-configured',
+          hostname,
+          sitePath: null,
+          isCustomSite: false,
+          site: null,
+          settingsList: null,
+        }));
+        return;
+      }
+
+      // Try to access the configured site
       const site = await getSite(instance, account, hostname, sitePath);
 
       if (!site) {
         setState((prev) => ({
           ...prev,
-          setupStatus: isCustomSite ? 'site-not-found' : 'no-site-configured',
+          setupStatus: 'site-not-found',
           hostname,
           sitePath,
-          isCustomSite,
+          isCustomSite: false,
           site: null,
           settingsList: null,
         }));
@@ -162,7 +171,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           error: null,
           hostname,
           sitePath,
-          isCustomSite,
+          isCustomSite: false,
           site,
           settingsList: null,
           settings: {},
@@ -187,7 +196,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         error: null,
         hostname,
         sitePath,
-        isCustomSite,
+        isCustomSite: false,
         site,
         settingsList,
         settings,
@@ -205,7 +214,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }, [instance, getAccount]);
 
   const configureSite = useCallback(
-    async (sitePath: string, isCustom: boolean): Promise<boolean> => {
+    async (sitePath: string): Promise<boolean> => {
       try {
         const account = getAccount();
         const hostname = state.hostname;
@@ -222,18 +231,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             setupStatus: 'site-not-found',
             hostname,
             sitePath,
-            isCustomSite: isCustom,
+            isCustomSite: false,
             site: null,
           }));
           return false;
         }
 
-        // Save override if custom
-        if (isCustom) {
-          localStorage.setItem(LOCAL_STORAGE_KEY, sitePath);
-        } else {
-          localStorage.removeItem(LOCAL_STORAGE_KEY);
-        }
+        // Save primary site to localStorage
+        localStorage.setItem(LOCAL_STORAGE_KEY, sitePath);
 
         // Create SP client for this site
         const siteUrl = buildSiteUrl(hostname, sitePath);
@@ -249,7 +254,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             error: null,
             hostname,
             sitePath,
-            isCustomSite: isCustom,
+            isCustomSite: false,
             site,
             settingsList: null,
             settings: {},
@@ -273,7 +278,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           error: null,
           hostname,
           sitePath,
-          isCustomSite: isCustom,
+          isCustomSite: false,
           site,
           settingsList,
           settings,
@@ -293,56 +298,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }
     },
     [instance, getAccount, state.hostname]
-  );
-
-  const createSiteCallback = useCallback(
-    async (sitePath: string, title: string): Promise<boolean> => {
-      const hostname = state.hostname;
-      if (!hostname) {
-        return false;
-      }
-
-      const account = accounts[0];
-      if (!account) {
-        return false;
-      }
-
-      setState((prev) => ({ ...prev, setupStatus: 'creating-site', error: null, sitePath }));
-
-      try {
-        // Create the site
-        const site = await createCommunicationSite(instance, account, hostname, {
-          title,
-          url: sitePath,
-          description: 'ListView application settings and data storage',
-        });
-
-        // Create SP client for the new site
-        const siteUrl = buildSiteUrl(hostname, sitePath);
-        const sp = await createSPClient(instance, account, siteUrl);
-        spClientRef.current = sp;
-
-        // Site created, now we need to create the lists
-        setState((prev) => ({
-          ...prev,
-          setupStatus: 'list-not-found',
-          site,
-          sitePath,
-          isCustomSite: sitePath !== DEFAULT_SETTINGS_SITE_PATH,
-        }));
-
-        return true;
-      } catch (error) {
-        console.error('Failed to create site:', error);
-        setState((prev) => ({
-          ...prev,
-          setupStatus: 'site-creation-failed',
-          error: error instanceof Error ? error.message : 'Failed to create SharePoint site',
-        }));
-        return false;
-      }
-    },
-    [instance, accounts, state.hostname]
   );
 
   const createList = useCallback(async (): Promise<boolean> => {
@@ -393,14 +348,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   }, [instance, accounts, state.site, state.hostname, state.sitePath]);
 
-  const clearSiteOverride = useCallback(() => {
+  const changePrimarySite = useCallback(() => {
     localStorage.removeItem(LOCAL_STORAGE_KEY);
     spClientRef.current = null;
     setState((prev) => ({
       ...prev,
-      setupStatus: 'loading',
+      setupStatus: 'no-site-configured',
       isCustomSite: false,
-      sitePath: DEFAULT_SETTINGS_SITE_PATH,
+      sitePath: null,
+      site: null,
+      settingsList: null,
+      settings: {},
+      pagesList: null,
+      pages: [],
     }));
   }, []);
 
@@ -608,9 +568,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     spClient: spClientRef.current,
     initialize,
     configureSite,
-    createSite: createSiteCallback,
     createList,
-    clearSiteOverride,
+    changePrimarySite,
     getSetting: getSettingValue,
     updateSetting,
     createPagesList: createPagesListCallback,

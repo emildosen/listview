@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   makeStyles,
@@ -10,12 +11,22 @@ import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbDivider,
+  Dialog,
+  DialogTrigger,
+  DialogSurface,
+  DialogTitle,
+  DialogBody,
+  DialogActions,
+  DialogContent,
+  Divider,
 } from '@fluentui/react-components';
 import {
   FolderRegular,
   OpenRegular,
   OptionsRegular,
   ArrowLeftRegular,
+  WarningRegular,
+  BuildingSwapRegular,
 } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -121,15 +132,14 @@ function SettingsPage() {
   const {
     site,
     sitePath,
-    isCustomSite,
     settingsList,
-    clearSiteOverride,
-    initialize,
+    changePrimarySite,
   } = useSettings();
+  const [showChangeDialog, setShowChangeDialog] = useState(false);
 
-  const handleResetSite = () => {
-    clearSiteOverride();
-    initialize();
+  const handleChangePrimarySite = () => {
+    setShowChangeDialog(false);
+    changePrimarySite();
   };
 
   return (
@@ -186,11 +196,7 @@ function SettingsPage() {
                     <code>{sitePath}</code>
                   </Text>
                 </div>
-                {isCustomSite ? (
-                  <Badge appearance="tint" color="warning">Custom</Badge>
-                ) : (
-                  <Badge appearance="tint" color="success">Standard</Badge>
-                )}
+                <Badge appearance="tint" color="success">Primary</Badge>
               </div>
 
               <div className={mergeClasses(styles.settingRow, theme === 'dark' && styles.settingRowDark)}>
@@ -204,17 +210,57 @@ function SettingsPage() {
               </div>
             </div>
 
-            {isCustomSite && (
-              <div className={styles.cardActions}>
-                <Button
-                  appearance="outline"
-                  size="small"
-                  onClick={handleResetSite}
-                >
-                  Reset to Standard Site
-                </Button>
-              </div>
-            )}
+            <Divider style={{ margin: '16px 0' }} />
+
+            <div>
+              <Text weight="semibold">Change Primary Site</Text>
+              <Text as="p" className={styles.settingValue} style={{ marginTop: '4px', marginBottom: '12px' }}>
+                Switch to a different SharePoint site for storing ListView settings.
+              </Text>
+
+              <Dialog open={showChangeDialog} onOpenChange={(_, data) => setShowChangeDialog(data.open)}>
+                <DialogTrigger disableButtonEnhancement>
+                  <Button
+                    appearance="outline"
+                    size="small"
+                    icon={<BuildingSwapRegular />}
+                  >
+                    Change Primary Site
+                  </Button>
+                </DialogTrigger>
+                <DialogSurface>
+                  <DialogBody>
+                    <DialogTitle>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <WarningRegular color={tokens.colorPaletteYellowForeground1} />
+                        Change Primary Site?
+                      </div>
+                    </DialogTitle>
+                    <DialogContent>
+                      <Text>
+                        Changing your primary site will:
+                      </Text>
+                      <ul style={{ margin: '12px 0', paddingLeft: '20px' }}>
+                        <li>Disconnect from the current site's settings and pages</li>
+                        <li>Require you to select a new primary site</li>
+                        <li>Not delete any data from the current site</li>
+                      </ul>
+                      <Text weight="semibold">
+                        Settings stored in "{site?.displayName}" will remain there but won't be accessible until you reconnect.
+                      </Text>
+                    </DialogContent>
+                    <DialogActions>
+                      <Button appearance="secondary" onClick={() => setShowChangeDialog(false)}>
+                        Cancel
+                      </Button>
+                      <Button appearance="primary" onClick={handleChangePrimarySite}>
+                        Change Site
+                      </Button>
+                    </DialogActions>
+                  </DialogBody>
+                </DialogSurface>
+              </Dialog>
+            </div>
           </div>
         </div>
 
