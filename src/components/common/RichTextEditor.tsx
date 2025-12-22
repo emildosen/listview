@@ -531,6 +531,7 @@ export function RichTextEditor({
   const [showPlusMenu, setShowPlusMenu] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [hasBeenFocused, setHasBeenFocused] = useState(false);
 
   // Configure extensions based on mode
   const extensions = [
@@ -603,6 +604,12 @@ export function RichTextEditor({
       attributes: {
         class: 'tiptap-editor',
       },
+    },
+    onFocus: () => {
+      // Track that editor has been focused at least once
+      if (!hasBeenFocused) {
+        setHasBeenFocused(true);
+      }
     },
     onBlur: ({ editor }) => {
       handleEditorBlur(editor);
@@ -687,12 +694,39 @@ export function RichTextEditor({
     [editor]
   );
 
+  // Handle click on container to ensure editor gets focus
+  const handleContainerClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!editor || readOnly) return;
+
+      // Only focus if clicking directly on the container or editor content area
+      // (not on menus or buttons)
+      const target = e.target as HTMLElement;
+      if (target.closest('button') || target.closest('.slash-command-menu')) {
+        return;
+      }
+
+      // Ensure editor is focused
+      if (!editor.isFocused) {
+        // Use setTimeout to avoid focus race conditions with floating menus
+        setTimeout(() => {
+          editor.commands.focus();
+        }, 0);
+      }
+    },
+    [editor, readOnly]
+  );
+
   if (!editor) {
     return null;
   }
 
   return (
-    <div ref={containerRef} className={mergeClasses(styles.container, isDark && styles.containerDark)}>
+    <div
+      ref={containerRef}
+      className={mergeClasses(styles.container, isDark && styles.containerDark)}
+      onClick={handleContainerClick}
+    >
       {/* Bubble menu for text selection - only in rich text mode */}
       {showToolbar && (
         <BubbleMenu
@@ -821,7 +855,11 @@ export function RichTextEditor({
             placement: 'left-start',
             offset: { mainAxis: 8, crossAxis: 0 },
           }}
-          shouldShow={({ state }: { editor: Editor; state: EditorState }) => {
+          shouldShow={({ editor: ed, state }: { editor: Editor; state: EditorState }) => {
+            // Only show after editor has been focused at least once
+            // This prevents focus issues on initial click
+            if (!hasBeenFocused || !ed.isFocused) return false;
+
             const { $from } = state.selection;
             const currentNode = $from.parent;
             return (
