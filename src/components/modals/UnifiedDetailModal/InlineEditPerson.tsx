@@ -192,6 +192,9 @@ export function InlineEditPerson({
     if (e.key === 'Escape') {
       e.preventDefault();
       onCancel();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      onCommit();
     }
   };
 
@@ -223,8 +226,7 @@ export function InlineEditPerson({
             onClick={(e) => {
               e.stopPropagation();
               onChange(null);
-              // Commit immediately when clearing
-              setTimeout(() => onCommit(null), 0);
+              // Don't commit immediately - let user select a new person or click outside to save empty
             }}
           />
         }
