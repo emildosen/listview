@@ -284,10 +284,29 @@ export function EditableStatBox({
   const renderEditComponent = () => {
     // Choice field
     if (formField?.choice?.choices) {
+      const isMultiSelect = formField.choice.allowMultipleValues ?? false;
+      // Normalize value: multi-select uses array, single-select uses string
+      // Handle SharePoint's { results: [...] } format
+      let normalizedValue: string | string[];
+      if (isMultiSelect) {
+        if (Array.isArray(editValue)) {
+          normalizedValue = editValue.map(String);
+        } else if (typeof editValue === 'object' && editValue !== null && 'results' in editValue) {
+          normalizedValue = ((editValue as { results: string[] }).results || []).map(String);
+        } else if (editValue) {
+          normalizedValue = [String(editValue)];
+        } else {
+          normalizedValue = [];
+        }
+      } else {
+        normalizedValue = String(editValue ?? '');
+      }
+
       return (
         <InlineEditChoice
-          value={String(editValue ?? '')}
+          value={normalizedValue}
           choices={formField.choice.choices}
+          isMultiSelect={isMultiSelect}
           onChange={(v) => updateEditValue(v)}
           onCommit={handleCommit}
           onCancel={onCancelEdit}

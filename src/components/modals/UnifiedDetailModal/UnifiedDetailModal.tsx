@@ -531,6 +531,18 @@ function UnifiedDetailModalContent({
       return isDateOnly ? formatDateForDisplay(value) : formatDateTimeForDisplay(value);
     }
 
+    // Choice (handle multi-select)
+    if (formField?.choice || colMeta?.choice) {
+      if (Array.isArray(value)) {
+        return value.join(', ') || '-';
+      }
+      // Handle SharePoint's { results: [...] } format
+      if (typeof value === 'object' && value !== null && 'results' in value) {
+        const results = (value as { results: string[] }).results;
+        return Array.isArray(results) ? results.join(', ') || '-' : String(value);
+      }
+    }
+
     // Lookup
     if (formField?.lookup || colMeta?.lookup) {
       if (typeof value === 'object' && value !== null && 'LookupValue' in value) {
@@ -541,6 +553,11 @@ function UnifiedDetailModalContent({
           .map(v => (typeof v === 'object' && v !== null && 'LookupValue' in v ? v.LookupValue : String(v)))
           .join(', ');
       }
+    }
+
+    // Default: handle arrays generically
+    if (Array.isArray(value)) {
+      return value.join(', ') || '-';
     }
 
     return String(value);
@@ -902,10 +919,29 @@ function DetailFieldEdit({
   const renderEditComponent = () => {
     // Choice field
     if (formField?.choice?.choices) {
+      const isMultiSelect = formField.choice.allowMultipleValues ?? false;
+      // Normalize value: multi-select uses array, single-select uses string
+      // Handle SharePoint's { results: [...] } format
+      let normalizedValue: string | string[];
+      if (isMultiSelect) {
+        if (Array.isArray(editValue)) {
+          normalizedValue = editValue.map(String);
+        } else if (typeof editValue === 'object' && editValue !== null && 'results' in editValue) {
+          normalizedValue = ((editValue as { results: string[] }).results || []).map(String);
+        } else if (editValue) {
+          normalizedValue = [String(editValue)];
+        } else {
+          normalizedValue = [];
+        }
+      } else {
+        normalizedValue = String(editValue ?? '');
+      }
+
       return (
         <InlineEditChoice
-          value={String(editValue ?? '')}
+          value={normalizedValue}
           choices={formField.choice.choices}
+          isMultiSelect={isMultiSelect}
           onChange={(v) => setEditValue(v)}
           onCommit={handleCommit}
           onCancel={onCancelEdit}

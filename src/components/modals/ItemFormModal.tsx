@@ -201,6 +201,18 @@ function ItemFormModal({
             initial[field.name] = null;
           }
         }
+      } else if (field.choice?.allowMultipleValues) {
+        // Multi-select choice: extract array from { results: [...] } format if present
+        const choiceValue = initialValues[field.name];
+        if (Array.isArray(choiceValue)) {
+          initial[field.name] = choiceValue;
+        } else if (typeof choiceValue === 'object' && choiceValue !== null && 'results' in choiceValue) {
+          initial[field.name] = (choiceValue as { results: string[] }).results || [];
+        } else if (choiceValue) {
+          initial[field.name] = [String(choiceValue)];
+        } else {
+          initial[field.name] = [];
+        }
       } else if (initialValues[field.name] !== undefined) {
         initial[field.name] = initialValues[field.name];
       } else if (mode === 'create' && field.defaultValue?.value) {
@@ -288,18 +300,38 @@ function ItemFormModal({
     if (field.choice?.choices) {
       // Choice column
       const dropdownWidth = getDropdownWidth(field.choice.choices);
+      const isMultiSelect = field.choice.allowMultipleValues;
+
+      // Normalize value for multi-select
+      const selectedOptions: string[] = isMultiSelect
+        ? (Array.isArray(value) ? value.map(String) : (value ? [String(value)] : []))
+        : (value ? [String(value)] : []);
+
+      const displayValue = isMultiSelect
+        ? selectedOptions.join(', ')
+        : String(value || '');
+
       return (
         <Field key={field.id} label={field.displayName} required={field.required}>
           <Dropdown
-            value={String(value || '')}
-            selectedOptions={value ? [String(value)] : []}
-            onOptionSelect={(_e, data) => handleChange(field.name, data.optionValue)}
+            value={displayValue}
+            selectedOptions={selectedOptions}
+            multiselect={isMultiSelect}
+            onOptionSelect={(_e, data) => {
+              if (isMultiSelect) {
+                // Multi-select: use the full selected options array
+                handleChange(field.name, data.selectedOptions);
+              } else {
+                // Single select
+                handleChange(field.name, data.optionValue);
+              }
+            }}
             disabled={field.readOnly}
             size="small"
             className={styles.dropdown}
             style={{ width: `${dropdownWidth}px` }}
           >
-            <Option value="">Select...</Option>
+            {!isMultiSelect && <Option value="">Select...</Option>}
             {field.choice.choices.map((choice) => (
               <Option key={choice} value={choice}>
                 {choice}
