@@ -512,10 +512,10 @@ function ItemFormModal({
           ) : configError ? (
             <MessageBar intent="error"><MessageBarBody>{configError}</MessageBarBody></MessageBar>
           ) : (
-            <form onSubmit={handleSubmit} onMouseDown={(e) => e.stopPropagation()}>
+            <>
               {error && <MessageBar intent="error" style={{ marginBottom: '16px' }}><MessageBarBody>{error}</MessageBarBody></MessageBar>}
               <div className={styles.formFields}>{visibleFields.map(renderField)}</div>
-            </form>
+            </>
           )}
         </DialogBody>
         <DialogActions>
