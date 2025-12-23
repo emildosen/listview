@@ -50,6 +50,7 @@ export interface GraphListColumn {
   choice?: {
     choices: string[];
     allowMultipleValues?: boolean;
+    displayAs?: 'checkBoxes' | 'dropDownMenu' | 'radioButtons';
   };
   // Hyperlink or picture column - present if this is a URL column
   hyperlinkOrPicture?: {
@@ -267,7 +268,8 @@ export async function getListColumns(
       if (col.choice?.choices) {
         result.choice = {
           choices: col.choice.choices,
-          allowMultipleValues: col.choice.allowMultipleValues,
+          // Graph API uses displayAs: 'checkBoxes' for multi-select choice columns
+          allowMultipleValues: col.choice.displayAs === 'checkBoxes',
         };
       }
 
@@ -354,7 +356,8 @@ export async function getFormFieldConfig(
       if (col.choice?.choices) {
         field.choice = {
           choices: col.choice.choices,
-          allowMultipleValues: col.choice.allowMultipleValues,
+          // Graph API uses displayAs: 'checkBoxes' for multi-select choice columns
+          allowMultipleValues: col.choice.displayAs === 'checkBoxes',
         };
       }
 
