@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import type { SPFI } from '@pnp/sp';
 import {
   makeStyles,
   Dialog,
@@ -21,6 +22,7 @@ import { useListFormConfig } from '../../hooks/useListFormConfig';
 import type { FormFieldConfig, PersonOrGroupOption } from '../../auth/graphClient';
 import type { LookupOption } from '../../contexts/FormConfigContext';
 import { PeoplePicker } from '../common/PeoplePicker';
+import { ensureUser, ensureUsers } from '../../services/sharepoint';
 
 // System columns that should never appear in forms
 const SYSTEM_COLUMNS = new Set([
@@ -58,6 +60,8 @@ interface ItemFormModalProps {
   onClose: () => void;
   /** Lookup field that is pre-filled by parent (hidden from form and excluded from save) */
   prefillLookupField?: string;
+  /** SharePoint client for resolving user IDs for Person fields */
+  spClient?: SPFI;
 }
 
 const useStyles = makeStyles({
@@ -99,6 +103,7 @@ function ItemFormModal({
   onSave,
   onClose,
   prefillLookupField,
+  spClient,
 }: ItemFormModalProps) {
   const styles = useStyles();
   const { fields, loading, error: configError, getLookupOptions } = useListFormConfig(siteId, listId);
@@ -281,8 +286,15 @@ function ItemFormModal({
       // and uses defaults on create
       // Pre-filled lookups are hidden from the form and handled by the parent.
       const submitValues: Record<string, unknown> = {};
-      visibleFields.forEach((field) => {
-        if (field.readOnly) return;
+
+      // Helper to get login name from PersonOrGroupOption
+      const getLoginName = (p: PersonOrGroupOption | null): string | null => {
+        if (!p) return null;
+        return p.email || p.userPrincipalName || null;
+      };
+
+      for (const field of visibleFields) {
+        if (field.readOnly) continue;
 
         const value = values[field.name];
 
@@ -300,25 +312,31 @@ function ItemFormModal({
             }
           }
         } else if (field.personOrGroup) {
-          // Person/Group fields: submit as FieldNameId with user email(s) or lookup ID(s)
-          // PnPjs expects the user's email or the numeric ID
-          const extractPersonId = (p: PersonOrGroupOption | null): string | number | null => {
-            if (!p) return null;
-            // Try to use email for user lookup, or the numeric ID if available
-            return p.email || p.userPrincipalName || (p.id ? parseInt(p.id, 10) || p.id : null);
-          };
-
+          // Person/Group fields: resolve email/UPN to SharePoint user ID
           if (field.personOrGroup.allowMultipleSelection) {
             if (Array.isArray(value) && value.length > 0) {
-              submitValues[`${field.name}Id`] = value
-                .map((p: PersonOrGroupOption) => extractPersonId(p))
-                .filter((id): id is string | number => id !== null);
+              const loginNames = value
+                .map((p: PersonOrGroupOption) => getLoginName(p))
+                .filter((name): name is string => name !== null);
+              if (loginNames.length > 0 && spClient) {
+                // Resolve all emails to SharePoint user IDs
+                const userIds = await ensureUsers(spClient, loginNames);
+                submitValues[`${field.name}Id`] = userIds;
+              } else {
+                submitValues[`${field.name}Id`] = [];
+              }
             } else {
               submitValues[`${field.name}Id`] = [];
             }
           } else {
-            const personId = extractPersonId(value as PersonOrGroupOption | null);
-            submitValues[`${field.name}Id`] = personId;
+            const loginName = getLoginName(value as PersonOrGroupOption | null);
+            if (loginName && spClient) {
+              // Resolve email to SharePoint user ID
+              const userId = await ensureUser(spClient, loginName);
+              submitValues[`${field.name}Id`] = userId;
+            } else {
+              submitValues[`${field.name}Id`] = null;
+            }
           }
         } else if (field.choice?.allowMultipleValues) {
           // Multi-select choice: PnPjs expects a plain array
@@ -329,7 +347,7 @@ function ItemFormModal({
             submitValues[field.name] = value;
           }
         }
-      });
+      }
 
       await onSave(submitValues);
     } catch (err) {

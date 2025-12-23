@@ -315,6 +315,7 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
           onSave={handleFormSave}
           onClose={() => setFormModalOpen(false)}
           prefillLookupField={section.lookupColumn}
+          spClient={spClientRef.current ?? undefined}
         />
       )}
     </div>

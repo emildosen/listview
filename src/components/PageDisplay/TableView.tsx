@@ -545,6 +545,7 @@ function TableView({
           saving={saving}
           onSave={handleCreate}
           onClose={() => setCreateModalOpen(false)}
+          spClient={primarySpClientRef.current ?? undefined}
         />
       )}
     </>

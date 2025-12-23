@@ -24,7 +24,7 @@ import {
   OpenRegular,
 } from '@fluentui/react-icons';
 import { getListItems, isSharePointUrl, type GraphListColumn, type GraphListItem } from '../../../auth/graphClient';
-import { updateListItem, deleteListItem, createSPClient } from '../../../services/sharepoint';
+import { updateListItem, deleteListItem, createSPClient, ensureUser, ensureUsers } from '../../../services/sharepoint';
 import type { PageDefinition, PageColumn, DetailLayoutConfig, DetailColumnSetting, ListDetailConfig, RelatedSection } from '../../../types/page';
 import { useSettings } from '../../../contexts/SettingsContext';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -371,23 +371,37 @@ function UnifiedDetailModalContent({
       if (formField?.lookup) {
         payload[`${fieldName}Id`] = value;
       } else if (formField?.personOrGroup) {
-        // Person/Group fields: submit as FieldNameId with user email(s)
+        // Person/Group fields: resolve email/UPN to SharePoint user ID using ensureUser
         type PersonOption = import('../../../auth/graphClient').PersonOrGroupOption;
-        const extractPersonId = (p: PersonOption | null): string | number | null => {
+        const getLoginName = (p: PersonOption | null): string | null => {
           if (!p) return null;
-          return p.email || p.userPrincipalName || (p.id ? parseInt(p.id, 10) || p.id : null);
+          return p.email || p.userPrincipalName || null;
         };
 
         if (formField.personOrGroup.allowMultipleSelection) {
           if (Array.isArray(value) && value.length > 0) {
-            payload[`${fieldName}Id`] = (value as PersonOption[])
-              .map(p => extractPersonId(p))
-              .filter((id): id is string | number => id !== null);
+            const loginNames = (value as PersonOption[])
+              .map(p => getLoginName(p))
+              .filter((name): name is string => name !== null);
+            if (loginNames.length > 0) {
+              // Resolve all emails to SharePoint user IDs
+              const userIds = await ensureUsers(spClient, loginNames);
+              payload[`${fieldName}Id`] = userIds;
+            } else {
+              payload[`${fieldName}Id`] = [];
+            }
           } else {
             payload[`${fieldName}Id`] = [];
           }
         } else {
-          payload[`${fieldName}Id`] = extractPersonId(value as PersonOption | null);
+          const loginName = getLoginName(value as PersonOption | null);
+          if (loginName) {
+            // Resolve email to SharePoint user ID
+            const userId = await ensureUser(spClient, loginName);
+            payload[`${fieldName}Id`] = userId;
+          } else {
+            payload[`${fieldName}Id`] = null;
+          }
         }
       } else if (formField?.choice?.allowMultipleValues) {
         // Multi-select choice: PnPjs expects a plain array

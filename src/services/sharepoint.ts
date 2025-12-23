@@ -6,6 +6,7 @@ import '@pnp/sp/items';
 import '@pnp/sp/fields';
 import '@pnp/sp/views';
 import '@pnp/sp/sites';
+import '@pnp/sp/site-users/web';
 import type { IPublicClientApplication, AccountInfo } from '@azure/msal-browser';
 import { getSharePointToken } from '../auth/graphClient';
 import type { Queryable } from '@pnp/queryable';
@@ -845,4 +846,35 @@ export async function deleteListItem(
     .items
     .getById(itemId)
     .delete();
+}
+
+// ============================================
+// User Resolution Operations
+// ============================================
+
+/**
+ * Resolve a user's email/UPN to a SharePoint site user ID.
+ * Uses ensureUser which adds the user to the site if not already present.
+ * Returns the numeric SharePoint user ID needed for Person fields.
+ */
+export async function ensureUser(
+  sp: SPFI,
+  loginName: string
+): Promise<number> {
+  const result = await sp.web.ensureUser(loginName);
+  return result.Id;
+}
+
+/**
+ * Resolve multiple user emails/UPNs to SharePoint user IDs.
+ * Returns an array of numeric IDs in the same order as input.
+ */
+export async function ensureUsers(
+  sp: SPFI,
+  loginNames: string[]
+): Promise<number[]> {
+  const results = await Promise.all(
+    loginNames.map(loginName => ensureUser(sp, loginName))
+  );
+  return results;
 }
