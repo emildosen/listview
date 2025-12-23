@@ -370,9 +370,8 @@ function UnifiedDetailModalContent({
       if (formField?.lookup) {
         payload[`${fieldName}Id`] = value;
       } else if (formField?.choice?.allowMultipleValues) {
-        // Multi-select choice: wrap in { results: [...] } format for SharePoint
-        const choiceArray = Array.isArray(value) ? value : [];
-        payload[fieldName] = { results: choiceArray };
+        // Multi-select choice: PnPjs expects a plain array
+        payload[fieldName] = Array.isArray(value) ? value : [];
       } else {
         payload[fieldName] = value;
       }

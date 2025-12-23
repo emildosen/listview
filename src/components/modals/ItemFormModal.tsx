@@ -260,9 +260,8 @@ function ItemFormModal({
             }
           }
         } else if (field.choice?.allowMultipleValues) {
-          // Multi-select choice: wrap in { results: [...] } format for SharePoint
-          const choiceArray = Array.isArray(value) ? value : [];
-          submitValues[field.name] = { results: choiceArray };
+          // Multi-select choice: PnPjs expects a plain array
+          submitValues[field.name] = Array.isArray(value) ? value : [];
         } else {
           // Regular fields: submit as-is
           if (value !== undefined && value !== '') {
