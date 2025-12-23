@@ -8,6 +8,10 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import Highlight from '@tiptap/extension-highlight';
 import Underline from '@tiptap/extension-underline';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TableHeader } from '@tiptap/extension-table-header';
 import { Extension } from '@tiptap/core';
 import Suggestion from '@tiptap/suggestion';
 import { makeStyles, tokens, mergeClasses, Tooltip } from '@fluentui/react-components';
@@ -26,6 +30,7 @@ import {
   TextParagraphRegular,
   HighlightRegular,
   DismissRegular,
+  TableRegular,
 } from '@fluentui/react-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { Editor, Range } from '@tiptap/core';
@@ -108,11 +113,45 @@ const useStyles = makeStyles({
       pointerEvents: 'none',
       height: 0,
     },
+    '& .ProseMirror table': {
+      borderCollapse: 'collapse',
+      margin: '8px 0',
+      width: '100%',
+      tableLayout: 'fixed',
+    },
+    '& .ProseMirror th, & .ProseMirror td': {
+      border: '1px solid #d0d0d0',
+      padding: '6px 10px',
+      verticalAlign: 'top',
+      minWidth: '50px',
+      position: 'relative',
+    },
+    '& .ProseMirror th': {
+      backgroundColor: tokens.colorNeutralBackground3,
+      fontWeight: tokens.fontWeightSemibold,
+      textAlign: 'left',
+    },
+    '& .ProseMirror .selectedCell::after': {
+      backgroundColor: 'rgba(0, 120, 212, 0.15)',
+      content: '""',
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+      pointerEvents: 'none',
+      position: 'absolute',
+    },
   },
   editorContentDark: {
     color: '#ffffff',
     '& .ProseMirror mark': {
       backgroundColor: '#5c4800',
+    },
+    '& .ProseMirror th, & .ProseMirror td': {
+      border: '1px solid #444444',
+    },
+    '& .ProseMirror th': {
+      backgroundColor: '#2a2a2a',
     },
   },
   editorContentPlain: {
@@ -273,6 +312,60 @@ const useStyles = makeStyles({
     ':hover': {
       transform: 'scale(1.1)',
     },
+  },
+  toolbar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1px',
+    padding: '4px 8px',
+    borderBottom: `1px solid ${tokens.colorNeutralStroke1}`,
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  toolbarDark: {
+    backgroundColor: '#252525',
+    borderBottom: '1px solid #333333',
+  },
+  toolbarDivider: {
+    width: '1px',
+    height: '16px',
+    backgroundColor: tokens.colorNeutralStroke2,
+    margin: '0 4px',
+  },
+  toolbarDividerDark: {
+    backgroundColor: '#444444',
+  },
+  toolbarButton: {
+    minWidth: '24px',
+    height: '24px',
+    padding: '2px',
+    borderRadius: tokens.borderRadiusSmall,
+    backgroundColor: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: tokens.colorNeutralForeground2,
+    fontSize: '16px',
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground1Hover,
+      color: tokens.colorNeutralForeground1,
+    },
+  },
+  toolbarButtonDark: {
+    color: '#aaaaaa',
+    ':hover': {
+      backgroundColor: '#3a3a3a',
+      color: '#ffffff',
+    },
+  },
+  toolbarButtonActive: {
+    backgroundColor: tokens.colorNeutralBackground1,
+    color: tokens.colorBrandForeground1,
+  },
+  toolbarButtonActiveDark: {
+    backgroundColor: '#3a3a3a',
+    color: '#60cdff',
   },
 });
 
@@ -553,7 +646,15 @@ export function RichTextEditor({
       multicolor: true,
     }),
     Underline,
-    ...(showToolbar ? [createSlashCommandExtension(isDark)] : []),
+    ...(showToolbar ? [
+      Table.configure({
+        resizable: false,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      createSlashCommandExtension(isDark),
+    ] : []),
   ];
 
   const editor = useEditor({
@@ -647,6 +748,12 @@ export function RichTextEditor({
     [editor]
   );
 
+  // Insert a 3x3 table
+  const handleInsertTable = useCallback(() => {
+    if (!editor) return;
+    editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  }, [editor]);
+
   if (!editor) {
     return null;
   }
@@ -662,6 +769,131 @@ export function RichTextEditor({
         }
       }}
     >
+      {/* Command strip toolbar at top - only in rich text mode */}
+      {showToolbar && (
+        <div className={mergeClasses(styles.toolbar, isDark && styles.toolbarDark)}>
+          <Tooltip content="Bold (⌘B)" relationship="label">
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              className={mergeClasses(
+                styles.toolbarButton,
+                isDark && styles.toolbarButtonDark,
+                editor.isActive('bold') && styles.toolbarButtonActive,
+                editor.isActive('bold') && isDark && styles.toolbarButtonActiveDark
+              )}
+            >
+              <TextBoldRegular />
+            </button>
+          </Tooltip>
+          <Tooltip content="Italic (⌘I)" relationship="label">
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              className={mergeClasses(
+                styles.toolbarButton,
+                isDark && styles.toolbarButtonDark,
+                editor.isActive('italic') && styles.toolbarButtonActive,
+                editor.isActive('italic') && isDark && styles.toolbarButtonActiveDark
+              )}
+            >
+              <TextItalicRegular />
+            </button>
+          </Tooltip>
+          <Tooltip content="Underline (⌘U)" relationship="label">
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().toggleUnderline().run()}
+              className={mergeClasses(
+                styles.toolbarButton,
+                isDark && styles.toolbarButtonDark,
+                editor.isActive('underline') && styles.toolbarButtonActive,
+                editor.isActive('underline') && isDark && styles.toolbarButtonActiveDark
+              )}
+            >
+              <TextUnderlineRegular />
+            </button>
+          </Tooltip>
+
+          <div className={mergeClasses(styles.toolbarDivider, isDark && styles.toolbarDividerDark)} />
+
+          <Tooltip content="Heading 1" relationship="label">
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+              className={mergeClasses(
+                styles.toolbarButton,
+                isDark && styles.toolbarButtonDark,
+                editor.isActive('heading', { level: 1 }) && styles.toolbarButtonActive,
+                editor.isActive('heading', { level: 1 }) && isDark && styles.toolbarButtonActiveDark
+              )}
+            >
+              <TextHeader1Regular />
+            </button>
+          </Tooltip>
+          <Tooltip content="Heading 2" relationship="label">
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+              className={mergeClasses(
+                styles.toolbarButton,
+                isDark && styles.toolbarButtonDark,
+                editor.isActive('heading', { level: 2 }) && styles.toolbarButtonActive,
+                editor.isActive('heading', { level: 2 }) && isDark && styles.toolbarButtonActiveDark
+              )}
+            >
+              <TextHeader2Regular />
+            </button>
+          </Tooltip>
+
+          <div className={mergeClasses(styles.toolbarDivider, isDark && styles.toolbarDividerDark)} />
+
+          <Tooltip content="Bullet list" relationship="label">
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().toggleBulletList().run()}
+              className={mergeClasses(
+                styles.toolbarButton,
+                isDark && styles.toolbarButtonDark,
+                editor.isActive('bulletList') && styles.toolbarButtonActive,
+                editor.isActive('bulletList') && isDark && styles.toolbarButtonActiveDark
+              )}
+            >
+              <TextBulletListLtrRegular />
+            </button>
+          </Tooltip>
+          <Tooltip content="Numbered list" relationship="label">
+            <button
+              type="button"
+              onClick={() => editor.chain().focus().toggleOrderedList().run()}
+              className={mergeClasses(
+                styles.toolbarButton,
+                isDark && styles.toolbarButtonDark,
+                editor.isActive('orderedList') && styles.toolbarButtonActive,
+                editor.isActive('orderedList') && isDark && styles.toolbarButtonActiveDark
+              )}
+            >
+              <TextNumberListLtrRegular />
+            </button>
+          </Tooltip>
+
+          <div className={mergeClasses(styles.toolbarDivider, isDark && styles.toolbarDividerDark)} />
+
+          <Tooltip content="Insert table" relationship="label">
+            <button
+              type="button"
+              onClick={handleInsertTable}
+              className={mergeClasses(
+                styles.toolbarButton,
+                isDark && styles.toolbarButtonDark
+              )}
+            >
+              <TableRegular />
+            </button>
+          </Tooltip>
+        </div>
+      )}
+
       {/* Bubble menu for text selection - only in rich text mode */}
       {showToolbar && (
         <BubbleMenu
