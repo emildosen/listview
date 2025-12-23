@@ -13,7 +13,6 @@ import {
 } from '@fluentui/react-components';
 import {
   PersonRegular,
-  PeopleRegular,
   DismissRegular,
 } from '@fluentui/react-icons';
 import { searchPeople, type PersonOrGroupOption } from '../../auth/graphClient';
@@ -186,9 +185,7 @@ export function PeoplePicker({
               />
             ) : undefined
           }
-          contentBefore={
-            selected.type === 'group' ? <PeopleRegular /> : <PersonRegular />
-          }
+          contentBefore={<PersonRegular />}
         />
       </div>
     );
@@ -207,7 +204,7 @@ export function PeoplePicker({
               key={person.id}
               value={person.id}
               dismissible={!disabled}
-              icon={person.type === 'group' ? <PeopleRegular /> : <PersonRegular />}
+              icon={<PersonRegular />}
             >
               {person.displayName}
             </Tag>
@@ -236,7 +233,7 @@ export function PeoplePicker({
           searchResults.map(person => (
             <Option key={person.id} value={person.id} text={person.displayName}>
               <div className={styles.option}>
-                {person.type === 'group' ? <PeopleRegular /> : <PersonRegular />}
+                <PersonRegular />
                 <div className={styles.optionDetails}>
                   <Text>{person.displayName}</Text>
                   {person.email && (

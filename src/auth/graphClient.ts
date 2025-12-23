@@ -648,23 +648,27 @@ export async function resolveSharePointUrl(
 // People picker types and utilities
 
 export interface PersonOrGroupOption {
-  id: string;  // User/Group ID
-  email?: string;  // Email address (for users)
+  id: string;  // User ID
+  email?: string;  // Email address
   displayName: string;  // Display name
-  type: 'user' | 'group';  // Whether this is a user or group
+  type: 'user';  // Always 'user' - SharePoint groups not supported via Graph API
   userPrincipalName?: string;  // UPN for users
 }
 
 /**
  * Search for users in the tenant
  * Uses the /users endpoint with $filter for search
+ * Note: SharePoint groups are not searchable via Graph API - only Entra ID users are supported
  */
-export async function searchUsers(
+export async function searchPeople(
   msalInstance: IPublicClientApplication,
   account: AccountInfo,
   searchQuery: string,
+  _chooseFromType: 'peopleOnly' | 'peopleAndGroups' = 'peopleOnly',
   top: number = 10
 ): Promise<PersonOrGroupOption[]> {
+  // Note: chooseFromType is ignored - SharePoint groups require SharePoint REST API
+  // which is not currently implemented. Only user search is supported.
   if (!searchQuery || searchQuery.trim().length < 1) {
     return [];
   }
@@ -699,137 +703,4 @@ export async function searchUsers(
     console.error('Failed to search users:', err);
     return [];
   }
-}
-
-/**
- * Search for groups in the tenant
- * Uses the /groups endpoint with $filter for search
- */
-export async function searchGroups(
-  msalInstance: IPublicClientApplication,
-  account: AccountInfo,
-  searchQuery: string,
-  top: number = 10
-): Promise<PersonOrGroupOption[]> {
-  if (!searchQuery || searchQuery.trim().length < 1) {
-    return [];
-  }
-
-  const client = createGraphClient(msalInstance, account);
-  const query = searchQuery.trim().toLowerCase();
-
-  try {
-    // Search groups using startsWith filter on displayName
-    const response = await client
-      .api('/groups')
-      .filter(`startsWith(displayName,'${query}')`)
-      .select('id,displayName,mail')
-      .top(top)
-      .get();
-
-    const groups: PersonOrGroupOption[] = (response.value || []).map((group: {
-      id: string;
-      displayName: string;
-      mail?: string;
-    }) => ({
-      id: group.id,
-      displayName: group.displayName,
-      email: group.mail,
-      type: 'group' as const,
-    }));
-
-    return groups;
-  } catch (err) {
-    console.error('Failed to search groups:', err);
-    return [];
-  }
-}
-
-/**
- * Search for users and/or groups based on chooseFromType setting
- */
-export async function searchPeople(
-  msalInstance: IPublicClientApplication,
-  account: AccountInfo,
-  searchQuery: string,
-  chooseFromType: 'peopleOnly' | 'peopleAndGroups' = 'peopleOnly',
-  top: number = 10
-): Promise<PersonOrGroupOption[]> {
-  if (chooseFromType === 'peopleOnly') {
-    return searchUsers(msalInstance, account, searchQuery, top);
-  }
-
-  // Search both users and groups in parallel
-  const [users, groups] = await Promise.all([
-    searchUsers(msalInstance, account, searchQuery, top),
-    searchGroups(msalInstance, account, searchQuery, top),
-  ]);
-
-  // Interleave results, prioritizing users
-  const combined: PersonOrGroupOption[] = [];
-  const maxLen = Math.max(users.length, groups.length);
-  for (let i = 0; i < maxLen && combined.length < top; i++) {
-    if (i < users.length) combined.push(users[i]);
-    if (i < groups.length && combined.length < top) combined.push(groups[i]);
-  }
-
-  return combined;
-}
-
-/**
- * Get user or group details by ID
- */
-export async function getPersonById(
-  msalInstance: IPublicClientApplication,
-  account: AccountInfo,
-  id: string,
-  type: 'user' | 'group' = 'user'
-): Promise<PersonOrGroupOption | null> {
-  const client = createGraphClient(msalInstance, account);
-
-  try {
-    if (type === 'user') {
-      const user = await client
-        .api(`/users/${id}`)
-        .select('id,displayName,mail,userPrincipalName')
-        .get();
-
-      return {
-        id: user.id,
-        displayName: user.displayName,
-        email: user.mail || user.userPrincipalName,
-        userPrincipalName: user.userPrincipalName,
-        type: 'user',
-      };
-    } else {
-      const group = await client
-        .api(`/groups/${id}`)
-        .select('id,displayName,mail')
-        .get();
-
-      return {
-        id: group.id,
-        displayName: group.displayName,
-        email: group.mail,
-        type: 'group',
-      };
-    }
-  } catch (err) {
-    console.error(`Failed to get ${type} by ID:`, err);
-    return null;
-  }
-}
-
-/**
- * Resolve multiple people/groups by their IDs
- */
-export async function resolvePeopleByIds(
-  msalInstance: IPublicClientApplication,
-  account: AccountInfo,
-  ids: Array<{ id: string; type?: 'user' | 'group' }>
-): Promise<PersonOrGroupOption[]> {
-  const results = await Promise.all(
-    ids.map(({ id, type = 'user' }) => getPersonById(msalInstance, account, id, type))
-  );
-  return results.filter((r): r is PersonOrGroupOption => r !== null);
 }

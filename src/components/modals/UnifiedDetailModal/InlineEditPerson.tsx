@@ -13,7 +13,6 @@ import {
 } from '@fluentui/react-components';
 import {
   PersonRegular,
-  PeopleRegular,
   DismissRegular,
 } from '@fluentui/react-icons';
 import { searchPeople, type PersonOrGroupOption } from '../../../auth/graphClient';
@@ -209,7 +208,7 @@ export function InlineEditPerson({
           />
         }
         contentBefore={
-          selected.type === 'group' ? <PeopleRegular /> : <PersonRegular />
+          <PersonRegular />
         }
       />
     );
@@ -228,7 +227,7 @@ export function InlineEditPerson({
               key={person.id}
               value={person.id}
               dismissible
-              icon={person.type === 'group' ? <PeopleRegular /> : <PersonRegular />}
+              icon={<PersonRegular />}
             >
               {person.displayName}
             </Tag>
@@ -259,7 +258,7 @@ export function InlineEditPerson({
           searchResults.map(person => (
             <Option key={person.id} value={person.id} text={person.displayName}>
               <div className={styles.option}>
-                {person.type === 'group' ? <PeopleRegular /> : <PersonRegular />}
+                <PersonRegular />
                 <div className={styles.optionDetails}>
                   <Text>{person.displayName}</Text>
                   {person.email && (
