@@ -158,7 +158,7 @@ export function DescriptionField({
           onBlur={handleBlur}
           placeholder={placeholder}
           readOnly={readOnly}
-          minHeight={200}
+          minHeight={100}
           showToolbar={isRichText}
         />
       </div>
