@@ -56,6 +56,12 @@ export interface GraphListColumn {
   hyperlinkOrPicture?: {
     isPicture?: boolean;
   };
+  // Person or group column - present if this is a people picker column
+  personOrGroup?: {
+    allowMultipleSelection?: boolean;
+    chooseFromType?: 'peopleOnly' | 'peopleAndGroups';
+    displayAs?: string;
+  };
 }
 
 // Form field configuration from ContentType columnPositions (ordered for forms)
@@ -73,6 +79,7 @@ export interface FormFieldConfig {
   lookup?: { listId: string; columnName: string; allowMultipleValues?: boolean };
   choice?: { choices: string[]; allowMultipleValues?: boolean };
   hyperlinkOrPicture?: { isPicture?: boolean };
+  personOrGroup?: { allowMultipleSelection?: boolean; chooseFromType?: 'peopleOnly' | 'peopleAndGroups' };
   defaultValue?: { value?: string; formula?: string };
 }
 
@@ -227,7 +234,7 @@ export async function getListColumns(
 
   const response = await client
     .api(`/sites/${siteId}/lists/${listId}/columns`)
-    .select('id,name,displayName,columnGroup,hidden,readOnly,defaultValue,text,boolean,number,dateTime,lookup,choice,hyperlinkOrPicture')
+    .select('id,name,displayName,columnGroup,hidden,readOnly,defaultValue,text,boolean,number,dateTime,lookup,choice,hyperlinkOrPicture,personOrGroup')
     .get();
 
   // Filter out system columns but keep hidden columns (marked with hidden: true for UI to filter)
@@ -279,6 +286,14 @@ export async function getListColumns(
         };
       }
 
+      if (col.personOrGroup) {
+        result.personOrGroup = {
+          allowMultipleSelection: col.personOrGroup.allowMultipleSelection,
+          chooseFromType: col.personOrGroup.chooseFromType as 'peopleOnly' | 'peopleAndGroups' | undefined,
+          displayAs: col.personOrGroup.displayAs,
+        };
+      }
+
       return result;
     });
 
@@ -322,7 +337,7 @@ export async function getFormFieldConfig(
   // Step 2: Get columns for this content type (they come in form order)
   const columnsResponse = await client
     .api(`/sites/${siteId}/lists/${listId}/contentTypes/${encodedContentTypeId}/columns`)
-    .select('id,name,displayName,hidden,readOnly,required,defaultValue,text,boolean,number,dateTime,lookup,choice,hyperlinkOrPicture')
+    .select('id,name,displayName,hidden,readOnly,required,defaultValue,text,boolean,number,dateTime,lookup,choice,hyperlinkOrPicture,personOrGroup')
     .get();
 
   const columns = columnsResponse.value || [];
@@ -364,6 +379,13 @@ export async function getFormFieldConfig(
       if (col.hyperlinkOrPicture) {
         field.hyperlinkOrPicture = {
           isPicture: col.hyperlinkOrPicture.isPicture,
+        };
+      }
+
+      if (col.personOrGroup) {
+        field.personOrGroup = {
+          allowMultipleSelection: col.personOrGroup.allowMultipleSelection,
+          chooseFromType: col.personOrGroup.chooseFromType as 'peopleOnly' | 'peopleAndGroups' | undefined,
         };
       }
 
@@ -621,4 +643,193 @@ export async function resolveSharePointUrl(
   // Cache and return the parsed result
   resolvedUrlCache.set(trimmedUrl, parsed);
   return parsed;
+}
+
+// People picker types and utilities
+
+export interface PersonOrGroupOption {
+  id: string;  // User/Group ID
+  email?: string;  // Email address (for users)
+  displayName: string;  // Display name
+  type: 'user' | 'group';  // Whether this is a user or group
+  userPrincipalName?: string;  // UPN for users
+}
+
+/**
+ * Search for users in the tenant
+ * Uses the /users endpoint with $filter for search
+ */
+export async function searchUsers(
+  msalInstance: IPublicClientApplication,
+  account: AccountInfo,
+  searchQuery: string,
+  top: number = 10
+): Promise<PersonOrGroupOption[]> {
+  if (!searchQuery || searchQuery.trim().length < 1) {
+    return [];
+  }
+
+  const client = createGraphClient(msalInstance, account);
+  const query = searchQuery.trim().toLowerCase();
+
+  try {
+    // Search users using startsWith filter on displayName, mail, or userPrincipalName
+    const response = await client
+      .api('/users')
+      .filter(`startsWith(displayName,'${query}') or startsWith(mail,'${query}') or startsWith(userPrincipalName,'${query}')`)
+      .select('id,displayName,mail,userPrincipalName')
+      .top(top)
+      .get();
+
+    const users: PersonOrGroupOption[] = (response.value || []).map((user: {
+      id: string;
+      displayName: string;
+      mail?: string;
+      userPrincipalName?: string;
+    }) => ({
+      id: user.id,
+      displayName: user.displayName,
+      email: user.mail || user.userPrincipalName,
+      userPrincipalName: user.userPrincipalName,
+      type: 'user' as const,
+    }));
+
+    return users;
+  } catch (err) {
+    console.error('Failed to search users:', err);
+    return [];
+  }
+}
+
+/**
+ * Search for groups in the tenant
+ * Uses the /groups endpoint with $filter for search
+ */
+export async function searchGroups(
+  msalInstance: IPublicClientApplication,
+  account: AccountInfo,
+  searchQuery: string,
+  top: number = 10
+): Promise<PersonOrGroupOption[]> {
+  if (!searchQuery || searchQuery.trim().length < 1) {
+    return [];
+  }
+
+  const client = createGraphClient(msalInstance, account);
+  const query = searchQuery.trim().toLowerCase();
+
+  try {
+    // Search groups using startsWith filter on displayName
+    const response = await client
+      .api('/groups')
+      .filter(`startsWith(displayName,'${query}')`)
+      .select('id,displayName,mail')
+      .top(top)
+      .get();
+
+    const groups: PersonOrGroupOption[] = (response.value || []).map((group: {
+      id: string;
+      displayName: string;
+      mail?: string;
+    }) => ({
+      id: group.id,
+      displayName: group.displayName,
+      email: group.mail,
+      type: 'group' as const,
+    }));
+
+    return groups;
+  } catch (err) {
+    console.error('Failed to search groups:', err);
+    return [];
+  }
+}
+
+/**
+ * Search for users and/or groups based on chooseFromType setting
+ */
+export async function searchPeople(
+  msalInstance: IPublicClientApplication,
+  account: AccountInfo,
+  searchQuery: string,
+  chooseFromType: 'peopleOnly' | 'peopleAndGroups' = 'peopleOnly',
+  top: number = 10
+): Promise<PersonOrGroupOption[]> {
+  if (chooseFromType === 'peopleOnly') {
+    return searchUsers(msalInstance, account, searchQuery, top);
+  }
+
+  // Search both users and groups in parallel
+  const [users, groups] = await Promise.all([
+    searchUsers(msalInstance, account, searchQuery, top),
+    searchGroups(msalInstance, account, searchQuery, top),
+  ]);
+
+  // Interleave results, prioritizing users
+  const combined: PersonOrGroupOption[] = [];
+  const maxLen = Math.max(users.length, groups.length);
+  for (let i = 0; i < maxLen && combined.length < top; i++) {
+    if (i < users.length) combined.push(users[i]);
+    if (i < groups.length && combined.length < top) combined.push(groups[i]);
+  }
+
+  return combined;
+}
+
+/**
+ * Get user or group details by ID
+ */
+export async function getPersonById(
+  msalInstance: IPublicClientApplication,
+  account: AccountInfo,
+  id: string,
+  type: 'user' | 'group' = 'user'
+): Promise<PersonOrGroupOption | null> {
+  const client = createGraphClient(msalInstance, account);
+
+  try {
+    if (type === 'user') {
+      const user = await client
+        .api(`/users/${id}`)
+        .select('id,displayName,mail,userPrincipalName')
+        .get();
+
+      return {
+        id: user.id,
+        displayName: user.displayName,
+        email: user.mail || user.userPrincipalName,
+        userPrincipalName: user.userPrincipalName,
+        type: 'user',
+      };
+    } else {
+      const group = await client
+        .api(`/groups/${id}`)
+        .select('id,displayName,mail')
+        .get();
+
+      return {
+        id: group.id,
+        displayName: group.displayName,
+        email: group.mail,
+        type: 'group',
+      };
+    }
+  } catch (err) {
+    console.error(`Failed to get ${type} by ID:`, err);
+    return null;
+  }
+}
+
+/**
+ * Resolve multiple people/groups by their IDs
+ */
+export async function resolvePeopleByIds(
+  msalInstance: IPublicClientApplication,
+  account: AccountInfo,
+  ids: Array<{ id: string; type?: 'user' | 'group' }>
+): Promise<PersonOrGroupOption[]> {
+  const results = await Promise.all(
+    ids.map(({ id, type = 'user' }) => getPersonById(msalInstance, account, id, type))
+  );
+  return results.filter((r): r is PersonOrGroupOption => r !== null);
 }

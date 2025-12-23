@@ -18,8 +18,9 @@ import {
   MessageBarBody,
 } from '@fluentui/react-components';
 import { useListFormConfig } from '../../hooks/useListFormConfig';
-import type { FormFieldConfig } from '../../auth/graphClient';
+import type { FormFieldConfig, PersonOrGroupOption } from '../../auth/graphClient';
 import type { LookupOption } from '../../contexts/FormConfigContext';
+import { PeoplePicker } from '../common/PeoplePicker';
 
 // System columns that should never appear in forms
 const SYSTEM_COLUMNS = new Set([
@@ -208,6 +209,38 @@ function ItemFormModal({
             initial[field.name] = null;
           }
         }
+      } else if (field.personOrGroup) {
+        // Person/Group column: extract person data from initial value
+        // SharePoint returns: { Email, LookupId, LookupValue } or array of these
+        const personValue = initialValues[field.name];
+
+        const extractPerson = (v: unknown): PersonOrGroupOption | null => {
+          if (typeof v === 'object' && v !== null) {
+            const obj = v as Record<string, unknown>;
+            // Handle SharePoint's person format
+            if ('LookupId' in obj || 'Email' in obj || 'email' in obj) {
+              return {
+                id: String(obj.LookupId ?? obj.id ?? ''),
+                email: String(obj.Email ?? obj.email ?? ''),
+                displayName: String(obj.LookupValue ?? obj.title ?? obj.displayName ?? ''),
+                type: 'user',
+              };
+            }
+          }
+          return null;
+        };
+
+        if (field.personOrGroup.allowMultipleSelection) {
+          if (Array.isArray(personValue)) {
+            initial[field.name] = personValue
+              .map(extractPerson)
+              .filter((p): p is PersonOrGroupOption => p !== null);
+          } else {
+            initial[field.name] = [];
+          }
+        } else {
+          initial[field.name] = extractPerson(personValue);
+        }
       } else if (field.choice?.allowMultipleValues) {
         // Multi-select choice: extract array from { results: [...] } format if present
         const choiceValue = initialValues[field.name];
@@ -265,6 +298,27 @@ function ItemFormModal({
             } else {
               submitValues[`${field.name}Id`] = null;
             }
+          }
+        } else if (field.personOrGroup) {
+          // Person/Group fields: submit as FieldNameId with user email(s) or lookup ID(s)
+          // PnPjs expects the user's email or the numeric ID
+          const extractPersonId = (p: PersonOrGroupOption | null): string | number | null => {
+            if (!p) return null;
+            // Try to use email for user lookup, or the numeric ID if available
+            return p.email || p.userPrincipalName || (p.id ? parseInt(p.id, 10) || p.id : null);
+          };
+
+          if (field.personOrGroup.allowMultipleSelection) {
+            if (Array.isArray(value) && value.length > 0) {
+              submitValues[`${field.name}Id`] = value
+                .map((p: PersonOrGroupOption) => extractPersonId(p))
+                .filter((id): id is string | number => id !== null);
+            } else {
+              submitValues[`${field.name}Id`] = [];
+            }
+          } else {
+            const personId = extractPersonId(value as PersonOrGroupOption | null);
+            submitValues[`${field.name}Id`] = personId;
           }
         } else if (field.choice?.allowMultipleValues) {
           // Multi-select choice: PnPjs expects a plain array
@@ -425,6 +479,39 @@ function ItemFormModal({
               </Option>
             ))}
           </Dropdown>
+        </Field>
+      );
+    }
+
+    // Person/Group column
+    if (field.personOrGroup) {
+      const isMultiSelect = field.personOrGroup.allowMultipleSelection ?? false;
+
+      // If read-only, show as disabled input with display names
+      if (field.readOnly) {
+        let displayValue = '-';
+        if (isMultiSelect && Array.isArray(value)) {
+          displayValue = value.map((p: PersonOrGroupOption) => p.displayName).join(', ') || '-';
+        } else if (value && typeof value === 'object' && 'displayName' in value) {
+          displayValue = (value as PersonOrGroupOption).displayName || '-';
+        }
+        return (
+          <Field key={field.id} label={field.displayName}>
+            <Input value={displayValue} disabled size="small" />
+          </Field>
+        );
+      }
+
+      return (
+        <Field key={field.id} label={field.displayName} required={field.required}>
+          <PeoplePicker
+            value={value as PersonOrGroupOption | PersonOrGroupOption[] | null}
+            onChange={(newValue) => handleChange(field.name, newValue)}
+            allowMultiple={isMultiSelect}
+            chooseFromType={field.personOrGroup.chooseFromType ?? 'peopleOnly'}
+            disabled={field.readOnly}
+            size="small"
+          />
         </Field>
       );
     }

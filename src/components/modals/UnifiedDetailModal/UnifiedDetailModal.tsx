@@ -36,6 +36,7 @@ import { InlineEditLookup } from './InlineEditLookup';
 import { InlineEditNumber } from './InlineEditNumber';
 import { InlineEditDate, formatDateForInput, formatDateTimeForInput, formatDateForDisplay, formatDateTimeForDisplay } from './InlineEditDate';
 import { InlineEditBoolean } from './InlineEditBoolean';
+import { InlineEditPerson } from './InlineEditPerson';
 import { DescriptionField } from './DescriptionField';
 import { RelatedSectionView } from './RelatedSectionView';
 import { EditableStatBox } from './EditableStatBox';
@@ -369,6 +370,25 @@ function UnifiedDetailModalContent({
       // Handle lookup fields specially
       if (formField?.lookup) {
         payload[`${fieldName}Id`] = value;
+      } else if (formField?.personOrGroup) {
+        // Person/Group fields: submit as FieldNameId with user email(s)
+        type PersonOption = import('../../../auth/graphClient').PersonOrGroupOption;
+        const extractPersonId = (p: PersonOption | null): string | number | null => {
+          if (!p) return null;
+          return p.email || p.userPrincipalName || (p.id ? parseInt(p.id, 10) || p.id : null);
+        };
+
+        if (formField.personOrGroup.allowMultipleSelection) {
+          if (Array.isArray(value) && value.length > 0) {
+            payload[`${fieldName}Id`] = (value as PersonOption[])
+              .map(p => extractPersonId(p))
+              .filter((id): id is string | number => id !== null);
+          } else {
+            payload[`${fieldName}Id`] = [];
+          }
+        } else {
+          payload[`${fieldName}Id`] = extractPersonId(value as PersonOption | null);
+        }
       } else if (formField?.choice?.allowMultipleValues) {
         // Multi-select choice: PnPjs expects a plain array
         payload[fieldName] = Array.isArray(value) ? value : [];
@@ -378,7 +398,7 @@ function UnifiedDetailModalContent({
 
       await updateListItem(spClient, currentListId, parseInt(currentItem.id, 10), payload);
 
-      // Update local item state with display-friendly format for lookups
+      // Update local item state with display-friendly format for lookups and people
       let displayValue = value;
       if (formField?.lookup) {
         const options = lookupOptions[fieldName] ?? [];
@@ -392,6 +412,20 @@ function UnifiedDetailModalContent({
           // Single select: convert ID to lookup object
           const option = options.find(o => o.id === value);
           displayValue = { LookupId: value, LookupValue: option?.value ?? String(value) };
+        }
+      } else if (formField?.personOrGroup) {
+        // Person/Group: convert PersonOrGroupOption to SharePoint format
+        type PersonOption = import('../../../auth/graphClient').PersonOrGroupOption;
+        const toSharePointFormat = (p: PersonOption) => ({
+          LookupId: parseInt(p.id, 10) || 0,
+          LookupValue: p.displayName,
+          Email: p.email,
+        });
+
+        if (formField.personOrGroup.allowMultipleSelection && Array.isArray(value)) {
+          displayValue = (value as PersonOption[]).map(toSharePointFormat);
+        } else if (value && typeof value === 'object' && 'displayName' in value) {
+          displayValue = toSharePointFormat(value as PersonOption);
         }
       }
 
@@ -556,6 +590,23 @@ function UnifiedDetailModalContent({
           .map(v => (typeof v === 'object' && v !== null && 'LookupValue' in v ? v.LookupValue : String(v)))
           .join(', ');
       }
+    }
+
+    // Person/Group
+    if (formField?.personOrGroup || colMeta?.personOrGroup) {
+      // SharePoint returns: { Email, LookupId, LookupValue } or array of these
+      const extractName = (v: unknown): string => {
+        if (typeof v === 'object' && v !== null) {
+          const obj = v as Record<string, unknown>;
+          return String(obj.LookupValue ?? obj.displayName ?? obj.title ?? obj.Email ?? '');
+        }
+        return String(v);
+      };
+
+      if (Array.isArray(value)) {
+        return value.map(extractName).filter(Boolean).join(', ') || '-';
+      }
+      return extractName(value) || '-';
     }
 
     // Default: handle arrays generically
@@ -972,6 +1023,49 @@ function DetailFieldEdit({
           options={lookupOptions[fieldName] ?? []}
           isLoading={lookupLoading}
           isMultiSelect={formField.lookup.allowMultipleValues ?? false}
+          onChange={(v) => setEditValue(v)}
+          onCommit={handleCommit}
+          onCancel={onCancelEdit}
+        />
+      );
+    }
+
+    // Person/Group field
+    if (formField?.personOrGroup || columnMetadata?.personOrGroup) {
+      const personOrGroup = formField?.personOrGroup ?? columnMetadata?.personOrGroup;
+      const isMultiSelect = personOrGroup?.allowMultipleSelection ?? false;
+
+      // Extract person data from current value
+      const extractPerson = (v: unknown): import('../../../auth/graphClient').PersonOrGroupOption | null => {
+        if (typeof v === 'object' && v !== null) {
+          const obj = v as Record<string, unknown>;
+          if ('LookupId' in obj || 'Email' in obj || 'email' in obj || 'displayName' in obj) {
+            return {
+              id: String(obj.LookupId ?? obj.id ?? ''),
+              email: String(obj.Email ?? obj.email ?? ''),
+              displayName: String(obj.LookupValue ?? obj.displayName ?? obj.title ?? ''),
+              type: 'user',
+            };
+          }
+        }
+        return null;
+      };
+
+      let currentValue: import('../../../auth/graphClient').PersonOrGroupOption | import('../../../auth/graphClient').PersonOrGroupOption[] | null;
+      if (isMultiSelect) {
+        currentValue = Array.isArray(editValue)
+          ? editValue.map(extractPerson).filter((p): p is import('../../../auth/graphClient').PersonOrGroupOption => p !== null)
+          : [];
+        if ((currentValue as import('../../../auth/graphClient').PersonOrGroupOption[]).length === 0) currentValue = null;
+      } else {
+        currentValue = extractPerson(editValue);
+      }
+
+      return (
+        <InlineEditPerson
+          value={currentValue}
+          isMultiSelect={isMultiSelect}
+          chooseFromType={personOrGroup?.chooseFromType ?? 'peopleOnly'}
           onChange={(v) => setEditValue(v)}
           onCommit={handleCommit}
           onCancel={onCancelEdit}
