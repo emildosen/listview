@@ -181,10 +181,10 @@ export function InlineEditPerson({
   };
 
   const handleBlur = () => {
-    // Only commit on blur for multi-select
-    if (isMultiSelect) {
-      onCommit();
-    }
+    // Commit on blur - this handles:
+    // - Multi-select: commit current selections
+    // - Single-select with no value: commit null (clearing the field)
+    onCommit();
   };
 
   // For single select with existing value, show as read-only input with clear button
@@ -198,12 +198,18 @@ export function InlineEditPerson({
         size="small"
         className={styles.singleSelectInput}
         onKeyDown={handleKeyDown}
+        onBlur={() => {
+          // Commit current value when clicking outside
+          onCommit();
+        }}
         contentAfter={
           <DismissRegular
             style={{ cursor: 'pointer' }}
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               onChange(null);
-              // Don't commit here - let them search for a new person
+              // Commit immediately when clearing
+              setTimeout(() => onCommit(null), 0);
             }}
           />
         }
