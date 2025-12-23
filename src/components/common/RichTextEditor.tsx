@@ -1,6 +1,6 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
-import { BubbleMenu, FloatingMenu } from '@tiptap/react/menus';
+import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
@@ -15,9 +15,7 @@ import { TableHeader } from '@tiptap/extension-table-header';
 import { Extension } from '@tiptap/core';
 import Suggestion from '@tiptap/suggestion';
 import { makeStyles, tokens, mergeClasses, Tooltip } from '@fluentui/react-components';
-import type { EditorState } from '@tiptap/pm/state';
 import {
-  AddRegular,
   TextBoldRegular,
   TextItalicRegular,
   TextUnderlineRegular,
@@ -63,7 +61,6 @@ const useStyles = makeStyles({
     fontSize: '14px',
     lineHeight: '1.5',
     padding: '12px 16px',
-    paddingLeft: '40px', // Space for floating + button
     outline: 'none',
     minHeight: 'var(--editor-min-height, 80px)',
     maxHeight: '600px',
@@ -154,9 +151,6 @@ const useStyles = makeStyles({
       backgroundColor: '#2a2a2a',
     },
   },
-  editorContentPlain: {
-    paddingLeft: '16px', // No space needed for + button in plain mode
-  },
   bubbleMenu: {
     display: 'flex',
     alignItems: 'center',
@@ -200,95 +194,6 @@ const useStyles = makeStyles({
   bubbleButtonActiveDark: {
     backgroundColor: '#3a3a3a',
     color: '#60cdff',
-  },
-  floatingMenu: {
-    position: 'absolute',
-    left: '8px',
-    marginTop: '-2px',
-  },
-  plusButton: {
-    width: '24px',
-    height: '24px',
-    minWidth: '24px',
-    padding: 0,
-    borderRadius: tokens.borderRadiusSmall,
-    backgroundColor: 'transparent',
-    border: `1px solid ${tokens.colorNeutralStroke1}`,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: tokens.colorNeutralForeground3,
-    ':hover': {
-      backgroundColor: tokens.colorNeutralBackground3,
-      color: tokens.colorNeutralForeground1,
-    },
-  },
-  plusButtonDark: {
-    border: '1px solid #444444',
-    color: '#888888',
-    ':hover': {
-      backgroundColor: '#3a3a3a',
-      color: '#ffffff',
-    },
-  },
-  slashMenu: {
-    backgroundColor: tokens.colorNeutralBackground1,
-    borderRadius: tokens.borderRadiusMedium,
-    boxShadow: tokens.shadow16,
-    border: `1px solid ${tokens.colorNeutralStroke1}`,
-    maxHeight: '300px',
-    overflowY: 'auto',
-    minWidth: '200px',
-    padding: '4px',
-    zIndex: 1000001,
-  },
-  slashMenuDark: {
-    backgroundColor: '#1a1a1a',
-    border: '1px solid #333333',
-  },
-  slashMenuItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '8px 12px',
-    cursor: 'pointer',
-    borderRadius: tokens.borderRadiusSmall,
-    ':hover': {
-      backgroundColor: tokens.colorNeutralBackground3,
-    },
-  },
-  slashMenuItemDark: {
-    ':hover': {
-      backgroundColor: '#252525',
-    },
-  },
-  slashMenuItemActive: {
-    backgroundColor: tokens.colorNeutralBackground3,
-  },
-  slashMenuItemActiveDark: {
-    backgroundColor: '#252525',
-  },
-  slashMenuItemIcon: {
-    width: '20px',
-    height: '20px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: tokens.colorNeutralForeground2,
-  },
-  slashMenuItemText: {
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  slashMenuItemTitle: {
-    fontSize: tokens.fontSizeBase300,
-    fontWeight: tokens.fontWeightSemibold,
-    color: tokens.colorNeutralForeground1,
-  },
-  slashMenuItemDescription: {
-    fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground3,
   },
   colorPicker: {
     display: 'flex',
@@ -621,7 +526,6 @@ export function RichTextEditor({
   const isDark = theme === 'dark';
   const lastExternalValue = useRef(value);
   const [showHighlightPicker, setShowHighlightPicker] = useState(false);
-  const [showPlusMenu, setShowPlusMenu] = useState(false);
 
   // Configure extensions based on mode
   const extensions = [
@@ -734,16 +638,6 @@ export function RichTextEditor({
       if (!editor) return;
       editor.chain().focus().toggleHighlight({ color }).run();
       setShowHighlightPicker(false);
-    },
-    [editor]
-  );
-
-  const handlePlusMenuCommand = useCallback(
-    (item: SlashCommandItem) => {
-      if (!editor) return;
-      item.command(editor);
-      setShowPlusMenu(false);
-      editor.commands.focus();
     },
     [editor]
   );
@@ -1014,67 +908,12 @@ export function RichTextEditor({
         </div>
       )}
 
-      {/* Floating plus menu - only in rich text mode */}
-      {showToolbar && (
-        <FloatingMenu
-          editor={editor}
-          options={{
-            placement: 'left-start',
-            offset: { mainAxis: 8, crossAxis: 0 },
-          }}
-          shouldShow={({ state }: { editor: Editor; state: EditorState }) => {
-            const { $from } = state.selection;
-            const currentNode = $from.parent;
-            return (
-              currentNode.type.name === 'paragraph' &&
-              currentNode.textContent === '' &&
-              state.selection.empty
-            );
-          }}
-          className={styles.floatingMenu}
-        >
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              className={mergeClasses(styles.plusButton, isDark && styles.plusButtonDark)}
-              onClick={() => setShowPlusMenu(!showPlusMenu)}
-            >
-              <AddRegular style={{ fontSize: '14px' }} />
-            </button>
-            {showPlusMenu && (
-              <div
-                className={mergeClasses(styles.slashMenu, isDark && styles.slashMenuDark)}
-                style={{ position: 'absolute', left: '32px', top: 0 }}
-              >
-                {slashCommands.map((item) => (
-                  <div
-                    key={item.title}
-                    className={mergeClasses(
-                      styles.slashMenuItem,
-                      isDark && styles.slashMenuItemDark
-                    )}
-                    onClick={() => handlePlusMenuCommand(item)}
-                  >
-                    <span className={styles.slashMenuItemIcon}>{item.icon}</span>
-                    <div className={styles.slashMenuItemText}>
-                      <span className={styles.slashMenuItemTitle}>{item.title}</span>
-                      <span className={styles.slashMenuItemDescription}>{item.description}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </FloatingMenu>
-      )}
-
       {/* Editor content */}
       <EditorContent
         editor={editor}
         className={mergeClasses(
           styles.editorContent,
-          isDark && styles.editorContentDark,
-          !showToolbar && styles.editorContentPlain
+          isDark && styles.editorContentDark
         )}
         style={{ '--editor-min-height': `${minHeight}px` } as React.CSSProperties}
       />
