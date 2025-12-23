@@ -121,21 +121,41 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(HOSTNAME_STORAGE_KEY, hostname);
       }
 
-      // Check for primary site in localStorage - user must explicitly choose
-      const sitePath = localStorage.getItem(LOCAL_STORAGE_KEY);
+      // Check for primary site in localStorage
+      let sitePath = localStorage.getItem(LOCAL_STORAGE_KEY);
 
       if (!sitePath) {
-        // No primary site configured - show site picker
-        setState((prev) => ({
-          ...prev,
-          setupStatus: 'no-site-configured',
-          hostname,
-          sitePath: null,
-          isCustomSite: false,
-          site: null,
-          settingsList: null,
-        }));
-        return;
+        // No primary site configured - try default /sites/ListView first
+        const defaultSitePath = '/sites/ListView';
+        const defaultSite = await getSite(instance, account, hostname, defaultSitePath);
+
+        if (defaultSite) {
+          // Default site exists - check if it has the settings list
+          const defaultSiteUrl = buildSiteUrl(hostname, defaultSitePath);
+          const defaultSp = await createSPClient(instance, account, defaultSiteUrl);
+          const defaultSettingsList = await findSettingsList(defaultSp, defaultSiteUrl);
+
+          if (defaultSettingsList) {
+            // Default site with settings exists - use it automatically
+            localStorage.setItem(LOCAL_STORAGE_KEY, defaultSitePath);
+            sitePath = defaultSitePath;
+            spClientRef.current = defaultSp;
+          }
+        }
+
+        // If still no sitePath, show site picker
+        if (!sitePath) {
+          setState((prev) => ({
+            ...prev,
+            setupStatus: 'no-site-configured',
+            hostname,
+            sitePath: null,
+            isCustomSite: false,
+            site: null,
+            settingsList: null,
+          }));
+          return;
+        }
       }
 
       // Try to access the configured site
