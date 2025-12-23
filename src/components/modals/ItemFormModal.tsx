@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   makeStyles,
   Dialog,
@@ -110,6 +110,9 @@ function ItemFormModal({
   const [lookupOptions, setLookupOptions] = useState<Record<string, LookupOption[]>>({});
   const [lookupLoading, setLookupLoading] = useState<Record<string, boolean>>({});
 
+  // Track which lookups we've started loading to prevent re-fetching
+  const loadedLookupsRef = useRef<Set<string>>(new Set());
+
   // Get visible (non-hidden, non-system) fields for the form
   // Also hide the pre-filled lookup field (it's set by the parent)
   const visibleFields = useMemo(() => {
@@ -126,7 +129,11 @@ function ItemFormModal({
     if (lookupFields.length === 0) return;
 
     lookupFields.forEach(async (field) => {
-      if (!field.lookup || lookupOptions[field.name] || lookupLoading[field.name]) return;
+      if (!field.lookup) return;
+
+      // Use ref to track loaded lookups - prevents re-running on state changes
+      if (loadedLookupsRef.current.has(field.name)) return;
+      loadedLookupsRef.current.add(field.name);
 
       setLookupLoading((prev) => ({ ...prev, [field.name]: true }));
 
@@ -142,7 +149,7 @@ function ItemFormModal({
         setLookupLoading((prev) => ({ ...prev, [field.name]: false }));
       }
     });
-  }, [visibleFields, siteId, getLookupOptions, lookupOptions, lookupLoading]);
+  }, [visibleFields, siteId, getLookupOptions]);
 
   // Compute default values from fields and initialValues (no effect needed)
   const defaultValues = useMemo(() => {
