@@ -669,21 +669,28 @@ export async function searchPeople(
 ): Promise<PersonOrGroupOption[]> {
   // Note: chooseFromType is ignored - SharePoint groups require SharePoint REST API
   // which is not currently implemented. Only user search is supported.
-  if (!searchQuery || searchQuery.trim().length < 1) {
-    return [];
-  }
-
   const client = createGraphClient(msalInstance, account);
   const query = searchQuery.trim().toLowerCase();
 
   try {
-    // Search users using startsWith filter on displayName, mail, or userPrincipalName
-    const response = await client
-      .api('/users')
-      .filter(`startsWith(displayName,'${query}') or startsWith(mail,'${query}') or startsWith(userPrincipalName,'${query}')`)
-      .select('id,displayName,mail,userPrincipalName')
-      .top(top)
-      .get();
+    let response;
+    if (query.length > 0) {
+      // Search users using startsWith filter on displayName, mail, or userPrincipalName
+      response = await client
+        .api('/users')
+        .filter(`startsWith(displayName,'${query}') or startsWith(mail,'${query}') or startsWith(userPrincipalName,'${query}')`)
+        .select('id,displayName,mail,userPrincipalName')
+        .top(top)
+        .get();
+    } else {
+      // No query - return first N users sorted by displayName
+      response = await client
+        .api('/users')
+        .select('id,displayName,mail,userPrincipalName')
+        .orderby('displayName')
+        .top(top)
+        .get();
+    }
 
     const users: PersonOrGroupOption[] = (response.value || []).map((user: {
       id: string;

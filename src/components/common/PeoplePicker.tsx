@@ -96,7 +96,7 @@ export function PeoplePicker({
 
   // Debounced search
   const performSearch = useCallback(async (query: string) => {
-    if (!query.trim() || !account) {
+    if (!account) {
       setSearchResults([]);
       setIsSearching(false);
       return;
@@ -104,7 +104,8 @@ export function PeoplePicker({
 
     setIsSearching(true);
     try {
-      const results = await searchPeople(instance, account, query, chooseFromType);
+      // Empty query fetches initial users, non-empty query searches
+      const results = await searchPeople(instance, account, query, chooseFromType, 10);
       // Filter out already selected items
       const selectedIds = new Set(selectedValues.map(v => v.id));
       const filtered = results.filter(r => !selectedIds.has(r.id));
@@ -123,12 +124,13 @@ export function PeoplePicker({
     }
 
     if (searchQuery.trim().length >= 1) {
+      // Debounce search when typing
       searchDebounceRef.current = setTimeout(() => {
         performSearch(searchQuery);
       }, 300);
-    } else {
-      setSearchResults([]);
-      setIsSearching(false);
+    } else if (open) {
+      // When cleared and dropdown is open, reload initial users immediately
+      performSearch('');
     }
 
     return () => {
@@ -136,7 +138,14 @@ export function PeoplePicker({
         clearTimeout(searchDebounceRef.current);
       }
     };
-  }, [searchQuery, performSearch]);
+  }, [searchQuery, performSearch, open]);
+
+  // Load initial users when dropdown opens
+  useEffect(() => {
+    if (open && searchResults.length === 0 && !isSearching && searchQuery.trim().length === 0) {
+      performSearch('');
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelect = (_event: unknown, data: { optionValue?: string }) => {
     const selectedId = data.optionValue;

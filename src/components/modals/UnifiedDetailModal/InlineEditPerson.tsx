@@ -92,14 +92,27 @@ export function InlineEditPerson({
     return value ? (Array.isArray(value) ? value : [value]) : [];
   }, [value]);
 
-  // Focus on mount
+  // Load initial users on mount
   useEffect(() => {
     inputRef.current?.focus();
-  }, []);
+
+    // Fetch initial users to show before user types
+    if (account) {
+      setIsSearching(true);
+      searchPeople(instance, account, '', chooseFromType, 10)
+        .then(results => {
+          // Filter out already selected items
+          const selectedIds = new Set(selectedValues.map(v => v.id));
+          setSearchResults(results.filter(r => !selectedIds.has(r.id)));
+        })
+        .catch(console.error)
+        .finally(() => setIsSearching(false));
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Debounced search
   const performSearch = useCallback(async (query: string) => {
-    if (!query.trim() || !account) {
+    if (!account) {
       setSearchResults([]);
       setIsSearching(false);
       return;
@@ -107,7 +120,8 @@ export function InlineEditPerson({
 
     setIsSearching(true);
     try {
-      const results = await searchPeople(instance, account, query, chooseFromType);
+      // Empty query fetches initial users, non-empty query searches
+      const results = await searchPeople(instance, account, query, chooseFromType, 10);
       // Filter out already selected items
       const selectedIds = new Set(selectedValues.map(v => v.id));
       const filtered = results.filter(r => !selectedIds.has(r.id));
@@ -126,12 +140,13 @@ export function InlineEditPerson({
     }
 
     if (searchQuery.trim().length >= 1) {
+      // Debounce search when typing
       searchDebounceRef.current = setTimeout(() => {
         performSearch(searchQuery);
       }, 300);
     } else {
-      setSearchResults([]);
-      setIsSearching(false);
+      // When cleared, reload initial users immediately
+      performSearch('');
     }
 
     return () => {
