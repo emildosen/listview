@@ -568,7 +568,7 @@ function UnifiedDetailModalContent({
     return (
       <Dialog
         open
-        modalType="alert"
+        modalType="modal"
         onOpenChange={(_, data) => {
           // Only close on explicit ESC key press
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -589,11 +589,11 @@ function UnifiedDetailModalContent({
   return (
     <>
       <Dialog
+        key={`${currentListId}-${currentItem.id}`}
         open
-        modalType="alert"
+        modalType="modal"
         onOpenChange={(_, data) => {
           // Only close on explicit ESC key press, not backdrop clicks or focus loss
-          // This prevents the modal from closing when TinyMCE opens dropdowns/dialogs
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           if (!data.open && (data as any).type === 'escapeKeyDown') {
             onClose();

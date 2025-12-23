@@ -652,7 +652,16 @@ export function RichTextEditor({
   }
 
   return (
-    <div className={mergeClasses(styles.container, isDark && styles.containerDark)}>
+    <div
+      className={mergeClasses(styles.container, isDark && styles.containerDark)}
+      tabIndex={0}
+      onFocus={() => {
+        // When container gets focus, forward it to the editor
+        if (!editor.isFocused) {
+          editor.commands.focus();
+        }
+      }}
+    >
       {/* Bubble menu for text selection - only in rich text mode */}
       {showToolbar && (
         <BubbleMenu
