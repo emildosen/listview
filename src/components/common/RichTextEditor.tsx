@@ -492,8 +492,9 @@ function createSlashCommandExtension(isDark: boolean) {
 // Convert HTML to plain text
 function htmlToPlainText(html: string): string {
   return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]*>/g, '')
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n')  // Paragraph breaks to newlines
+    .replace(/<br\s*\/?>/gi, '\n')         // BR tags to newlines
+    .replace(/<[^>]*>/g, '')               // Strip remaining HTML tags
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
