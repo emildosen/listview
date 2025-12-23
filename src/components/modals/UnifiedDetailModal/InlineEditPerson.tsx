@@ -87,6 +87,11 @@ export function InlineEditPerson({
   const [open, setOpen] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // For single-select: store original value to revert on blur without selection
+  const originalValueRef = useRef(value);
+  // Track if user made a new selection (for single-select revert behavior)
+  const [hasNewSelection, setHasNewSelection] = useState(false);
+
   // Normalize value to array for easier handling
   const selectedValues: PersonOrGroupOption[] = useMemo(() => {
     return value ? (Array.isArray(value) ? value : [value]) : [];
@@ -96,12 +101,19 @@ export function InlineEditPerson({
   useEffect(() => {
     inputRef.current?.focus();
 
+    // For single-select with existing value: auto-clear to show search immediately
+    // The original value is stored in originalValueRef for reverting on blur
+    if (!isMultiSelect && value) {
+      onChange(null);
+    }
+
     // Fetch initial users to show before user types
     if (account) {
       setIsSearching(true);
       searchPeople(instance, account, '', chooseFromType, 10)
         .then(results => {
-          // Filter out already selected items
+          // Filter out already selected items (for multi-select)
+          // For single-select, we cleared value so no filtering needed
           const selectedIds = new Set(selectedValues.map(v => v.id));
           setSearchResults(results.filter(r => !selectedIds.has(r.id)));
         })
@@ -168,6 +180,7 @@ export function InlineEditPerson({
       onChange(newValue);
     } else {
       onChange(selectedPerson);
+      setHasNewSelection(true);
       // Commit immediately for single select
       setTimeout(() => onCommit(selectedPerson), 0);
     }
@@ -191,17 +204,32 @@ export function InlineEditPerson({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
       e.preventDefault();
+      // For single-select: revert to original value
+      if (!isMultiSelect) {
+        onChange(originalValueRef.current);
+      }
       onCancel();
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      onCommit();
+      // For single-select without new selection: revert
+      if (!isMultiSelect && !hasNewSelection) {
+        onChange(originalValueRef.current);
+        onCancel();
+      } else {
+        onCommit();
+      }
     }
   };
 
   const handleBlur = () => {
-    // Commit on blur - this handles:
-    // - Multi-select: commit current selections
-    // - Single-select with no value: commit null (clearing the field)
+    // For single-select: if no new selection was made, revert to original value
+    if (!isMultiSelect && !hasNewSelection) {
+      // Revert to original value and cancel (don't save)
+      onChange(originalValueRef.current);
+      onCancel();
+      return;
+    }
+    // Multi-select: commit current selections
     onCommit();
   };
 
