@@ -21,8 +21,9 @@ import {
 } from '@fluentui/react-components';
 import type { TableColumnDefinition } from '@fluentui/react-components';
 import { AddRegular } from '@fluentui/react-icons';
-import { getListItems, type GraphListItem } from '../../../auth/graphClient';
+import { getListItems, type GraphListItem, type GraphListColumn } from '../../../auth/graphClient';
 import { createListItem, createSPClient } from '../../../services/sharepoint';
+import { formatDateForDisplay, formatDateTimeForDisplay } from './InlineEditDate';
 import type { RelatedSection } from '../../../types/page';
 import { useModalNavigation, type NavigationEntry } from './ModalNavigationContext';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -103,6 +104,7 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
 
   // Data state
   const [items, setItems] = useState<GraphListItem[]>([]);
+  const [columns, setColumns] = useState<GraphListColumn[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -130,6 +132,9 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
 
     try {
       const result = await getListItems(instance, account, section.source.siteId, section.source.listId);
+
+      // Store columns for type detection
+      setColumns(result.columns);
 
       // Filter items by lookup column match
       const parentId = parentItem.id;
@@ -198,6 +203,11 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
     }
   };
 
+  // Helper to get column metadata
+  const getColumnMetadata = (internalName: string): GraphListColumn | undefined => {
+    return columns.find(c => c.name === internalName);
+  };
+
   // Build table columns
   const tableColumns: TableColumnDefinition<GraphListItem>[] = section.displayColumns.map(col =>
     createTableColumn<GraphListItem>({
@@ -208,7 +218,15 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
         let displayValue = '-';
 
         if (value !== null && value !== undefined) {
-          if (typeof value === 'object' && 'LookupValue' in value) {
+          const colMeta = getColumnMetadata(col.internalName);
+
+          // Handle date/datetime columns
+          if (colMeta?.dateTime) {
+            const isDateOnly = colMeta.dateTime.format === 'dateOnly';
+            displayValue = isDateOnly
+              ? formatDateForDisplay(value)
+              : formatDateTimeForDisplay(value);
+          } else if (typeof value === 'object' && 'LookupValue' in value) {
             displayValue = (value as { LookupValue: string }).LookupValue;
           } else if (Array.isArray(value)) {
             displayValue = value
