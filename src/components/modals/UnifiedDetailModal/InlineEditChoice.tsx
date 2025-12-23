@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { makeStyles, Dropdown, Option } from '@fluentui/react-components';
 
 const useStyles = makeStyles({
@@ -28,9 +28,13 @@ export function InlineEditChoice({
 }: InlineEditChoiceProps) {
   const styles = useStyles();
   const dropdownRef = useRef<HTMLButtonElement>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  // Track current selections for multi-select (to pass to onCommit when closing)
+  const currentValueRef = useRef(value);
+  currentValueRef.current = value;
 
   useEffect(() => {
-    // Focus dropdown on mount
+    // Focus and open dropdown on mount
     dropdownRef.current?.focus();
   }, []);
 
@@ -39,21 +43,26 @@ export function InlineEditChoice({
       e.preventDefault();
       onCancel();
     }
-    // For multi-select, Enter commits
-    if (e.key === 'Enter' && isMultiSelect) {
-      e.preventDefault();
-      onCommit();
-    }
   };
 
   const handleOptionSelect = (_e: unknown, data: { optionValue?: string; selectedOptions: string[] }) => {
     if (isMultiSelect) {
-      // For multi-select, update with the full selected options array
+      // For multi-select, just update the value - don't commit yet
       onChange(data.selectedOptions);
     } else {
       // For single-select, commit immediately
       onChange(data.optionValue || '');
       setTimeout(() => onCommit(data.optionValue || ''), 0);
+    }
+  };
+
+  const handleOpenChange = (_e: unknown, data: { open: boolean }) => {
+    setIsOpen(data.open);
+
+    // For multi-select, commit when dropdown closes
+    if (isMultiSelect && !data.open) {
+      // Use setTimeout to ensure the value state has been updated
+      setTimeout(() => onCommit(currentValueRef.current), 0);
     }
   };
 
@@ -74,12 +83,14 @@ export function InlineEditChoice({
   return (
     <Dropdown
       ref={dropdownRef}
+      open={isMultiSelect ? isOpen : undefined}
       value={displayValue}
       selectedOptions={selectedOptions}
       multiselect={isMultiSelect}
       onOptionSelect={handleOptionSelect}
+      onOpenChange={handleOpenChange}
       onKeyDown={handleKeyDown}
-      onBlur={() => onCommit()}
+      onBlur={isMultiSelect ? undefined : () => onCommit()}
       className={styles.dropdown}
       style={{ width: `${dropdownWidth}px` }}
       size="small"
