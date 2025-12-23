@@ -500,17 +500,7 @@ function ItemFormModal({
   };
 
   return (
-    <Dialog
-      open
-      modalType="modal"
-      onOpenChange={(_, data) => {
-        // Only close on explicit ESC key press, not backdrop clicks or focus loss
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (!data.open && (data as any).type === 'escapeKeyDown') {
-          onClose();
-        }
-      }}
-    >
+    <Dialog open onOpenChange={(_event, data) => { if (!data.open) onClose(); }}>
       <DialogSurface className={styles.dialogSurface}>
         <DialogTitle>{configError ? 'Error' : mode === 'create' ? 'Add New Item' : 'Edit Item'}</DialogTitle>
         <DialogBody className={styles.dialogBody}>
