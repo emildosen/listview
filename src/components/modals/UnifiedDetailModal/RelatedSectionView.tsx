@@ -20,9 +20,9 @@ import {
   mergeClasses,
 } from '@fluentui/react-components';
 import type { TableColumnDefinition } from '@fluentui/react-components';
-import { AddRegular, DeleteRegular, EditRegular } from '@fluentui/react-icons';
+import { AddRegular } from '@fluentui/react-icons';
 import { getListItems, type GraphListItem } from '../../../auth/graphClient';
-import { createListItem, updateListItem, deleteListItem, createSPClient } from '../../../services/sharepoint';
+import { createListItem, createSPClient } from '../../../services/sharepoint';
 import type { RelatedSection } from '../../../types/page';
 import { useModalNavigation, type NavigationEntry } from './ModalNavigationContext';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -77,13 +77,8 @@ const useStyles = makeStyles({
     },
     '& [role="columnheader"], & [role="gridcell"]': {
       overflow: 'hidden',
-    },
-    '& [role="columnheader"]:not(:last-child), & [role="gridcell"]:not(:last-child)': {
       flex: '1 1 0',
       minWidth: 0,
-    },
-    '& [role="columnheader"]:last-child, & [role="gridcell"]:last-child': {
-      flex: '0 0 80px',
     },
   },
   cellText: {
@@ -91,13 +86,6 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     maxWidth: '100%',
-  },
-  actionsCell: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: '4px',
-    width: '100%',
   },
 });
 
@@ -123,8 +111,6 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
 
   // Form modal state
   const [formModalOpen, setFormModalOpen] = useState(false);
-  const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
-  const [editingItem, setEditingItem] = useState<GraphListItem | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Initialize SP client
@@ -188,30 +174,7 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
 
   // Handle add
   const handleAdd = () => {
-    setEditingItem(null);
-    setFormMode('create');
     setFormModalOpen(true);
-  };
-
-  // Handle edit
-  const handleEdit = (e: React.MouseEvent, item: GraphListItem) => {
-    e.stopPropagation();
-    setEditingItem(item);
-    setFormMode('edit');
-    setFormModalOpen(true);
-  };
-
-  // Handle delete
-  const handleDelete = async (e: React.MouseEvent, item: GraphListItem) => {
-    e.stopPropagation();
-    if (!spClientRef.current) return;
-
-    try {
-      await deleteListItem(spClientRef.current, section.source.listId, parseInt(item.id, 10));
-      await loadItems();
-    } catch (err) {
-      console.error('Failed to delete item:', err);
-    }
   };
 
   // Handle form save
@@ -226,11 +189,7 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
         [`${section.lookupColumn}Id`]: parseInt(parentItem.id, 10),
       };
 
-      if (formMode === 'create') {
-        await createListItem(spClientRef.current, section.source.listId, saveFields);
-      } else if (editingItem) {
-        await updateListItem(spClientRef.current, section.source.listId, parseInt(editingItem.id, 10), saveFields);
-      }
+      await createListItem(spClientRef.current, section.source.listId, saveFields);
 
       setFormModalOpen(false);
       await loadItems();
@@ -266,32 +225,6 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
           </TableCellLayout>
         );
       },
-    })
-  );
-
-  // Add actions column for edit/delete
-  tableColumns.push(
-    createTableColumn<GraphListItem>({
-      columnId: 'actions',
-      renderHeaderCell: () => '',
-      renderCell: (item) => (
-        <div className={styles.actionsCell}>
-          <Button
-            appearance="subtle"
-            size="small"
-            icon={<EditRegular />}
-            onClick={(e) => handleEdit(e, item)}
-            title="Edit"
-          />
-          <Button
-            appearance="subtle"
-            size="small"
-            icon={<DeleteRegular />}
-            onClick={(e) => handleDelete(e, item)}
-            title="Delete"
-          />
-        </div>
-      ),
     })
   );
 
@@ -353,13 +286,13 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
         )}
       </div>
 
-      {/* Form modal for create/edit */}
+      {/* Form modal for create */}
       {formModalOpen && (
         <ItemFormModal
-          mode={formMode}
+          mode="create"
           siteId={section.source.siteId}
           listId={section.source.listId}
-          initialValues={editingItem?.fields ?? {}}
+          initialValues={{}}
           saving={saving}
           onSave={handleFormSave}
           onClose={() => setFormModalOpen(false)}
