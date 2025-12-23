@@ -642,7 +642,7 @@ function UnifiedDetailModalContent({
               />
             </div>
 
-            <Text className={styles.titleText}>{titleDisplay}</Text>
+            {!isNavigating && <Text className={styles.titleText}>{titleDisplay}</Text>}
 
             <div className={styles.headerActions}>
               {currentSiteUrl && (
