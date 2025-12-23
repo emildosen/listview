@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState } from 'react';
+import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
@@ -527,8 +527,8 @@ export function RichTextEditor({
   const lastExternalValue = useRef(value);
   const [showHighlightPicker, setShowHighlightPicker] = useState(false);
 
-  // Configure extensions based on mode
-  const extensions = [
+  // Configure extensions based on mode - memoized to prevent duplicate extension warnings
+  const extensions = useMemo(() => [
     StarterKit.configure({
       heading: showToolbar ? { levels: [1, 2] } : false,
       bulletList: showToolbar ? {} : false,
@@ -559,7 +559,7 @@ export function RichTextEditor({
       TableCell,
       createSlashCommandExtension(isDark),
     ] : []),
-  ];
+  ], [showToolbar, placeholder, isDark]);
 
   const editor = useEditor({
     extensions,
