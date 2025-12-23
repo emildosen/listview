@@ -147,9 +147,18 @@ export function PeoplePicker({
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSelect = (_event: unknown, data: { optionValue?: string }) => {
+  const handleSelect = (event: unknown, data: { optionValue?: string }) => {
     const selectedId = data.optionValue;
     if (!selectedId) return;
+
+    // Only process selection if it was a deliberate action (click or Enter on dropdown item)
+    // Ignore if this was triggered by typing that happens to match an option
+    const nativeEvent = (event as React.SyntheticEvent)?.nativeEvent;
+    const isKeyboardEvent = nativeEvent instanceof KeyboardEvent;
+    const isMouseEvent = nativeEvent instanceof MouseEvent;
+
+    // If it's neither a mouse click nor a keyboard event (Enter), skip
+    if (!isMouseEvent && !isKeyboardEvent) return;
 
     const selectedPerson = searchResults.find(r => r.id === selectedId);
     if (!selectedPerson) return;
