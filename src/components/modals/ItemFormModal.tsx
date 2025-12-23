@@ -259,6 +259,10 @@ function ItemFormModal({
               submitValues[`${field.name}Id`] = null;
             }
           }
+        } else if (field.choice?.allowMultipleValues) {
+          // Multi-select choice: wrap in { results: [...] } format for SharePoint
+          const choiceArray = Array.isArray(value) ? value : [];
+          submitValues[field.name] = { results: choiceArray };
         } else {
           // Regular fields: submit as-is
           if (value !== undefined && value !== '') {

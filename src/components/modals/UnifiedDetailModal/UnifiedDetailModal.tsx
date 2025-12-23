@@ -369,6 +369,10 @@ function UnifiedDetailModalContent({
       // Handle lookup fields specially
       if (formField?.lookup) {
         payload[`${fieldName}Id`] = value;
+      } else if (formField?.choice?.allowMultipleValues) {
+        // Multi-select choice: wrap in { results: [...] } format for SharePoint
+        const choiceArray = Array.isArray(value) ? value : [];
+        payload[fieldName] = { results: choiceArray };
       } else {
         payload[fieldName] = value;
       }
