@@ -507,7 +507,13 @@ function ItemFormModal({
   };
 
   return (
-    <Dialog open onOpenChange={(_event, data) => { if (!data.open) onClose(); }}>
+    <Dialog
+      open
+      modalType="non-modal"
+      onOpenChange={(_event, data) => {
+        if (!data.open) onClose();
+      }}
+    >
       <DialogSurface className={styles.dialogSurface}>
         <DialogTitle>{configError ? 'Error' : mode === 'create' ? 'Add New Item' : 'Edit Item'}</DialogTitle>
         <DialogBody className={styles.dialogBody}>
