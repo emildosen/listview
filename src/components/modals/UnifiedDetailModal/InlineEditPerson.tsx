@@ -86,6 +86,7 @@ export function InlineEditPerson({
   const [isSearching, setIsSearching] = useState(false);
   const [open, setOpen] = useState(false);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isClearing = useRef(false); // Track when user is clearing to select a new person
 
   // Normalize value to array for easier handling
   const selectedValues: PersonOrGroupOption[] = useMemo(() => {
@@ -227,6 +228,11 @@ export function InlineEditPerson({
         className={styles.singleSelectInput}
         onKeyDown={handleKeyDown}
         onBlur={() => {
+          // Don't commit if user is clearing to select a new person
+          if (isClearing.current) {
+            isClearing.current = false;
+            return;
+          }
           // Commit current value when clicking outside
           onCommit();
         }}
@@ -235,8 +241,9 @@ export function InlineEditPerson({
             style={{ cursor: 'pointer' }}
             onClick={(e) => {
               e.stopPropagation();
+              isClearing.current = true; // Mark that we're clearing to select new
               onChange(null);
-              // Don't commit immediately - let user select a new person or click outside to save empty
+              // Don't commit - let user select a new person or click outside to save empty
             }}
           />
         }
