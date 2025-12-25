@@ -28,6 +28,7 @@ import type { RelatedSection } from '../../../types/page';
 import { useModalNavigation, type NavigationEntry } from './ModalNavigationContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import ItemFormModal from '../ItemFormModal';
+import { TruncatedRichText } from './TruncatedRichText';
 
 const useStyles = makeStyles({
   container: {
@@ -215,26 +216,41 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
       renderHeaderCell: () => col.displayName,
       renderCell: (item) => {
         const value = item.fields[col.internalName];
-        let displayValue = '-';
 
-        if (value !== null && value !== undefined) {
-          const colMeta = getColumnMetadata(col.internalName);
+        if (value === null || value === undefined) {
+          return (
+            <TableCellLayout>
+              <span className={styles.cellText}>-</span>
+            </TableCellLayout>
+          );
+        }
 
-          // Handle date/datetime columns
-          if (colMeta?.dateTime) {
-            const isDateOnly = colMeta.dateTime.format === 'dateOnly';
-            displayValue = isDateOnly
-              ? formatDateForDisplay(value)
-              : formatDateTimeForDisplay(value);
-          } else if (typeof value === 'object' && 'LookupValue' in value) {
-            displayValue = (value as { LookupValue: string }).LookupValue;
-          } else if (Array.isArray(value)) {
-            displayValue = value
-              .map(v => (typeof v === 'object' && 'LookupValue' in v ? v.LookupValue : String(v)))
-              .join(', ');
-          } else {
-            displayValue = String(value);
-          }
+        const colMeta = getColumnMetadata(col.internalName);
+
+        // Handle multiline text / rich text columns
+        if (colMeta?.text?.allowMultipleLines) {
+          return (
+            <TableCellLayout>
+              <TruncatedRichText value={String(value)} />
+            </TableCellLayout>
+          );
+        }
+
+        // Handle date/datetime columns
+        let displayValue: string;
+        if (colMeta?.dateTime) {
+          const isDateOnly = colMeta.dateTime.format === 'dateOnly';
+          displayValue = isDateOnly
+            ? formatDateForDisplay(value)
+            : formatDateTimeForDisplay(value);
+        } else if (typeof value === 'object' && 'LookupValue' in value) {
+          displayValue = (value as { LookupValue: string }).LookupValue;
+        } else if (Array.isArray(value)) {
+          displayValue = value
+            .map(v => (typeof v === 'object' && 'LookupValue' in v ? v.LookupValue : String(v)))
+            .join(', ');
+        } else {
+          displayValue = String(value);
         }
 
         return (
