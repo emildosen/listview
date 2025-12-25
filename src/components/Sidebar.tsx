@@ -268,11 +268,13 @@ const useStyles = makeStyles({
     position: 'relative',
   },
   addPageButton: {
-    marginTop: '8px',
+    marginTop: '2px',
     justifyContent: 'flex-start',
     gap: '8px',
     padding: '6px 12px',
     minWidth: 'auto',
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground3,
   },
 });
 
@@ -399,7 +401,7 @@ function Sidebar() {
           </li>
         </ul>
         <Button
-          appearance="outline"
+          appearance="transparent"
           size="small"
           icon={<AddRegular />}
           className={styles.addPageButton}
