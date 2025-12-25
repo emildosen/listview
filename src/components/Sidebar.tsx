@@ -269,10 +269,10 @@ const useStyles = makeStyles({
   },
   addPageButton: {
     marginTop: '8px',
-    width: '100%',
     justifyContent: 'flex-start',
-    gap: '10px',
-    padding: '10px 12px',
+    gap: '8px',
+    padding: '6px 12px',
+    minWidth: 'auto',
   },
 });
 
@@ -400,6 +400,7 @@ function Sidebar() {
         </ul>
         <Button
           appearance="outline"
+          size="small"
           icon={<AddRegular />}
           className={styles.addPageButton}
           onClick={() => navigate('/app/pages/new')}
