@@ -308,10 +308,11 @@ const useStyles = makeStyles({
     width: '100%',
     justifyContent: 'flex-start',
     gap: '10px',
-    padding: '10px 12px',
+    padding: '6px 12px',
+    marginTop: '-4px',
     minWidth: 'auto',
-    fontSize: tokens.fontSizeBase400,
-    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground4,
   },
 });
 
