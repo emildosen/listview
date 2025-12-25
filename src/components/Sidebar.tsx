@@ -305,13 +305,12 @@ const useStyles = makeStyles({
     position: 'relative',
   },
   addPageButton: {
-    marginTop: '2px',
     width: '100%',
     justifyContent: 'flex-start',
-    gap: '8px',
-    padding: '6px 12px',
+    gap: '10px',
+    padding: '10px 12px',
     minWidth: 'auto',
-    fontSize: tokens.fontSizeBase200,
+    fontSize: tokens.fontSizeBase400,
     color: tokens.colorNeutralForeground3,
   },
 });
@@ -672,6 +671,17 @@ function Sidebar() {
               Home
             </Link>
           </li>
+          <li>
+            <Button
+              appearance="transparent"
+              size="small"
+              icon={<AddRegular />}
+              className={styles.addPageButton}
+              onClick={() => navigate('/app/pages/new')}
+            >
+              Add Page
+            </Button>
+          </li>
         </ul>
 
         {/* Unsectioned pages (above sections) */}
@@ -713,17 +723,6 @@ function Sidebar() {
             </SortableContext>
           </DndContext>
         )}
-
-        {/* Add Page button */}
-        <Button
-          appearance="transparent"
-          size="small"
-          icon={<AddRegular />}
-          className={styles.addPageButton}
-          onClick={() => navigate('/app/pages/new')}
-        >
-          Add Page
-        </Button>
       </nav>
 
       {/* User Profile */}
