@@ -1,5 +1,14 @@
 // Page type definitions for the Custom Pages feature
 
+// Sidebar section for organizing pages
+export interface Section {
+  id: string;
+  name: string;
+  order: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // Detail modal layout configuration (for customizable popup)
 export interface DetailLayoutConfig {
   columnSettings: DetailColumnSetting[];
@@ -35,6 +44,8 @@ export interface PageDefinition {
   name: string;                       // Display name (e.g., "Student Details")
   description?: string;               // Optional description
   pageType: PageType;                 // Type of page: lookup (data view) or report (dashboard)
+  sectionId?: string | null;          // Sidebar section ID (null = unsectioned)
+  icon?: string;                      // Icon name from @fluentui/react-icons (e.g., "PersonRegular")
 
   // Primary entity configuration (not used for report pages)
   primarySource: PageSource;          // Main list (e.g., Students)

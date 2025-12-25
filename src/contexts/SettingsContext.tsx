@@ -29,9 +29,10 @@ import {
   type SharePointList,
 } from '../services/sharepoint';
 import { getSharePointHostname } from '../auth/graphClient';
-import type { PageDefinition, ListDetailConfig } from '../types/page';
+import type { PageDefinition, ListDetailConfig, Section } from '../types/page';
 
 const LIST_DETAIL_CONFIGS_KEY = 'ListDetailConfigs';
+const SIDEBAR_SECTIONS_KEY = 'SidebarSections';
 
 const LOCAL_STORAGE_KEY = 'listview-primary-site';
 const HOSTNAME_STORAGE_KEY = 'listview-sharepoint-hostname';
@@ -59,6 +60,7 @@ interface SettingsState {
   settings: Record<string, string>;
   pagesList: SharePointList | null;
   pages: PageDefinition[];
+  sections: Record<string, Section>;
 }
 
 interface SettingsContextValue extends SettingsState {
@@ -74,6 +76,10 @@ interface SettingsContextValue extends SettingsState {
   loadPages: () => Promise<void>;
   savePage: (page: PageDefinition) => Promise<PageDefinition>;
   removePage: (id: string) => Promise<void>;
+  // Section operations
+  saveSection: (section: Section) => Promise<void>;
+  removeSection: (id: string) => Promise<void>;
+  reorderSections: (orderedIds: string[]) => Promise<void>;
   // List detail config operations (per-list popup settings)
   listDetailConfigs: Record<string, ListDetailConfig>;
   getListDetailConfig: (listId: string) => ListDetailConfig | undefined;
@@ -96,6 +102,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     settings: {},
     pagesList: null,
     pages: [],
+    sections: {},
   });
 
   const getAccount = useCallback(() => {
@@ -197,12 +204,24 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           settings: {},
           pagesList: null,
           pages: [],
+          sections: {},
         });
         return;
       }
 
       // Load existing settings
       const settings = await getSettings(sp);
+
+      // Parse sections from settings
+      let sections: Record<string, Section> = {};
+      const sectionsJson = settings[SIDEBAR_SECTIONS_KEY];
+      if (sectionsJson) {
+        try {
+          sections = JSON.parse(sectionsJson);
+        } catch {
+          // Invalid JSON, use empty
+        }
+      }
 
       // Check for pages list and load pages
       const pagesList = await findPagesList(sp, siteUrl);
@@ -222,6 +241,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         settings,
         pagesList,
         pages,
+        sections,
       });
     } catch (error) {
       console.error('Failed to initialize settings:', error);
@@ -280,11 +300,23 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
             settings: {},
             pagesList: null,
             pages: [],
+            sections: {},
           });
           return true; // Site found, but list needs to be created
         }
 
         const settings = await getSettings(sp);
+
+        // Parse sections from settings
+        let sections: Record<string, Section> = {};
+        const sectionsJson = settings[SIDEBAR_SECTIONS_KEY];
+        if (sectionsJson) {
+          try {
+            sections = JSON.parse(sectionsJson);
+          } catch {
+            // Invalid JSON, use empty
+          }
+        }
 
         // Check for pages list and load pages
         const pagesList = await findPagesList(sp, siteUrl);
@@ -304,6 +336,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           settings,
           pagesList,
           pages,
+          sections,
         });
 
         return true;
@@ -354,6 +387,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         settings,
         pagesList,
         pages: [],
+        sections: {},
       }));
 
       return true;
@@ -381,6 +415,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       settings: {},
       pagesList: null,
       pages: [],
+      sections: {},
     }));
   }, []);
 
@@ -583,6 +618,107 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [listDetailConfigs]
   );
 
+  // Section operations
+  const saveSectionCallback = useCallback(
+    async (section: Section): Promise<void> => {
+      const sp = spClientRef.current;
+      if (!sp) {
+        throw new Error('SharePoint client not initialized');
+      }
+
+      // Update section with timestamps
+      const now = new Date().toISOString();
+      const updatedSection: Section = {
+        ...section,
+        updatedAt: now,
+        createdAt: section.createdAt || now,
+      };
+
+      // Get current sections and update
+      const currentSections = { ...state.sections };
+      currentSections[section.id] = updatedSection;
+
+      // Save to settings
+      await setSetting(sp, SIDEBAR_SECTIONS_KEY, JSON.stringify(currentSections));
+
+      // Update local state
+      setState((prev) => ({
+        ...prev,
+        sections: currentSections,
+        settings: {
+          ...prev.settings,
+          [SIDEBAR_SECTIONS_KEY]: JSON.stringify(currentSections),
+        },
+      }));
+    },
+    [state.sections]
+  );
+
+  const removeSectionCallback = useCallback(
+    async (id: string): Promise<void> => {
+      const sp = spClientRef.current;
+      if (!sp) {
+        throw new Error('SharePoint client not initialized');
+      }
+
+      // Remove section
+      const currentSections = { ...state.sections };
+      delete currentSections[id];
+
+      // Save to settings
+      await setSetting(sp, SIDEBAR_SECTIONS_KEY, JSON.stringify(currentSections));
+
+      // Update local state - also clear sectionId from any pages in this section
+      setState((prev) => ({
+        ...prev,
+        sections: currentSections,
+        pages: prev.pages.map((p) =>
+          p.sectionId === id ? { ...p, sectionId: null } : p
+        ),
+        settings: {
+          ...prev.settings,
+          [SIDEBAR_SECTIONS_KEY]: JSON.stringify(currentSections),
+        },
+      }));
+    },
+    [state.sections]
+  );
+
+  const reorderSectionsCallback = useCallback(
+    async (orderedIds: string[]): Promise<void> => {
+      const sp = spClientRef.current;
+      if (!sp) {
+        throw new Error('SharePoint client not initialized');
+      }
+
+      // Update order values based on array position
+      const currentSections = { ...state.sections };
+      orderedIds.forEach((id, index) => {
+        if (currentSections[id]) {
+          currentSections[id] = {
+            ...currentSections[id],
+            order: index,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      });
+
+      // Save to settings
+      await setSetting(sp, SIDEBAR_SECTIONS_KEY, JSON.stringify(currentSections));
+
+      // Update local state
+      setState((prev) => ({
+        ...prev,
+        sections: currentSections,
+        settings: {
+          ...prev.settings,
+          [SIDEBAR_SECTIONS_KEY]: JSON.stringify(currentSections),
+        },
+      }));
+    },
+    [state.sections]
+  );
+
   const contextValue: SettingsContextValue = {
     ...state,
     spClient: spClientRef.current,
@@ -596,6 +732,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     loadPages: loadPagesCallback,
     savePage: savePageCallback,
     removePage: removePageCallback,
+    saveSection: saveSectionCallback,
+    removeSection: removeSectionCallback,
+    reorderSections: reorderSectionsCallback,
     listDetailConfigs,
     getListDetailConfig,
     saveListDetailConfig,
