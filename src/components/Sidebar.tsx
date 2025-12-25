@@ -269,12 +269,17 @@ const useStyles = makeStyles({
   },
   addPageButton: {
     marginTop: '2px',
+    width: '100%',
     justifyContent: 'flex-start',
     gap: '8px',
     padding: '6px 12px',
     minWidth: 'auto',
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground3,
+    ':focus-visible': {
+      outlineColor: tokens.colorNeutralStroke1,
+      outlineWidth: '1px',
+    },
   },
 });
 
