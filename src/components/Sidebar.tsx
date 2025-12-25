@@ -175,7 +175,7 @@ const useStyles = makeStyles({
   },
   sectionChevron: {
     color: tokens.colorNeutralForeground3,
-    marginRight: '6px',
+    marginLeft: '4px',
   },
   sectionTitle: {
     flex: 1,
@@ -397,13 +397,6 @@ function SortableSection({
         >
           <ReOrderDotsVerticalRegular fontSize={16} />
         </div>
-        <span className={styles.sectionChevron}>
-          {isExpanded ? (
-            <ChevronDownRegular fontSize={12} />
-          ) : (
-            <ChevronRightRegular fontSize={12} />
-          )}
-        </span>
         {isEditing ? (
           <Input
             size="small"
@@ -418,6 +411,13 @@ function SortableSection({
         ) : (
           <span className={styles.sectionTitle}>{section.name}</span>
         )}
+        <span className={styles.sectionChevron}>
+          {isExpanded ? (
+            <ChevronDownRegular fontSize={12} />
+          ) : (
+            <ChevronRightRegular fontSize={12} />
+          )}
+        </span>
         <div
           className={mergeClasses(
             styles.sectionActions,
