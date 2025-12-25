@@ -2,6 +2,7 @@ import { useRef, useCallback, useEffect, useState, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
+import { Extension } from '@tiptap/core';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import { TextStyle } from '@tiptap/extension-text-style';
@@ -28,6 +29,27 @@ import {
   TableRegular,
 } from '@fluentui/react-icons';
 import { useTheme } from '../../contexts/ThemeContext';
+
+// Custom extension to clear formatting on Enter
+const ClearMarksOnEnter = Extension.create({
+  name: 'clearMarksOnEnter',
+
+  addKeyboardShortcuts() {
+    return {
+      Enter: ({ editor }) => {
+        // Let default Enter behavior happen first, then clear stored marks
+        // We return false to not prevent default, but schedule mark clearing
+        setTimeout(() => {
+          // Clear stored marks by dispatching a transaction
+          const { state, view } = editor;
+          const tr = state.tr.setStoredMarks([]);
+          view.dispatch(tr);
+        }, 0);
+        return false; // Don't prevent default Enter behavior
+      },
+    };
+  },
+});
 
 const useStyles = makeStyles({
   container: {
@@ -387,6 +409,7 @@ export function RichTextEditor({
       multicolor: true,
     }),
     Underline,
+    ClearMarksOnEnter,
     ...(showToolbar ? [
       Table.configure({
         resizable: false,
@@ -452,28 +475,6 @@ export function RichTextEditor({
 
     return () => {
       editorElement.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [editor]);
-
-  // Reset formatting on Enter (new line)
-  useEffect(() => {
-    if (!editor) return;
-
-    const handleKeyUp = (event: KeyboardEvent) => {
-      // On Enter, clear all marks (bold, italic, underline, highlight, etc.)
-      if (event.key === 'Enter' && !event.shiftKey) {
-        // Use setTimeout to ensure the new paragraph is created first
-        setTimeout(() => {
-          editor.commands.unsetAllMarks();
-        }, 0);
-      }
-    };
-
-    const editorElement = editor.view.dom;
-    editorElement.addEventListener('keyup', handleKeyUp);
-
-    return () => {
-      editorElement.removeEventListener('keyup', handleKeyUp);
     };
   }, [editor]);
 
