@@ -53,7 +53,7 @@ const useStyles = makeStyles({
   },
   editorContent: {
     fontFamily: "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif",
-    fontSize: '14px',
+    fontSize: '15px',
     lineHeight: '1.5',
     padding: '12px 16px',
     outline: 'none',
@@ -136,9 +136,6 @@ const useStyles = makeStyles({
   },
   editorContentDark: {
     color: '#ffffff',
-    '& .ProseMirror mark': {
-      backgroundColor: '#5c4800',
-    },
     '& .ProseMirror th, & .ProseMirror td': {
       border: '1px solid #444444',
     },
@@ -297,11 +294,52 @@ function plainTextToHtml(text: string): string {
   return text.replace(/\n/g, '<br>');
 }
 
-// Highlight colors
-const highlightColors = [
+// Highlight colors - light (saved to SharePoint) and dark (display only)
+const highlightColorsLight = [
   '#fff3bf', '#ffd6d6', '#ffe0c2', '#d4edda', '#cce5ff',
   '#e2d9f3', '#f8d7da', '#d1ecf1', '#fff3cd', '#e2e3e5',
 ];
+
+const highlightColorsDark = [
+  '#5c4800', '#5c2828', '#5c3a1a', '#1e4a28', '#1e3a5c',
+  '#3d2e5c', '#4d2828', '#1e4a5c', '#4d4200', '#3a3a3a',
+];
+
+// Create bidirectional color maps
+const lightToDarkMap = new Map<string, string>();
+const darkToLightMap = new Map<string, string>();
+highlightColorsLight.forEach((light, i) => {
+  const dark = highlightColorsDark[i];
+  lightToDarkMap.set(light.toLowerCase(), dark);
+  darkToLightMap.set(dark.toLowerCase(), light);
+});
+
+// Convert RGB to hex
+function rgbToHex(r: number, g: number, b: number): string {
+  return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+
+// Translate highlight colors in HTML content
+function translateHighlightColors(html: string, toDark: boolean): string {
+  const map = toDark ? lightToDarkMap : darkToLightMap;
+  return html
+    // Handle hex background-color
+    .replace(/background-color:\s*(#[a-fA-F0-9]{6})/gi, (match, color) => {
+      const translated = map.get(color.toLowerCase());
+      return translated ? `background-color: ${translated}` : match;
+    })
+    // Handle rgb() background-color
+    .replace(/background-color:\s*rgb\((\d+),\s*(\d+),\s*(\d+)\)/gi, (match, r, g, b) => {
+      const hex = rgbToHex(parseInt(r), parseInt(g), parseInt(b));
+      const translated = map.get(hex.toLowerCase());
+      return translated ? `background-color: ${translated}` : match;
+    })
+    // Handle data-color attribute
+    .replace(/data-color="(#[a-fA-F0-9]{6})"/gi, (match, color) => {
+      const translated = map.get(color.toLowerCase());
+      return translated ? `data-color="${translated}"` : match;
+    });
+}
 
 export function RichTextEditor({
   value,
@@ -316,7 +354,15 @@ export function RichTextEditor({
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const lastExternalValue = useRef(value);
+  const prevThemeRef = useRef(theme);
   const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+
+  // Get display content (translate to dark colors if in dark mode)
+  const getDisplayContent = useCallback((html: string) => {
+    if (!showToolbar) return plainTextToHtml(html);
+    return isDark ? translateHighlightColors(html, true) : html;
+  }, [showToolbar, isDark]);
+
 
   // Configure extensions based on mode - memoized to prevent duplicate extension warnings
   const extensions = useMemo(() => [
@@ -353,16 +399,29 @@ export function RichTextEditor({
 
   const editor = useEditor({
     extensions,
-    content: showToolbar ? value : plainTextToHtml(value),
+    content: getDisplayContent(value),
     editable: !readOnly,
     editorProps: {
       attributes: {
         class: 'tiptap-editor',
       },
     },
-    onBlur: ({ editor }) => {
+  });
+
+  // Handle blur separately to avoid stale closure issues with useEditor
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleBlur = () => {
       const html = editor.getHTML();
-      const outputValue = showToolbar ? html : htmlToPlainText(html);
+      // Always translate dark colors back to light for saving
+      let outputValue: string;
+      if (!showToolbar) {
+        outputValue = htmlToPlainText(html);
+      } else {
+        // Translate any dark colors to light for saving to SharePoint
+        outputValue = translateHighlightColors(html, false);
+      }
 
       if (outputValue !== lastExternalValue.current) {
         lastExternalValue.current = outputValue;
@@ -370,8 +429,13 @@ export function RichTextEditor({
       }
 
       onBlur?.();
-    },
-  });
+    };
+
+    editor.on('blur', handleBlur);
+    return () => {
+      editor.off('blur', handleBlur);
+    };
+  }, [editor, showToolbar, onChange, onBlur]);
 
   // Add keyboard shortcut for blur
   useEffect(() => {
@@ -394,11 +458,23 @@ export function RichTextEditor({
   // Update editor content when external value changes
   useEffect(() => {
     if (editor && value !== lastExternalValue.current) {
-      const displayValue = showToolbar ? value : plainTextToHtml(value);
-      editor.commands.setContent(displayValue);
+      editor.commands.setContent(getDisplayContent(value));
       lastExternalValue.current = value;
     }
-  }, [value, editor, showToolbar]);
+  }, [value, editor, getDisplayContent]);
+
+  // Re-render content when theme changes to translate highlight colors
+  useEffect(() => {
+    if (!editor || !showToolbar) return;
+    if (prevThemeRef.current !== theme) {
+      const html = editor.getHTML();
+      // Translate colors: if switching to dark, convert light->dark; if switching to light, convert dark->light
+      const toDark = theme === 'dark';
+      const translatedContent = translateHighlightColors(html, toDark);
+      editor.commands.setContent(translatedContent);
+      prevThemeRef.current = theme;
+    }
+  }, [theme, editor, showToolbar]);
 
   const handleBubbleButtonClick = useCallback(
     (action: () => void) => (e: React.MouseEvent) => {
@@ -677,7 +753,7 @@ export function RichTextEditor({
           className={mergeClasses(styles.colorPicker, isDark && styles.colorPickerDark)}
           style={{ position: 'fixed', zIndex: 1000002 }}
         >
-          {highlightColors.map((color) => (
+          {(isDark ? highlightColorsDark : highlightColorsLight).map((color) => (
             <div
               key={color}
               className={styles.colorSwatch}
