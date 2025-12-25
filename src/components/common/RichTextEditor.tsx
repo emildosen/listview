@@ -12,8 +12,6 @@ import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
-import { Extension } from '@tiptap/core';
-import Suggestion from '@tiptap/suggestion';
 import { makeStyles, tokens, mergeClasses, Tooltip } from '@fluentui/react-components';
 import {
   TextBoldRegular,
@@ -25,14 +23,11 @@ import {
   TextHeader2Regular,
   TextBulletListLtrRegular,
   TextNumberListLtrRegular,
-  TextParagraphRegular,
   HighlightRegular,
   DismissRegular,
   TableRegular,
 } from '@fluentui/react-icons';
 import { useTheme } from '../../contexts/ThemeContext';
-import type { Editor, Range } from '@tiptap/core';
-import type { ReactNode } from 'react';
 
 const useStyles = makeStyles({
   container: {
@@ -284,211 +279,6 @@ interface RichTextEditorProps {
   showToolbar?: boolean;
 }
 
-// Slash command items
-interface SlashCommandItem {
-  title: string;
-  description: string;
-  icon: ReactNode;
-  command: (editor: Editor) => void;
-}
-
-const slashCommands: SlashCommandItem[] = [
-  {
-    title: 'Text',
-    description: 'Plain text paragraph',
-    icon: <TextParagraphRegular />,
-    command: (editor) => editor.chain().focus().setParagraph().run(),
-  },
-  {
-    title: 'Heading 1',
-    description: 'Large heading',
-    icon: <TextHeader1Regular />,
-    command: (editor) => editor.chain().focus().toggleHeading({ level: 1 }).run(),
-  },
-  {
-    title: 'Heading 2',
-    description: 'Medium heading',
-    icon: <TextHeader2Regular />,
-    command: (editor) => editor.chain().focus().toggleHeading({ level: 2 }).run(),
-  },
-  {
-    title: 'Bullet List',
-    description: 'Unordered list',
-    icon: <TextBulletListLtrRegular />,
-    command: (editor) => editor.chain().focus().toggleBulletList().run(),
-  },
-  {
-    title: 'Numbered List',
-    description: 'Ordered list',
-    icon: <TextNumberListLtrRegular />,
-    command: (editor) => editor.chain().focus().toggleOrderedList().run(),
-  },
-];
-
-// Create slash command extension
-function createSlashCommandExtension(isDark: boolean) {
-  return Extension.create({
-    name: 'slashCommand',
-    addOptions() {
-      return {
-        suggestion: {
-          char: '/',
-          command: ({ editor, range, props }: { editor: Editor; range: Range; props: SlashCommandItem }) => {
-            props.command(editor);
-            editor.chain().focus().deleteRange(range).run();
-          },
-          items: ({ query }: { query: string }) => {
-            return slashCommands.filter((item) =>
-              item.title.toLowerCase().includes(query.toLowerCase())
-            );
-          },
-          render: () => {
-            let component: HTMLDivElement | null = null;
-            let selectedIndex = 0;
-            let items: SlashCommandItem[] = [];
-
-            const updateMenu = () => {
-              if (!component) return;
-
-              // Re-render the menu
-              const menuHtml = items.map((item, index) => `
-                <div class="slash-menu-item ${index === selectedIndex ? 'active' : ''}" data-index="${index}">
-                  <span class="slash-menu-icon"></span>
-                  <div class="slash-menu-text">
-                    <span class="slash-menu-title">${item.title}</span>
-                    <span class="slash-menu-desc">${item.description}</span>
-                  </div>
-                </div>
-              `).join('');
-              component.innerHTML = menuHtml;
-            };
-
-            return {
-              onStart: (props: { clientRect: () => DOMRect | null; items: SlashCommandItem[]; command: (item: SlashCommandItem) => void }) => {
-                items = props.items;
-                selectedIndex = 0;
-
-                component = document.createElement('div');
-                component.className = `slash-command-menu ${isDark ? 'dark' : ''}`;
-                component.style.cssText = `
-                  position: fixed;
-                  z-index: 1000001;
-                  background: ${isDark ? '#1a1a1a' : '#ffffff'};
-                  border: 1px solid ${isDark ? '#333333' : '#e0e0e0'};
-                  border-radius: 6px;
-                  box-shadow: 0 4px 16px rgba(0,0,0,0.16);
-                  min-width: 200px;
-                  max-height: 300px;
-                  overflow-y: auto;
-                  padding: 4px;
-                `;
-
-                const rect = props.clientRect?.();
-                if (rect) {
-                  component.style.left = `${rect.left}px`;
-                  component.style.top = `${rect.bottom + 4}px`;
-                }
-
-                // Add styles for menu items
-                const style = document.createElement('style');
-                style.textContent = `
-                  .slash-command-menu .slash-menu-item {
-                    display: flex;
-                    align-items: center;
-                    gap: 12px;
-                    padding: 8px 12px;
-                    cursor: pointer;
-                    border-radius: 4px;
-                  }
-                  .slash-command-menu .slash-menu-item:hover,
-                  .slash-command-menu .slash-menu-item.active {
-                    background: ${isDark ? '#252525' : '#f5f5f5'};
-                  }
-                  .slash-command-menu .slash-menu-text {
-                    display: flex;
-                    flex-direction: column;
-                  }
-                  .slash-command-menu .slash-menu-title {
-                    font-size: 14px;
-                    font-weight: 600;
-                    color: ${isDark ? '#ffffff' : '#242424'};
-                  }
-                  .slash-command-menu .slash-menu-desc {
-                    font-size: 12px;
-                    color: ${isDark ? '#888888' : '#666666'};
-                  }
-                `;
-                document.head.appendChild(style);
-
-                updateMenu();
-
-                // Add click handlers
-                component.addEventListener('click', (e) => {
-                  const target = (e.target as HTMLElement).closest('.slash-menu-item');
-                  if (target) {
-                    const index = parseInt(target.getAttribute('data-index') || '0');
-                    props.command(items[index]);
-                  }
-                });
-
-                document.body.appendChild(component);
-              },
-              onUpdate: (props: { clientRect: () => DOMRect | null; items: SlashCommandItem[] }) => {
-                items = props.items;
-                selectedIndex = 0;
-                updateMenu();
-
-                const rect = props.clientRect?.();
-                if (rect && component) {
-                  component.style.left = `${rect.left}px`;
-                  component.style.top = `${rect.bottom + 4}px`;
-                }
-              },
-              onKeyDown: (props: { event: KeyboardEvent }) => {
-                if (props.event.key === 'ArrowUp') {
-                  selectedIndex = (selectedIndex - 1 + items.length) % items.length;
-                  updateMenu();
-                  return true;
-                }
-                if (props.event.key === 'ArrowDown') {
-                  selectedIndex = (selectedIndex + 1) % items.length;
-                  updateMenu();
-                  return true;
-                }
-                if (props.event.key === 'Enter') {
-                  if (items[selectedIndex]) {
-                    // We need to trigger the command through the suggestion plugin
-                    return true;
-                  }
-                  return false;
-                }
-                if (props.event.key === 'Escape') {
-                  return true;
-                }
-                return false;
-              },
-              onExit: () => {
-                if (component) {
-                  component.remove();
-                  component = null;
-                }
-              },
-            };
-          },
-        },
-      };
-    },
-    addProseMirrorPlugins() {
-      return [
-        Suggestion({
-          editor: this.editor,
-          ...this.options.suggestion,
-        }),
-      ];
-    },
-  });
-}
-
 // Convert HTML to plain text
 function htmlToPlainText(html: string): string {
   return html
@@ -558,9 +348,8 @@ export function RichTextEditor({
       TableRow,
       TableHeader,
       TableCell,
-      createSlashCommandExtension(isDark),
     ] : []),
-  ], [showToolbar, placeholder, isDark]);
+  ], [showToolbar, placeholder]);
 
   const editor = useEditor({
     extensions,
