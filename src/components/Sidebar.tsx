@@ -152,7 +152,7 @@ const useStyles = makeStyles({
   sectionHeader: {
     display: 'flex',
     alignItems: 'center',
-    padding: '6px 8px',
+    padding: '8px 8px 8px 0',
     marginTop: '12px',
     borderRadius: tokens.borderRadiusMedium,
     cursor: 'pointer',
@@ -165,7 +165,7 @@ const useStyles = makeStyles({
   sectionDragHandle: {
     cursor: 'grab',
     color: tokens.colorNeutralForeground3,
-    marginRight: '4px',
+    marginRight: '2px',
     opacity: 0,
     transitionProperty: 'opacity',
     transitionDuration: tokens.durationNormal,
@@ -175,11 +175,11 @@ const useStyles = makeStyles({
   },
   sectionChevron: {
     color: tokens.colorNeutralForeground3,
-    marginRight: '4px',
+    marginRight: '6px',
   },
   sectionTitle: {
     flex: 1,
-    fontSize: tokens.fontSizeBase200,
+    fontSize: tokens.fontSizeBase300,
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground2,
     textTransform: 'uppercase',
@@ -197,7 +197,7 @@ const useStyles = makeStyles({
     opacity: 1,
   },
   sectionContent: {
-    marginLeft: '8px',
+    marginLeft: '4px',
     paddingLeft: '8px',
     borderLeft: `1px solid ${tokens.colorNeutralStroke2}`,
   },
