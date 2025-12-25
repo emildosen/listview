@@ -455,6 +455,28 @@ export function RichTextEditor({
     };
   }, [editor]);
 
+  // Reset formatting on Enter (new line)
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      // On Enter, clear all marks (bold, italic, underline, highlight, etc.)
+      if (event.key === 'Enter' && !event.shiftKey) {
+        // Use setTimeout to ensure the new paragraph is created first
+        setTimeout(() => {
+          editor.commands.unsetAllMarks();
+        }, 0);
+      }
+    };
+
+    const editorElement = editor.view.dom;
+    editorElement.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      editorElement.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [editor]);
+
   // Update editor content when external value changes
   useEffect(() => {
     if (editor && value !== lastExternalValue.current) {
