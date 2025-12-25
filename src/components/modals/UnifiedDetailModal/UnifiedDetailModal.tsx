@@ -655,9 +655,7 @@ function UnifiedDetailModalContent({
         open
         modalType="modal"
         onOpenChange={(_, data) => {
-          // Only close on explicit ESC key press
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          if (!data.open && (data as any).type === 'escapeKeyDown') {
+          if (!data.open) {
             onClose();
           }
         }}
@@ -678,9 +676,7 @@ function UnifiedDetailModalContent({
         open
         modalType="modal"
         onOpenChange={(_, data) => {
-          // Only close on explicit ESC key press, not backdrop clicks or focus loss
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          if (!data.open && (data as any).type === 'escapeKeyDown') {
+          if (!data.open) {
             onClose();
           }
         }}
