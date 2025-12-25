@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMsal } from '@azure/msal-react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
 import {
   makeStyles,
   tokens,
@@ -267,6 +267,13 @@ const useStyles = makeStyles({
   relativeContainer: {
     position: 'relative',
   },
+  addPageButton: {
+    marginTop: '8px',
+    width: '100%',
+    justifyContent: 'flex-start',
+    gap: '10px',
+    padding: '10px 12px',
+  },
 });
 
 function Sidebar() {
@@ -275,6 +282,7 @@ function Sidebar() {
   const { setupStatus, pages } = useSettings();
   const { theme, setTheme } = useTheme();
   const location = useLocation();
+  const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [pagesExpanded, setPagesExpanded] = useState(true);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
@@ -390,6 +398,14 @@ function Sidebar() {
             </Link>
           </li>
         </ul>
+        <Button
+          appearance="outline"
+          icon={<AddRegular />}
+          className={styles.addPageButton}
+          onClick={() => navigate('/app/pages/new')}
+        >
+          Add Page
+        </Button>
 
         {/* Pages Section */}
         {isReady && (
