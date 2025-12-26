@@ -39,6 +39,7 @@ import { InlineEditBoolean } from './InlineEditBoolean';
 import { InlineEditPerson } from './InlineEditPerson';
 import { DescriptionField } from './DescriptionField';
 import { RelatedSectionView } from './RelatedSectionView';
+import { ClickableLookupValue } from './ClickableLookupValue';
 import { EditableStatBox } from './EditableStatBox';
 import DetailCustomizeDrawer from '../../PageDisplay/DetailCustomizeDrawer';
 import { SharePointLink } from '../../common/SharePointLink';
@@ -774,6 +775,7 @@ function UnifiedDetailModalContent({
                           isSaving={savingFields.has(col.internalName)}
                           error={fieldErrors[col.internalName] ?? null}
                           siteId={currentSiteId}
+                          siteUrl={currentSiteUrl}
                           getLookupOptions={getLookupOptions}
                           lookupOptions={lookupOptions}
                           setLookupOptions={setLookupOptions}
@@ -818,6 +820,7 @@ function UnifiedDetailModalContent({
                               isSaving={savingFields.has(col.internalName)}
                               error={fieldErrors[col.internalName] ?? null}
                               siteId={currentSiteId}
+                              siteUrl={currentSiteUrl}
                               getLookupOptions={getLookupOptions}
                               lookupOptions={lookupOptions}
                               setLookupOptions={setLookupOptions}
@@ -902,6 +905,7 @@ interface DetailFieldEditProps {
   isSaving: boolean;
   error: string | null;
   siteId: string;
+  siteUrl?: string;
   getLookupOptions: (siteId: string, listId: string, columnName: string) => Promise<LookupOption[]>;
   lookupOptions: Record<string, LookupOption[]>;
   setLookupOptions: React.Dispatch<React.SetStateAction<Record<string, LookupOption[]>>>;
@@ -925,6 +929,7 @@ function DetailFieldEdit({
   isSaving,
   error,
   siteId,
+  siteUrl,
   getLookupOptions,
   lookupOptions,
   setLookupOptions,
@@ -1149,6 +1154,26 @@ function DetailFieldEdit({
     );
   };
 
+  // Render view value - use clickable lookup for lookup fields
+  const renderViewValue = () => {
+    // Lookup field - render as clickable link
+    if (formField?.lookup && value !== null && value !== undefined) {
+      return (
+        <ClickableLookupValue
+          value={value}
+          targetListId={formField.lookup.listId}
+          targetListName={label} // Use column display name as fallback list name
+          siteId={siteId}
+          siteUrl={siteUrl}
+          isMultiSelect={formField.lookup.allowMultipleValues ?? false}
+        />
+      );
+    }
+
+    // Default rendering
+    return renderValue(fieldName, value);
+  };
+
   return (
     <InlineEditField
       label={label}
@@ -1164,7 +1189,7 @@ function DetailFieldEdit({
       onClearError={onClearError}
       editComponent={renderEditComponent()}
     >
-      {renderValue(fieldName, value)}
+      {renderViewValue()}
     </InlineEditField>
   );
 }

@@ -14,6 +14,7 @@ import { InlineEditLookup } from './InlineEditLookup';
 import { InlineEditNumber } from './InlineEditNumber';
 import { InlineEditDate, formatDateForInput, formatDateTimeForInput } from './InlineEditDate';
 import { InlineEditBoolean } from './InlineEditBoolean';
+import { ClickableLookupValue } from './ClickableLookupValue';
 import type { GraphListColumn, FormFieldConfig } from '../../../auth/graphClient';
 import type { LookupOption } from '../../../contexts/FormConfigContext';
 
@@ -124,6 +125,7 @@ interface EditableStatBoxProps {
   isSaving: boolean;
   error: string | null;
   siteId: string;
+  siteUrl?: string;
   getLookupOptions: (siteId: string, listId: string, columnName: string) => Promise<LookupOption[]>;
   lookupOptions: Record<string, LookupOption[]>;
   setLookupOptions: React.Dispatch<React.SetStateAction<Record<string, LookupOption[]>>>;
@@ -147,6 +149,7 @@ export function EditableStatBox({
   isSaving,
   error,
   siteId,
+  siteUrl,
   getLookupOptions,
   lookupOptions,
   setLookupOptions,
@@ -443,7 +446,20 @@ export function EditableStatBox({
         </div>
       ) : (
         <div className={styles.valueRow}>
-          <Text className={styles.value}>{displayValue || '-'}</Text>
+          <Text className={styles.value}>
+            {formField?.lookup && value !== null && value !== undefined ? (
+              <ClickableLookupValue
+                value={value}
+                targetListId={formField.lookup.listId}
+                targetListName={label}
+                siteId={siteId}
+                siteUrl={siteUrl}
+                isMultiSelect={formField.lookup.allowMultipleValues ?? false}
+              />
+            ) : (
+              displayValue || '-'
+            )}
+          </Text>
           <EditRegular
             className={mergeClasses(styles.editIcon, showEditIcon && styles.editIconVisible)}
           />
