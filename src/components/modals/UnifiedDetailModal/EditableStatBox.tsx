@@ -117,6 +117,7 @@ interface EditableStatBoxProps {
   fieldName: string;
   label: string;
   value: unknown;
+  lookupIdValue?: number | number[] | null;
   displayValue: string;
   formField: FormFieldConfig | undefined;
   columnMetadata: GraphListColumn | undefined;
@@ -141,6 +142,7 @@ export function EditableStatBox({
   fieldName,
   label,
   value,
+  lookupIdValue,
   displayValue,
   formField,
   columnMetadata,
@@ -450,9 +452,22 @@ export function EditableStatBox({
             {(() => {
               const lookupInfo = formField?.lookup ?? columnMetadata?.lookup;
               if (lookupInfo?.listId && value !== null && value !== undefined) {
+                // Normalize the value to include LookupId
+                let normalizedValue = value;
+
+                if (lookupInfo.allowMultipleValues) {
+                  normalizedValue = value;
+                } else {
+                  if (typeof value === 'object' && value !== null && 'LookupId' in value) {
+                    normalizedValue = value;
+                  } else if (lookupIdValue !== null && lookupIdValue !== undefined && typeof lookupIdValue === 'number') {
+                    normalizedValue = { LookupId: lookupIdValue, LookupValue: String(value) };
+                  }
+                }
+
                 return (
                   <ClickableLookupValue
-                    value={value}
+                    value={normalizedValue}
                     targetListId={lookupInfo.listId}
                     targetListName={label}
                     siteId={siteId}

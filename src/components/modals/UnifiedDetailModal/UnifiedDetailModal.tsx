@@ -767,6 +767,7 @@ function UnifiedDetailModalContent({
                           fieldName={col.internalName}
                           label={getDisplayName(col.internalName)}
                           value={value}
+                          lookupIdValue={currentItem.fields[`${col.internalName}LookupId`] as number | number[] | null | undefined}
                           displayValue={getStatValue(col.internalName, value)}
                           formField={getFormField(col.internalName)}
                           columnMetadata={getColumnMetadata(col.internalName)}
@@ -813,6 +814,7 @@ function UnifiedDetailModalContent({
                               fieldName={col.internalName}
                               label={getDisplayName(col.internalName)}
                               value={currentItem.fields[col.internalName]}
+                              lookupIdValue={currentItem.fields[`${col.internalName}LookupId`] as number | number[] | null | undefined}
                               formField={getFormField(col.internalName)}
                               columnMetadata={getColumnMetadata(col.internalName)}
                               isEditing={editingField === col.internalName}
@@ -898,6 +900,7 @@ interface DetailFieldEditProps {
   fieldName: string;
   label: string;
   value: unknown;
+  lookupIdValue?: number | number[] | null; // For lookup fields: the ID(s) from {ColumnName}LookupId field
   formField: ReturnType<typeof import('../../../hooks/useListFormConfig').useListFormConfig>['fields'][0] | undefined;
   columnMetadata: GraphListColumn | undefined;
   isEditing: boolean;
@@ -922,6 +925,7 @@ function DetailFieldEdit({
   fieldName,
   label,
   value,
+  lookupIdValue,
   formField,
   columnMetadata,
   isEditing,
@@ -1159,9 +1163,28 @@ function DetailFieldEdit({
     // Lookup field - render as clickable link (check both formField and columnMetadata)
     const lookupInfo = formField?.lookup ?? columnMetadata?.lookup;
     if (lookupInfo?.listId && value !== null && value !== undefined) {
+      // Normalize the value to include LookupId
+      // SharePoint returns single-select lookups as: value = string, lookupIdValue = number
+      // Multi-select lookups as: value = array of { LookupId, LookupValue }
+      // After local update: value = { LookupId, LookupValue }
+      let normalizedValue = value;
+
+      if (lookupInfo.allowMultipleValues) {
+        // Multi-select: value should already be array of { LookupId, LookupValue }
+        normalizedValue = value;
+      } else {
+        // Single-select: check if value is already an object with LookupId
+        if (typeof value === 'object' && value !== null && 'LookupId' in value) {
+          normalizedValue = value;
+        } else if (lookupIdValue !== null && lookupIdValue !== undefined && typeof lookupIdValue === 'number') {
+          // Value is a string, need to combine with lookupIdValue
+          normalizedValue = { LookupId: lookupIdValue, LookupValue: String(value) };
+        }
+      }
+
       return (
         <ClickableLookupValue
-          value={value}
+          value={normalizedValue}
           targetListId={lookupInfo.listId}
           targetListName={label} // Use column display name as fallback list name
           siteId={siteId}
