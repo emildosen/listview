@@ -572,13 +572,15 @@ export async function getPages(sp: SPFI): Promise<PageDefinition[]> {
     return items.map((item) => {
       try {
         const config = JSON.parse(item.PageConfig || '{}') as Partial<Omit<PageDefinition, 'id' | 'name'>>;
+        // Spread all config properties, then override id/name and provide defaults
         return {
+          // Spread all saved properties (preserves reportLayout, webpart configs, etc.)
+          ...config,
+          // Override with SharePoint item values
           id: String(item.Id),
           name: item.Title,
-          // Default pageType for backwards compatibility with existing pages
+          // Provide defaults for required fields
           pageType: config.pageType || 'lookup',
-          icon: config.icon,
-          sectionId: config.sectionId,
           primarySource: config.primarySource || { siteId: '', listId: '', listName: '' },
           displayColumns: config.displayColumns || [],
           searchConfig: config.searchConfig || {
@@ -587,11 +589,6 @@ export async function getPages(sp: SPFI): Promise<PageDefinition[]> {
             filterColumns: [],
           },
           relatedSections: config.relatedSections || [],
-          detailLayout: config.detailLayout,
-          reportLayout: config.reportLayout,
-          description: config.description,
-          createdAt: config.createdAt,
-          updatedAt: config.updatedAt,
         };
       } catch {
         return {
