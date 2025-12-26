@@ -272,10 +272,51 @@ function UnifiedDetailModalContent({
       setCurrentColumns(columns);
       setCurrentItem(item);
 
-      // Load config for new list
-      const config = getListDetailConfig(entry.listId);
-      if (config) {
-        setListDetailConfig(config);
+      // Load config for new list - sync with fresh columns
+      const savedConfig = getListDetailConfig(entry.listId);
+      if (savedConfig) {
+        // Sync saved config with fresh columns to ensure column names match
+        const freshColumnNames = new Set(
+          columns.filter(c => !c.hidden && !c.name.startsWith('_')).map(c => c.name)
+        );
+
+        // Filter displayColumns to only include columns that still exist
+        const validDisplayColumns = savedConfig.displayColumns.filter(c =>
+          freshColumnNames.has(c.internalName)
+        );
+
+        // Add any new columns from the fresh data
+        const existingColumnNames = new Set(savedConfig.displayColumns.map(c => c.internalName));
+        const newColumns = columns
+          .filter(c => !c.hidden && !c.name.startsWith('_') && !existingColumnNames.has(c.name))
+          .map(c => ({
+            internalName: c.name,
+            displayName: c.displayName,
+            editable: !c.readOnly,
+          }));
+
+        // Update column settings similarly
+        const validColumnSettings = (savedConfig.detailLayout?.columnSettings ?? []).filter(s =>
+          freshColumnNames.has(s.internalName)
+        );
+        const existingSettingNames = new Set(validColumnSettings.map(s => s.internalName));
+        const newColumnSettings = newColumns
+          .filter(c => !existingSettingNames.has(c.internalName))
+          .map(c => ({
+            internalName: c.internalName,
+            visible: false,
+            displayStyle: 'list' as const,
+          }));
+
+        const syncedConfig: ListDetailConfig = {
+          ...savedConfig,
+          displayColumns: [...validDisplayColumns, ...newColumns],
+          detailLayout: {
+            ...savedConfig.detailLayout,
+            columnSettings: [...validColumnSettings, ...newColumnSettings],
+          },
+        };
+        setListDetailConfig(syncedConfig);
       } else {
         const defaultConfig = createDefaultListDetailConfig(
           entry.listId,
@@ -1164,10 +1205,20 @@ function DetailFieldEdit({
     const lookupInfo = formField?.lookup ?? columnMetadata?.lookup;
     if (lookupInfo?.listId && value !== null && value !== undefined) {
       // Normalize the value to include LookupId
-      // SharePoint returns single-select lookups as: value = string, lookupIdValue = number
+      // SharePoint returns single-select lookups as: value = string, lookupIdValue = number (or string)
       // Multi-select lookups as: value = array of { LookupId, LookupValue }
       // After local update: value = { LookupId, LookupValue }
       let normalizedValue = value;
+
+      // Helper to parse ID from various formats (number, string, etc.)
+      const parseId = (v: unknown): number | null => {
+        if (typeof v === 'number') return v;
+        if (typeof v === 'string' && v) {
+          const parsed = parseInt(v, 10);
+          return isNaN(parsed) ? null : parsed;
+        }
+        return null;
+      };
 
       if (lookupInfo.allowMultipleValues) {
         // Multi-select: value should already be array of { LookupId, LookupValue }
@@ -1176,9 +1227,12 @@ function DetailFieldEdit({
         // Single-select: check if value is already an object with LookupId
         if (typeof value === 'object' && value !== null && 'LookupId' in value) {
           normalizedValue = value;
-        } else if (lookupIdValue !== null && lookupIdValue !== undefined && typeof lookupIdValue === 'number') {
+        } else {
           // Value is a string, need to combine with lookupIdValue
-          normalizedValue = { LookupId: lookupIdValue, LookupValue: String(value) };
+          const parsedId = parseId(lookupIdValue);
+          if (parsedId !== null) {
+            normalizedValue = { LookupId: parsedId, LookupValue: String(value) };
+          }
         }
       }
 

@@ -455,13 +455,26 @@ export function EditableStatBox({
                 // Normalize the value to include LookupId
                 let normalizedValue = value;
 
+                // Helper to parse ID from various formats
+                const parseId = (v: unknown): number | null => {
+                  if (typeof v === 'number') return v;
+                  if (typeof v === 'string' && v) {
+                    const parsed = parseInt(v, 10);
+                    return isNaN(parsed) ? null : parsed;
+                  }
+                  return null;
+                };
+
                 if (lookupInfo.allowMultipleValues) {
                   normalizedValue = value;
                 } else {
                   if (typeof value === 'object' && value !== null && 'LookupId' in value) {
                     normalizedValue = value;
-                  } else if (lookupIdValue !== null && lookupIdValue !== undefined && typeof lookupIdValue === 'number') {
-                    normalizedValue = { LookupId: lookupIdValue, LookupValue: String(value) };
+                  } else {
+                    const parsedId = parseId(lookupIdValue);
+                    if (parsedId !== null) {
+                      normalizedValue = { LookupId: parsedId, LookupValue: String(value) };
+                    }
                   }
                 }
 
