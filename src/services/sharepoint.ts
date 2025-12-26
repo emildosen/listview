@@ -577,6 +577,8 @@ export async function getPages(sp: SPFI): Promise<PageDefinition[]> {
           name: item.Title,
           // Default pageType for backwards compatibility with existing pages
           pageType: config.pageType || 'lookup',
+          icon: config.icon,
+          sectionId: config.sectionId,
           primarySource: config.primarySource || { siteId: '', listId: '', listName: '' },
           displayColumns: config.displayColumns || [],
           searchConfig: config.searchConfig || {
