@@ -67,7 +67,7 @@ const useStyles = makeStyles({
   },
   iconButtonHover: {
     backgroundColor: tokens.colorNeutralBackground1Hover,
-    borderColor: tokens.colorNeutralStroke1Hover,
+    border: `1px solid ${tokens.colorNeutralStroke1Hover}`,
   },
   iconButtonDark: {
     backgroundColor: '#252525',

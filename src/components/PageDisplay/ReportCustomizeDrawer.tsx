@@ -14,6 +14,8 @@ import {
   Field,
   Dropdown,
   Option,
+  TabList,
+  Tab,
 } from '@fluentui/react-components';
 import {
   DismissRegular,
@@ -29,6 +31,7 @@ import type {
   SectionHeight,
   WebPartType,
   AnyWebPartConfig,
+  Section,
 } from '../../types/page';
 import { useSettings } from '../../contexts/SettingsContext';
 import { IconPicker } from '../PageEditor/IconPicker';
@@ -41,6 +44,9 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
+  },
+  tabList: {
+    marginBottom: '16px',
   },
   content: {
     flex: 1,
@@ -168,6 +174,13 @@ const useStyles = makeStyles({
     borderTop: `1px solid ${tokens.colorNeutralStroke1}`,
     marginTop: 'auto',
   },
+  newSectionRow: {
+    display: 'flex',
+    gap: '8px',
+  },
+  newSectionInput: {
+    flex: 1,
+  },
 });
 
 /**
@@ -214,6 +227,8 @@ interface ReportCustomizeDrawerProps {
   onSave: (page: PageDefinition) => Promise<void>;
 }
 
+type DrawerTab = 'basic' | 'sections';
+
 export default function ReportCustomizeDrawer({
   page,
   open,
@@ -221,13 +236,20 @@ export default function ReportCustomizeDrawer({
   onSave,
 }: ReportCustomizeDrawerProps) {
   const styles = useStyles();
-  const { sections: sidebarSections } = useSettings();
+  const { sections: sidebarSections, saveSection } = useSettings();
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<DrawerTab>('basic');
 
   // Basic info state
   const [name, setName] = useState(page.name);
   const [description, setDescription] = useState(page.description || '');
   const [icon, setIcon] = useState(page.icon || DEFAULT_PAGE_ICONS.report);
   const [sectionId, setSectionId] = useState<string | null>(page.sectionId || null);
+
+  // New sidebar section creation
+  const [showNewSidebarSection, setShowNewSidebarSection] = useState(false);
+  const [newSidebarSectionName, setNewSidebarSectionName] = useState('');
 
   // Sorted sidebar sections for dropdown
   const sortedSidebarSections = useMemo(() => {
@@ -250,6 +272,9 @@ export default function ReportCustomizeDrawer({
       setDescription(page.description || '');
       setIcon(page.icon || DEFAULT_PAGE_ICONS.report);
       setSectionId(page.sectionId || null);
+      setActiveTab('basic');
+      setShowNewSidebarSection(false);
+      setNewSidebarSectionName('');
       if (page.reportLayout?.sections && page.reportLayout.sections.length > 0) {
         setSections([...page.reportLayout.sections]);
       } else {
@@ -257,6 +282,26 @@ export default function ReportCustomizeDrawer({
       }
     }
   }, [open, page]);
+
+  // Handle new sidebar section creation
+  const handleCreateSidebarSection = useCallback(async () => {
+    if (!newSidebarSectionName.trim()) return;
+
+    const newSection: Section = {
+      id: `section-${Date.now()}`,
+      name: newSidebarSectionName.trim(),
+      order: sortedSidebarSections.length,
+    };
+
+    try {
+      await saveSection(newSection);
+      setSectionId(newSection.id);
+      setNewSidebarSectionName('');
+      setShowNewSidebarSection(false);
+    } catch (err) {
+      console.error('Failed to create section:', err);
+    }
+  }, [newSidebarSectionName, sortedSidebarSections.length, saveSection]);
 
   // Drag state
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -433,65 +478,110 @@ export default function ReportCustomizeDrawer({
       </DrawerHeader>
 
       <DrawerBody className={styles.body}>
+        <TabList
+          className={styles.tabList}
+          selectedValue={activeTab}
+          onTabSelect={(_, data) => setActiveTab(data.value as DrawerTab)}
+        >
+          <Tab value="basic">Basic Info</Tab>
+          <Tab value="sections">Sections</Tab>
+        </TabList>
+
         <div className={styles.content}>
-          {/* Basic Information */}
-          <div className={styles.section}>
-            <Text className={styles.sectionTitle}>Basic Information</Text>
+          {/* Basic Information Tab */}
+          {activeTab === 'basic' && (
+            <div className={styles.section}>
+              <Field label="Page Name" required>
+                <Input
+                  value={name}
+                  onChange={(_e, data) => setName(data.value)}
+                />
+              </Field>
 
-            <Field label="Page Name" required>
-              <Input
-                value={name}
-                onChange={(_e, data) => setName(data.value)}
-              />
-            </Field>
+              <Field label="Description">
+                <Textarea
+                  value={description}
+                  onChange={(_e, data) => setDescription(data.value)}
+                  rows={2}
+                />
+              </Field>
 
-            <Field label="Description">
-              <Textarea
-                value={description}
-                onChange={(_e, data) => setDescription(data.value)}
-                rows={2}
-              />
-            </Field>
+              <Field label="Icon">
+                <IconPicker value={icon} onChange={setIcon} />
+              </Field>
 
-            <Field label="Icon">
-              <IconPicker value={icon} onChange={setIcon} />
-            </Field>
-
-            <Field label="Sidebar Section">
-              <Dropdown
-                value={sectionId ? sidebarSections[sectionId]?.name : 'None'}
-                selectedOptions={sectionId ? [sectionId] : []}
-                onOptionSelect={(_, data) => {
-                  setSectionId(data.optionValue === '' ? null : data.optionValue || null);
-                }}
-              >
-                <Option value="">None (show at top)</Option>
-                {sortedSidebarSections.map((section) => (
-                  <Option key={section.id} value={section.id}>
-                    {section.name}
-                  </Option>
-                ))}
-              </Dropdown>
-            </Field>
-          </div>
-
-          <Divider />
-
-          {/* Sections */}
-          <div className={styles.section} style={{ marginTop: '24px' }}>
-            <div className={styles.sectionHeader}>
-              <Text className={styles.sectionTitle}>Sections</Text>
-              <Button
-                appearance="subtle"
-                icon={<AddRegular />}
-                onClick={handleAddSection}
-              >
-                Add Section
-              </Button>
+              <Field label="Sidebar Section">
+                {showNewSidebarSection ? (
+                  <div className={styles.newSectionRow}>
+                    <Input
+                      className={styles.newSectionInput}
+                      placeholder="New section name"
+                      value={newSidebarSectionName}
+                      onChange={(_, data) => setNewSidebarSectionName(data.value)}
+                    />
+                    <Button
+                      appearance="primary"
+                      onClick={handleCreateSidebarSection}
+                      disabled={!newSidebarSectionName.trim()}
+                    >
+                      Create
+                    </Button>
+                    <Button
+                      appearance="subtle"
+                      onClick={() => {
+                        setShowNewSidebarSection(false);
+                        setNewSidebarSectionName('');
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <div className={styles.newSectionRow}>
+                    <Dropdown
+                      style={{ flex: 1 }}
+                      value={sectionId ? sidebarSections[sectionId]?.name : 'None'}
+                      selectedOptions={sectionId ? [sectionId] : []}
+                      onOptionSelect={(_, data) => {
+                        setSectionId(data.optionValue === '' ? null : data.optionValue || null);
+                      }}
+                    >
+                      <Option value="">None (show at top)</Option>
+                      {sortedSidebarSections.map((section) => (
+                        <Option key={section.id} value={section.id}>
+                          {section.name}
+                        </Option>
+                      ))}
+                    </Dropdown>
+                    <Button
+                      appearance="subtle"
+                      icon={<AddRegular />}
+                      onClick={() => setShowNewSidebarSection(true)}
+                    >
+                      New
+                    </Button>
+                  </div>
+                )}
+              </Field>
             </div>
-            <Text className={styles.sectionHint}>
-              Drag to reorder sections. Each section can have a different column layout.
-            </Text>
+          )}
+
+          {/* Sections Tab */}
+          {activeTab === 'sections' && (
+            <div className={styles.section}>
+              <div className={styles.sectionHeader}>
+                <Text className={styles.sectionTitle}>Layout Sections</Text>
+                <Button
+                  appearance="subtle"
+                  icon={<AddRegular />}
+                  onClick={handleAddSection}
+                >
+                  Add Section
+                </Button>
+              </div>
+              <Text className={styles.sectionHint}>
+                Drag to reorder sections. Each section can have a different column layout.
+              </Text>
 
             {sections.length === 0 ? (
               <div className={styles.emptySection}>
@@ -612,7 +702,8 @@ export default function ReportCustomizeDrawer({
                 </div>
               ))
             )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Footer with Save/Cancel */}
