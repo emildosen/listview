@@ -447,18 +447,22 @@ export function EditableStatBox({
       ) : (
         <div className={styles.valueRow}>
           <Text className={styles.value}>
-            {formField?.lookup && value !== null && value !== undefined ? (
-              <ClickableLookupValue
-                value={value}
-                targetListId={formField.lookup.listId}
-                targetListName={label}
-                siteId={siteId}
-                siteUrl={siteUrl}
-                isMultiSelect={formField.lookup.allowMultipleValues ?? false}
-              />
-            ) : (
-              displayValue || '-'
-            )}
+            {(() => {
+              const lookupInfo = formField?.lookup ?? columnMetadata?.lookup;
+              if (lookupInfo?.listId && value !== null && value !== undefined) {
+                return (
+                  <ClickableLookupValue
+                    value={value}
+                    targetListId={lookupInfo.listId}
+                    targetListName={label}
+                    siteId={siteId}
+                    siteUrl={siteUrl}
+                    isMultiSelect={lookupInfo.allowMultipleValues ?? false}
+                  />
+                );
+              }
+              return displayValue || '-';
+            })()}
           </Text>
           <EditRegular
             className={mergeClasses(styles.editIcon, showEditIcon && styles.editIconVisible)}

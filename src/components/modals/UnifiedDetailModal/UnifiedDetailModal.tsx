@@ -1156,16 +1156,17 @@ function DetailFieldEdit({
 
   // Render view value - use clickable lookup for lookup fields
   const renderViewValue = () => {
-    // Lookup field - render as clickable link
-    if (formField?.lookup && value !== null && value !== undefined) {
+    // Lookup field - render as clickable link (check both formField and columnMetadata)
+    const lookupInfo = formField?.lookup ?? columnMetadata?.lookup;
+    if (lookupInfo?.listId && value !== null && value !== undefined) {
       return (
         <ClickableLookupValue
           value={value}
-          targetListId={formField.lookup.listId}
+          targetListId={lookupInfo.listId}
           targetListName={label} // Use column display name as fallback list name
           siteId={siteId}
           siteUrl={siteUrl}
-          isMultiSelect={formField.lookup.allowMultipleValues ?? false}
+          isMultiSelect={lookupInfo.allowMultipleValues ?? false}
         />
       );
     }
