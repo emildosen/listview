@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useMsal } from '@azure/msal-react';
 import {
   makeStyles,
@@ -18,6 +18,8 @@ import {
   Badge,
   Link,
   mergeClasses,
+  Dropdown,
+  Option,
 } from '@fluentui/react-components';
 import {
   DismissRegular,
@@ -32,6 +34,9 @@ import type {
   WebPartDataSource,
 } from '../../types/page';
 import { getListColumns, type GraphListColumn } from '../../auth/graphClient';
+import { useSettings } from '../../contexts/SettingsContext';
+import { IconPicker } from '../PageEditor/IconPicker';
+import { DEFAULT_PAGE_ICONS } from '../../utils/iconMap';
 import DataSourcePicker from './WebParts/DataSourcePicker';
 
 interface ColumnWithMeta extends GraphListColumn {
@@ -176,13 +181,21 @@ export default function LookupCustomizeDrawer({
   const styles = useStyles();
   const { instance, accounts } = useMsal();
   const account = accounts[0];
+  const { sections } = useSettings();
 
   // Form state
   const [name, setName] = useState(page.name);
   const [description, setDescription] = useState(page.description || '');
+  const [icon, setIcon] = useState(page.icon || DEFAULT_PAGE_ICONS.lookup);
+  const [sectionId, setSectionId] = useState<string | null>(page.sectionId || null);
   const [primarySource, setPrimarySource] = useState<PageSource>(page.primarySource);
   const [displayColumns, setDisplayColumns] = useState<PageColumn[]>(page.displayColumns);
   const [searchConfig, setSearchConfig] = useState<SearchConfig>(page.searchConfig);
+
+  // Sorted sections for dropdown
+  const sortedSections = useMemo(() => {
+    return Object.values(sections).sort((a, b) => a.order - b.order);
+  }, [sections]);
 
   // Available columns from primary source
   const [availableColumns, setAvailableColumns] = useState<ColumnWithMeta[]>([]);
@@ -200,6 +213,8 @@ export default function LookupCustomizeDrawer({
     if (open) {
       setName(page.name);
       setDescription(page.description || '');
+      setIcon(page.icon || DEFAULT_PAGE_ICONS.lookup);
+      setSectionId(page.sectionId || null);
       setPrimarySource(page.primarySource);
       setDisplayColumns(page.displayColumns);
       setSearchConfig(page.searchConfig);
@@ -342,6 +357,8 @@ export default function LookupCustomizeDrawer({
         ...page,
         name,
         description: description || undefined,
+        icon,
+        sectionId,
         primarySource,
         displayColumns,
         searchConfig: {
@@ -354,7 +371,7 @@ export default function LookupCustomizeDrawer({
     } finally {
       setSaving(false);
     }
-  }, [page, name, description, primarySource, displayColumns, searchConfig, onSave, onClose]);
+  }, [page, name, description, icon, sectionId, primarySource, displayColumns, searchConfig, onSave, onClose]);
 
   // Get choice columns for filter dropdown
   const choiceColumns = availableColumns.filter(
@@ -410,6 +427,27 @@ export default function LookupCustomizeDrawer({
                 onChange={(_e, data) => setDescription(data.value)}
                 rows={2}
               />
+            </Field>
+
+            <Field label="Icon">
+              <IconPicker value={icon} onChange={setIcon} />
+            </Field>
+
+            <Field label="Sidebar Section">
+              <Dropdown
+                value={sectionId ? sections[sectionId]?.name : 'None'}
+                selectedOptions={sectionId ? [sectionId] : []}
+                onOptionSelect={(_, data) => {
+                  setSectionId(data.optionValue === '' ? null : data.optionValue || null);
+                }}
+              >
+                <Option value="">None (show at top)</Option>
+                {sortedSections.map((section) => (
+                  <Option key={section.id} value={section.id}>
+                    {section.name}
+                  </Option>
+                ))}
+              </Dropdown>
             </Field>
           </div>
 

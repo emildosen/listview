@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   makeStyles,
   tokens,
@@ -12,6 +12,8 @@ import {
   Input,
   Textarea,
   Field,
+  Dropdown,
+  Option,
 } from '@fluentui/react-components';
 import {
   DismissRegular,
@@ -28,6 +30,9 @@ import type {
   WebPartType,
   AnyWebPartConfig,
 } from '../../types/page';
+import { useSettings } from '../../contexts/SettingsContext';
+import { IconPicker } from '../PageEditor/IconPicker';
+import { DEFAULT_PAGE_ICONS } from '../../utils/iconMap';
 import LayoutPicker from './LayoutPicker';
 import WebPartPicker from './WebPartPicker';
 
@@ -216,10 +221,18 @@ export default function ReportCustomizeDrawer({
   onSave,
 }: ReportCustomizeDrawerProps) {
   const styles = useStyles();
+  const { sections: sidebarSections } = useSettings();
 
   // Basic info state
   const [name, setName] = useState(page.name);
   const [description, setDescription] = useState(page.description || '');
+  const [icon, setIcon] = useState(page.icon || DEFAULT_PAGE_ICONS.report);
+  const [sectionId, setSectionId] = useState<string | null>(page.sectionId || null);
+
+  // Sorted sidebar sections for dropdown
+  const sortedSidebarSections = useMemo(() => {
+    return Object.values(sidebarSections).sort((a, b) => a.order - b.order);
+  }, [sidebarSections]);
 
   // Initialize sections from existing config or create default
   const [sections, setSections] = useState<ReportSection[]>(() => {
@@ -235,6 +248,8 @@ export default function ReportCustomizeDrawer({
     if (open) {
       setName(page.name);
       setDescription(page.description || '');
+      setIcon(page.icon || DEFAULT_PAGE_ICONS.report);
+      setSectionId(page.sectionId || null);
       if (page.reportLayout?.sections && page.reportLayout.sections.length > 0) {
         setSections([...page.reportLayout.sections]);
       } else {
@@ -374,6 +389,8 @@ export default function ReportCustomizeDrawer({
         ...page,
         name,
         description: description || undefined,
+        icon,
+        sectionId,
         reportLayout: { sections },
       };
       await onSave(updatedPage);
@@ -381,7 +398,7 @@ export default function ReportCustomizeDrawer({
     } finally {
       setSaving(false);
     }
-  }, [page, name, description, sections, onSave, onClose]);
+  }, [page, name, description, icon, sectionId, sections, onSave, onClose]);
 
   // Get column label based on position and layout
   const getColumnLabel = (layout: SectionLayout, index: number): string => {
@@ -434,6 +451,27 @@ export default function ReportCustomizeDrawer({
                 onChange={(_e, data) => setDescription(data.value)}
                 rows={2}
               />
+            </Field>
+
+            <Field label="Icon">
+              <IconPicker value={icon} onChange={setIcon} />
+            </Field>
+
+            <Field label="Sidebar Section">
+              <Dropdown
+                value={sectionId ? sidebarSections[sectionId]?.name : 'None'}
+                selectedOptions={sectionId ? [sectionId] : []}
+                onOptionSelect={(_, data) => {
+                  setSectionId(data.optionValue === '' ? null : data.optionValue || null);
+                }}
+              >
+                <Option value="">None (show at top)</Option>
+                {sortedSidebarSections.map((section) => (
+                  <Option key={section.id} value={section.id}>
+                    {section.name}
+                  </Option>
+                ))}
+              </Dropdown>
             </Field>
           </div>
 
