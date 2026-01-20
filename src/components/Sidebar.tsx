@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useMsal } from '@azure/msal-react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
 import {
   makeStyles,
   tokens,
@@ -9,20 +9,50 @@ import {
   Text,
   Divider,
   mergeClasses,
+  Input,
+  Menu,
+  MenuTrigger,
+  MenuPopover,
+  MenuList,
+  MenuItem,
 } from '@fluentui/react-components';
 import {
   HomeRegular,
   AddRegular,
-  EditRegular,
   ChevronUpRegular,
+  ChevronDownRegular,
+  ChevronRightRegular,
   WeatherSunnyRegular,
   WeatherMoonRegular,
   SettingsRegular,
   SignOutRegular,
+  ReOrderDotsVerticalRegular,
+  EditRegular,
+  DeleteRegular,
+  MoreHorizontalRegular,
 } from '@fluentui/react-icons';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useTheme } from '../contexts/ThemeContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { graphScopes } from '../auth/msalConfig';
+import { getPageIcon } from '../utils/iconMap';
+import type { Section, PageDefinition } from '../types/page';
 import Logo from './Logo';
 
 const useStyles = makeStyles({
@@ -58,19 +88,6 @@ const useStyles = makeStyles({
   },
   navDark: {
     scrollbarColor: '#333 #121212',
-    '&::-webkit-scrollbar': {
-      width: '8px',
-    },
-    '&::-webkit-scrollbar-track': {
-      background: '#121212',
-    },
-    '&::-webkit-scrollbar-thumb': {
-      background: '#333',
-      borderRadius: '4px',
-    },
-    '&::-webkit-scrollbar-thumb:hover': {
-      background: '#444',
-    },
   },
   menuList: {
     listStyle: 'none',
@@ -92,82 +109,102 @@ const useStyles = makeStyles({
     cursor: 'pointer',
     transitionProperty: 'background-color',
     transitionDuration: tokens.durationNormal,
-    ':hover': {
-      backgroundColor: tokens.colorNeutralBackground3,
-    },
   },
   menuItemActive: {
     backgroundColor: tokens.colorNeutralBackground3,
   },
-  section: {
-    marginTop: '16px',
+  menuItemHover: {
+    backgroundColor: tokens.colorNeutralBackground3,
   },
+  // Page link styles
+  pageLink: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '8px 12px',
+    borderRadius: tokens.borderRadiusMedium,
+    textDecoration: 'none',
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase300,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    transitionProperty: 'background-color',
+    transitionDuration: tokens.durationNormal,
+  },
+  pageLinkActive: {
+    backgroundColor: tokens.colorNeutralBackground3,
+    color: tokens.colorNeutralForeground1,
+  },
+  pageLinkHover: {
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  pageIcon: {
+    flexShrink: 0,
+    color: tokens.colorNeutralForeground3,
+  },
+  pageName: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  // Section styles
   sectionHeader: {
     display: 'flex',
     alignItems: 'center',
-    padding: '10px 12px',
+    padding: '8px 8px 8px 0',
+    marginTop: '12px',
+    borderRadius: tokens.borderRadiusMedium,
+    cursor: 'pointer',
+    transitionProperty: 'background-color',
+    transitionDuration: tokens.durationNormal,
+  },
+  sectionHeaderHover: {
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  sectionDragHandle: {
+    cursor: 'grab',
+    color: tokens.colorNeutralForeground3,
+    marginRight: '2px',
+    opacity: 0,
+    transitionProperty: 'opacity',
+    transitionDuration: tokens.durationNormal,
+  },
+  sectionDragHandleVisible: {
+    opacity: 1,
+  },
+  sectionChevron: {
+    color: tokens.colorNeutralForeground3,
+    marginLeft: '4px',
   },
   sectionTitle: {
     flex: 1,
     fontSize: tokens.fontSizeBase300,
     fontWeight: tokens.fontWeightSemibold,
     color: tokens.colorNeutralForeground2,
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    textAlign: 'left',
-    padding: 0,
+    textTransform: 'uppercase',
+    letterSpacing: '0.02em',
+  },
+  sectionTitleInput: {
+    flex: 1,
   },
   sectionActions: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
     opacity: 0,
     transitionProperty: 'opacity',
     transitionDuration: tokens.durationNormal,
   },
-  sectionHeaderHover: {
-    ':hover': {
-      '& .section-actions': {
-        opacity: 1,
-      },
-    },
-  },
-  sectionActionLink: {
-    color: tokens.colorNeutralForeground3,
-    display: 'flex',
-    alignItems: 'center',
-    transitionProperty: 'color',
-    transitionDuration: tokens.durationNormal,
-    ':hover': {
-      color: tokens.colorBrandForeground1,
-    },
+  sectionActionsVisible: {
+    opacity: 1,
   },
   sectionContent: {
-    marginLeft: '20px',
-    paddingLeft: '4px',
+    marginLeft: '4px',
+    paddingLeft: '8px',
+    borderLeft: `1px solid ${tokens.colorNeutralStroke2}`,
   },
-  sectionLink: {
-    display: 'block',
-    padding: '8px 12px',
-    margin: '0 4px',
-    fontSize: tokens.fontSizeBase300,
-    borderRadius: tokens.borderRadiusMedium,
-    textDecoration: 'none',
-    color: tokens.colorNeutralForeground2,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    transitionProperty: 'background-color',
-    transitionDuration: tokens.durationNormal,
-    ':hover': {
-      backgroundColor: tokens.colorNeutralBackground3,
-    },
+  sectionDragging: {
+    opacity: 0.5,
   },
-  sectionLinkActive: {
-    backgroundColor: tokens.colorNeutralBackground3,
-    color: tokens.colorNeutralForeground1,
-  },
+  // User profile
   userProfile: {
     padding: '16px',
   },
@@ -183,9 +220,9 @@ const useStyles = makeStyles({
     cursor: 'pointer',
     transitionProperty: 'background-color',
     transitionDuration: tokens.durationNormal,
-    ':hover': {
-      backgroundColor: tokens.colorNeutralBackground3,
-    },
+  },
+  profileButtonHover: {
+    backgroundColor: tokens.colorNeutralBackground3,
   },
   profileInfo: {
     flex: 1,
@@ -257,9 +294,9 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
     transitionProperty: 'background-color',
     transitionDuration: tokens.durationNormal,
-    ':hover': {
-      backgroundColor: tokens.colorNeutralBackground2,
-    },
+  },
+  dropdownItemHover: {
+    backgroundColor: tokens.colorNeutralBackground2,
   },
   signOutItem: {
     color: tokens.colorPaletteRedForeground1,
@@ -267,23 +304,254 @@ const useStyles = makeStyles({
   relativeContainer: {
     position: 'relative',
   },
+  addPageButton: {
+    width: '100%',
+    justifyContent: 'flex-start',
+    gap: '10px',
+    padding: '6px 12px',
+    marginTop: '-4px',
+    minWidth: 'auto',
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground4,
+  },
 });
+
+// Sortable Section component
+interface SortableSectionProps {
+  section: Section;
+  pages: PageDefinition[];
+  isExpanded: boolean;
+  onToggle: () => void;
+  onRename: (name: string) => void;
+  onDelete: () => void;
+  currentPath: string;
+}
+
+function SortableSection({
+  section,
+  pages,
+  isExpanded,
+  onToggle,
+  onRename,
+  onDelete,
+  currentPath,
+}: SortableSectionProps) {
+  const styles = useStyles();
+  const [isHovered, setIsHovered] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(section.name);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: section.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const handleSaveEdit = () => {
+    if (editName.trim() && editName !== section.name) {
+      onRename(editName.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      setEditName(section.name);
+      setIsEditing(false);
+    }
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={isDragging ? styles.sectionDragging : undefined}
+    >
+      <div
+        className={mergeClasses(
+          styles.sectionHeader,
+          isHovered && styles.sectionHeaderHover
+        )}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onClick={onToggle}
+      >
+        <div
+          {...attributes}
+          {...listeners}
+          className={mergeClasses(
+            styles.sectionDragHandle,
+            isHovered && styles.sectionDragHandleVisible
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ReOrderDotsVerticalRegular fontSize={16} />
+        </div>
+        {isEditing ? (
+          <Input
+            size="small"
+            value={editName}
+            onChange={(_, data) => setEditName(data.value)}
+            onBlur={handleSaveEdit}
+            onKeyDown={handleKeyDown}
+            onClick={(e) => e.stopPropagation()}
+            autoFocus
+            className={styles.sectionTitleInput}
+          />
+        ) : (
+          <span className={styles.sectionTitle}>{section.name}</span>
+        )}
+        <span className={styles.sectionChevron}>
+          {isExpanded ? (
+            <ChevronDownRegular fontSize={12} />
+          ) : (
+            <ChevronRightRegular fontSize={12} />
+          )}
+        </span>
+        <div
+          className={mergeClasses(
+            styles.sectionActions,
+            isHovered && styles.sectionActionsVisible
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Menu>
+            <MenuTrigger disableButtonEnhancement>
+              <Button
+                appearance="subtle"
+                size="small"
+                icon={<MoreHorizontalRegular fontSize={16} />}
+              />
+            </MenuTrigger>
+            <MenuPopover>
+              <MenuList>
+                <MenuItem
+                  icon={<EditRegular />}
+                  onClick={() => setIsEditing(true)}
+                >
+                  Rename
+                </MenuItem>
+                <MenuItem icon={<DeleteRegular />} onClick={onDelete}>
+                  Delete
+                </MenuItem>
+              </MenuList>
+            </MenuPopover>
+          </Menu>
+        </div>
+      </div>
+      {isExpanded && pages.length > 0 && (
+        <div className={styles.sectionContent}>
+          {pages.map((page) => (
+            <PageLink
+              key={page.id}
+              page={page}
+              isActive={currentPath === `/app/pages/${page.id}`}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Page link component
+interface PageLinkProps {
+  page: PageDefinition;
+  isActive: boolean;
+}
+
+function PageLink({ page, isActive }: PageLinkProps) {
+  const styles = useStyles();
+  const [isHovered, setIsHovered] = useState(false);
+  const Icon = getPageIcon(page.icon);
+
+  return (
+    <Link
+      to={`/app/pages/${page.id}`}
+      className={mergeClasses(
+        styles.pageLink,
+        isActive && styles.pageLinkActive,
+        isHovered && !isActive && styles.pageLinkHover
+      )}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      title={page.description || page.name}
+    >
+      <Icon fontSize={18} className={styles.pageIcon} />
+      <span className={styles.pageName}>{page.name}</span>
+    </Link>
+  );
+}
 
 function Sidebar() {
   const styles = useStyles();
   const { instance, accounts } = useMsal();
-  const { setupStatus, pages } = useSettings();
+  const { setupStatus, pages, sections, saveSection, removeSection, reorderSections } = useSettings();
   const { theme, setTheme } = useTheme();
   const location = useLocation();
+  const navigate = useNavigate();
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [pagesExpanded, setPagesExpanded] = useState(true);
   const [profilePicture, setProfilePicture] = useState<string | null>(null);
   const profilePictureUrlRef = useRef<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [sectionHover, setSectionHover] = useState<string | null>(null);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [homeHovered, setHomeHovered] = useState(false);
+  const [profileHovered, setProfileHovered] = useState(false);
 
   const account = accounts[0];
   const isReady = setupStatus === 'ready';
+
+  // Sorted sections
+  const sortedSections = useMemo(() => {
+    return Object.values(sections).sort((a, b) => a.order - b.order);
+  }, [sections]);
+
+  // Pages grouped by section
+  const unsectionedPages = useMemo(() => {
+    return pages.filter((p) => !p.sectionId);
+  }, [pages]);
+
+  const pagesBySection = useMemo(() => {
+    const grouped: Record<string, PageDefinition[]> = {};
+    pages.forEach((page) => {
+      if (page.sectionId) {
+        if (!grouped[page.sectionId]) {
+          grouped[page.sectionId] = [];
+        }
+        grouped[page.sectionId].push(page);
+      }
+    });
+    return grouped;
+  }, [pages]);
+
+  // dnd-kit sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle section drag end
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = sortedSections.findIndex((s) => s.id === active.id);
+      const newIndex = sortedSections.findIndex((s) => s.id === over.id);
+      const newOrder = arrayMove(sortedSections, oldIndex, newIndex);
+      await reorderSections(newOrder.map((s) => s.id));
+    }
+  };
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -320,14 +588,12 @@ function Sidebar() {
           setProfilePicture(url);
         }
       } catch (error) {
-        // Silently fail - will show initials instead
         console.debug('Could not fetch profile picture:', error);
       }
     }
 
     fetchProfilePicture();
 
-    // Cleanup blob URL on unmount
     return () => {
       if (profilePictureUrlRef.current) {
         URL.revokeObjectURL(profilePictureUrlRef.current);
@@ -346,7 +612,6 @@ function Sidebar() {
     }
   };
 
-  // Get user initials for avatar
   const getInitials = () => {
     if (!account) return '?';
     const name = account.name || account.username || '';
@@ -362,6 +627,21 @@ function Sidebar() {
       return location.pathname === '/app';
     }
     return location.pathname.startsWith(path);
+  };
+
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections((prev) => ({
+      ...prev,
+      [sectionId]: !prev[sectionId],
+    }));
+  };
+
+  const handleRenameSection = async (section: Section, newName: string) => {
+    await saveSection({ ...section, name: newName });
+  };
+
+  const handleDeleteSection = async (sectionId: string) => {
+    await removeSection(sectionId);
   };
 
   return (
@@ -382,75 +662,68 @@ function Sidebar() {
               to="/app"
               className={mergeClasses(
                 styles.menuItem,
-                isActive('/app') && styles.menuItemActive
+                isActive('/app') && styles.menuItemActive,
+                homeHovered && !isActive('/app') && styles.menuItemHover
               )}
+              onMouseEnter={() => setHomeHovered(true)}
+              onMouseLeave={() => setHomeHovered(false)}
             >
               <HomeRegular fontSize={22} />
               Home
             </Link>
           </li>
+          <li>
+            <Button
+              appearance="transparent"
+              size="small"
+              icon={<AddRegular />}
+              className={styles.addPageButton}
+              onClick={() => navigate('/app/pages/new')}
+            >
+              Add Page
+            </Button>
+          </li>
         </ul>
 
-        {/* Pages Section */}
-        {isReady && (
-          <div className={styles.section}>
-            <div
-              className={styles.sectionHeader}
-              onMouseEnter={() => setSectionHover('pages')}
-              onMouseLeave={() => setSectionHover(null)}
-            >
-              <button
-                onClick={() => setPagesExpanded(!pagesExpanded)}
-                className={styles.sectionTitle}
-              >
-                Pages
-              </button>
-              <div
-                className={styles.sectionActions}
-                style={{ opacity: sectionHover === 'pages' ? 1 : 0 }}
-              >
-                <Link
-                  to="/app/pages/new"
-                  className={styles.sectionActionLink}
-                  title="Create Page"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <AddRegular fontSize={16} />
-                </Link>
-                <Link
-                  to="/app/pages"
-                  className={styles.sectionActionLink}
-                  title="Manage Pages"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <EditRegular fontSize={16} />
-                </Link>
-              </div>
-            </div>
-            {pagesExpanded && pages.length > 0 && (
-              <div className={styles.sectionContent}>
-                {pages.map((page) => {
-                  const pagePath = `/app/pages/${page.id}`;
-                  const isPageActive = location.pathname === pagePath;
-                  return (
-                    <Link
-                      key={page.id}
-                      to={pagePath}
-                      className={mergeClasses(
-                        styles.sectionLink,
-                        isPageActive && styles.sectionLinkActive
-                      )}
-                      title={page.description || page.name}
-                    >
-                      {page.name}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
+        {/* Unsectioned pages (above sections) */}
+        {isReady && unsectionedPages.length > 0 && (
+          <div style={{ marginTop: '8px' }}>
+            {unsectionedPages.map((page) => (
+              <PageLink
+                key={page.id}
+                page={page}
+                isActive={location.pathname === `/app/pages/${page.id}`}
+              />
+            ))}
           </div>
         )}
 
+        {/* Custom sections with drag-drop */}
+        {isReady && sortedSections.length > 0 && (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={sortedSections.map((s) => s.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {sortedSections.map((section) => (
+                <SortableSection
+                  key={section.id}
+                  section={section}
+                  pages={pagesBySection[section.id] || []}
+                  isExpanded={expandedSections[section.id] !== false}
+                  onToggle={() => toggleSection(section.id)}
+                  onRename={(name) => handleRenameSection(section, name)}
+                  onDelete={() => handleDeleteSection(section.id)}
+                  currentPath={location.pathname}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        )}
       </nav>
 
       {/* User Profile */}
@@ -458,7 +731,12 @@ function Sidebar() {
         <div className={styles.relativeContainer}>
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            className={styles.profileButton}
+            className={mergeClasses(
+              styles.profileButton,
+              profileHovered && styles.profileButtonHover
+            )}
+            onMouseEnter={() => setProfileHovered(true)}
+            onMouseLeave={() => setProfileHovered(false)}
           >
             <Avatar
               image={profilePicture ? { src: profilePicture } : undefined}

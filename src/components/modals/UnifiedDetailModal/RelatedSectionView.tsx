@@ -20,13 +20,15 @@ import {
   mergeClasses,
 } from '@fluentui/react-components';
 import type { TableColumnDefinition } from '@fluentui/react-components';
-import { AddRegular, DeleteRegular, EditRegular } from '@fluentui/react-icons';
-import { getListItems, type GraphListItem } from '../../../auth/graphClient';
-import { createListItem, updateListItem, deleteListItem, createSPClient } from '../../../services/sharepoint';
+import { AddRegular } from '@fluentui/react-icons';
+import { getListItems, type GraphListItem, type GraphListColumn } from '../../../auth/graphClient';
+import { createListItem, createSPClient } from '../../../services/sharepoint';
+import { formatDateForDisplay, formatDateTimeForDisplay } from './InlineEditDate';
 import type { RelatedSection } from '../../../types/page';
 import { useModalNavigation, type NavigationEntry } from './ModalNavigationContext';
 import { useTheme } from '../../../contexts/ThemeContext';
 import ItemFormModal from '../ItemFormModal';
+import { TruncatedRichText } from './TruncatedRichText';
 
 const useStyles = makeStyles({
   container: {
@@ -77,13 +79,8 @@ const useStyles = makeStyles({
     },
     '& [role="columnheader"], & [role="gridcell"]': {
       overflow: 'hidden',
-    },
-    '& [role="columnheader"]:not(:last-child), & [role="gridcell"]:not(:last-child)': {
       flex: '1 1 0',
       minWidth: 0,
-    },
-    '& [role="columnheader"]:last-child, & [role="gridcell"]:last-child': {
-      flex: '0 0 80px',
     },
   },
   cellText: {
@@ -91,13 +88,6 @@ const useStyles = makeStyles({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     maxWidth: '100%',
-  },
-  actionsCell: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: '4px',
-    width: '100%',
   },
 });
 
@@ -115,6 +105,7 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
 
   // Data state
   const [items, setItems] = useState<GraphListItem[]>([]);
+  const [columns, setColumns] = useState<GraphListColumn[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,8 +114,6 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
 
   // Form modal state
   const [formModalOpen, setFormModalOpen] = useState(false);
-  const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
-  const [editingItem, setEditingItem] = useState<GraphListItem | null>(null);
   const [saving, setSaving] = useState(false);
 
   // Initialize SP client
@@ -144,6 +133,9 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
 
     try {
       const result = await getListItems(instance, account, section.source.siteId, section.source.listId);
+
+      // Store columns for type detection
+      setColumns(result.columns);
 
       // Filter items by lookup column match
       const parentId = parentItem.id;
@@ -188,30 +180,7 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
 
   // Handle add
   const handleAdd = () => {
-    setEditingItem(null);
-    setFormMode('create');
     setFormModalOpen(true);
-  };
-
-  // Handle edit
-  const handleEdit = (e: React.MouseEvent, item: GraphListItem) => {
-    e.stopPropagation();
-    setEditingItem(item);
-    setFormMode('edit');
-    setFormModalOpen(true);
-  };
-
-  // Handle delete
-  const handleDelete = async (e: React.MouseEvent, item: GraphListItem) => {
-    e.stopPropagation();
-    if (!spClientRef.current) return;
-
-    try {
-      await deleteListItem(spClientRef.current, section.source.listId, parseInt(item.id, 10));
-      await loadItems();
-    } catch (err) {
-      console.error('Failed to delete item:', err);
-    }
   };
 
   // Handle form save
@@ -226,17 +195,18 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
         [`${section.lookupColumn}Id`]: parseInt(parentItem.id, 10),
       };
 
-      if (formMode === 'create') {
-        await createListItem(spClientRef.current, section.source.listId, saveFields);
-      } else if (editingItem) {
-        await updateListItem(spClientRef.current, section.source.listId, parseInt(editingItem.id, 10), saveFields);
-      }
+      await createListItem(spClientRef.current, section.source.listId, saveFields);
 
       setFormModalOpen(false);
       await loadItems();
     } finally {
       setSaving(false);
     }
+  };
+
+  // Helper to get column metadata
+  const getColumnMetadata = (internalName: string): GraphListColumn | undefined => {
+    return columns.find(c => c.name === internalName);
   };
 
   // Build table columns
@@ -246,18 +216,41 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
       renderHeaderCell: () => col.displayName,
       renderCell: (item) => {
         const value = item.fields[col.internalName];
-        let displayValue = '-';
 
-        if (value !== null && value !== undefined) {
-          if (typeof value === 'object' && 'LookupValue' in value) {
-            displayValue = (value as { LookupValue: string }).LookupValue;
-          } else if (Array.isArray(value)) {
-            displayValue = value
-              .map(v => (typeof v === 'object' && 'LookupValue' in v ? v.LookupValue : String(v)))
-              .join(', ');
-          } else {
-            displayValue = String(value);
-          }
+        if (value === null || value === undefined) {
+          return (
+            <TableCellLayout>
+              <span className={styles.cellText}>-</span>
+            </TableCellLayout>
+          );
+        }
+
+        const colMeta = getColumnMetadata(col.internalName);
+
+        // Handle multiline text / rich text columns
+        if (colMeta?.text?.allowMultipleLines) {
+          return (
+            <TableCellLayout>
+              <TruncatedRichText value={String(value)} />
+            </TableCellLayout>
+          );
+        }
+
+        // Handle date/datetime columns
+        let displayValue: string;
+        if (colMeta?.dateTime) {
+          const isDateOnly = colMeta.dateTime.format === 'dateOnly';
+          displayValue = isDateOnly
+            ? formatDateForDisplay(value)
+            : formatDateTimeForDisplay(value);
+        } else if (typeof value === 'object' && 'LookupValue' in value) {
+          displayValue = (value as { LookupValue: string }).LookupValue;
+        } else if (Array.isArray(value)) {
+          displayValue = value
+            .map(v => (typeof v === 'object' && 'LookupValue' in v ? v.LookupValue : String(v)))
+            .join(', ');
+        } else {
+          displayValue = String(value);
         }
 
         return (
@@ -266,32 +259,6 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
           </TableCellLayout>
         );
       },
-    })
-  );
-
-  // Add actions column for edit/delete
-  tableColumns.push(
-    createTableColumn<GraphListItem>({
-      columnId: 'actions',
-      renderHeaderCell: () => '',
-      renderCell: (item) => (
-        <div className={styles.actionsCell}>
-          <Button
-            appearance="subtle"
-            size="small"
-            icon={<EditRegular />}
-            onClick={(e) => handleEdit(e, item)}
-            title="Edit"
-          />
-          <Button
-            appearance="subtle"
-            size="small"
-            icon={<DeleteRegular />}
-            onClick={(e) => handleDelete(e, item)}
-            title="Delete"
-          />
-        </div>
-      ),
     })
   );
 
@@ -353,17 +320,18 @@ export function RelatedSectionView({ section, parentItem }: RelatedSectionViewPr
         )}
       </div>
 
-      {/* Form modal for create/edit */}
+      {/* Form modal for create */}
       {formModalOpen && (
         <ItemFormModal
-          mode={formMode}
+          mode="create"
           siteId={section.source.siteId}
           listId={section.source.listId}
-          initialValues={editingItem?.fields ?? {}}
+          initialValues={{}}
           saving={saving}
           onSave={handleFormSave}
           onClose={() => setFormModalOpen(false)}
           prefillLookupField={section.lookupColumn}
+          spClient={spClientRef.current ?? undefined}
         />
       )}
     </div>

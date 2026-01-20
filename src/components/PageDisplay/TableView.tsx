@@ -122,7 +122,7 @@ const useStyles = makeStyles({
   container: {
     display: 'flex',
     gap: '24px',
-    height: '100%',
+    alignItems: 'flex-start',
   },
   // Filter panel - Azure style: sharp edges, subtle shadow
   filterPanel: {
@@ -135,10 +135,8 @@ const useStyles = makeStyles({
     border: '1px solid transparent',
     borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
     boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
-    height: '100%',
     display: 'flex',
     flexDirection: 'column',
-    overflow: 'hidden',
   },
   // Search at top - full width
   searchSection: {
@@ -171,8 +169,6 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     gap: '12px',
     padding: '0 12px 20px',
-    flex: 1,
-    overflow: 'auto',
   },
   searchContainer: {
     position: 'relative',
@@ -189,7 +185,6 @@ const useStyles = makeStyles({
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    overflow: 'hidden',
   },
   tableWrapper: {
     backgroundColor: tokens.colorNeutralBackground1,
@@ -197,22 +192,16 @@ const useStyles = makeStyles({
     border: '1px solid transparent',
     borderImage: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 100%) 1',
     boxShadow: '0 1px 2px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04)',
-    flex: 1,
-    minHeight: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
   },
   emptyTable: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    height: '100%',
+    padding: '48px',
     color: tokens.colorNeutralForeground2,
   },
   tableScrollContainer: {
     overflowX: 'auto',
-    flex: 1,
   },
   tableHeader: {
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
@@ -556,6 +545,7 @@ function TableView({
           saving={saving}
           onSave={handleCreate}
           onClose={() => setCreateModalOpen(false)}
+          spClient={primarySpClientRef.current ?? undefined}
         />
       )}
     </>

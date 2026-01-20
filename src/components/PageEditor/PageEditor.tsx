@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useMsal } from '@azure/msal-react';
 import {
   makeStyles,
@@ -16,6 +16,8 @@ import {
   Field,
   Link,
   mergeClasses,
+  Dropdown,
+  Option,
 } from '@fluentui/react-components';
 import {
   DismissCircleRegular,
@@ -42,6 +44,11 @@ import type {
   WebPartDataSource,
 } from '../../types/page';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useSettings } from '../../contexts/SettingsContext';
+import { IconPicker } from './IconPicker';
+import { DEFAULT_PAGE_ICONS } from '../../utils/iconMap';
+import { AddRegular } from '@fluentui/react-icons';
+import type { Section } from '../../types/page';
 
 interface PageEditorProps {
   initialPage?: PageDefinition;
@@ -318,6 +325,7 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
   const { theme } = useTheme();
   const { instance, accounts } = useMsal();
   const account = accounts[0];
+  const { sections, saveSection } = useSettings();
 
   // Current step
   const [currentStep, setCurrentStep] = useState<Step>('basic');
@@ -326,6 +334,8 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
   const [name, setName] = useState(initialPage?.name || '');
   const [description, setDescription] = useState(initialPage?.description || '');
   const [pageType, setPageType] = useState<PageType>(initialPage?.pageType || 'lookup');
+  const [sectionId, setSectionId] = useState<string | null>(initialPage?.sectionId || null);
+  const [icon, setIcon] = useState(initialPage?.icon || '');
   const [primarySource, setPrimarySource] = useState<PageSource | null>(
     initialPage?.primarySource || null
   );
@@ -338,6 +348,15 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
       filterColumns: [],
     }
   );
+
+  // New section creation
+  const [showNewSection, setShowNewSection] = useState(false);
+  const [newSectionName, setNewSectionName] = useState('');
+
+  // Sorted sections for display
+  const sortedSections = useMemo(() => {
+    return Object.values(sections).sort((a, b) => a.order - b.order);
+  }, [sections]);
 
   // Available columns from primary source
   const [availableColumns, setAvailableColumns] = useState<ColumnWithMeta[]>([]);
@@ -504,6 +523,33 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
     });
   }, []);
 
+  // Handle new section creation
+  const handleCreateSection = useCallback(async () => {
+    if (!newSectionName.trim()) return;
+
+    const newSection: Section = {
+      id: `section-${Date.now()}`,
+      name: newSectionName.trim(),
+      order: sortedSections.length,
+    };
+
+    try {
+      await saveSection(newSection);
+      setSectionId(newSection.id);
+      setNewSectionName('');
+      setShowNewSection(false);
+    } catch (err) {
+      console.error('Failed to create section:', err);
+    }
+  }, [newSectionName, sortedSections.length, saveSection]);
+
+  // Set default icon when page type changes (only if not already set)
+  useEffect(() => {
+    if (!icon) {
+      setIcon(DEFAULT_PAGE_ICONS[pageType] || 'DocumentRegular');
+    }
+  }, [pageType, icon]);
+
   const handleFilterColumnToggle = useCallback((col: ColumnWithMeta) => {
     setSearchConfig((prev) => {
       const exists = prev.filterColumns.some((f) => f.internalName === col.name);
@@ -612,6 +658,8 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
         name,
         description,
         pageType,
+        sectionId,
+        icon: icon || DEFAULT_PAGE_ICONS[pageType],
         primarySource: primarySource || { siteId: '', listId: '', listName: '' },
         displayColumns,
         searchConfig: {
@@ -867,6 +915,68 @@ function PageEditor({ initialPage, onSave, onCancel }: PageEditorProps) {
                     </div>
                   </div>
                 </div>
+              </Field>
+
+              <Field label="Section">
+                {showNewSection ? (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Input
+                      placeholder="New section name"
+                      value={newSectionName}
+                      onChange={(_, data) => setNewSectionName(data.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <Button
+                      appearance="primary"
+                      onClick={handleCreateSection}
+                      disabled={!newSectionName.trim()}
+                    >
+                      Create
+                    </Button>
+                    <Button
+                      appearance="subtle"
+                      onClick={() => {
+                        setShowNewSection(false);
+                        setNewSectionName('');
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Dropdown
+                      placeholder="No section (appears at top)"
+                      value={sectionId ? sections[sectionId]?.name : ''}
+                      selectedOptions={sectionId ? [sectionId] : []}
+                      onOptionSelect={(_, data) => {
+                        setSectionId(data.optionValue === '__none__' ? null : (data.optionValue as string));
+                      }}
+                      style={{ flex: 1 }}
+                    >
+                      <Option value="__none__">No section (appears at top)</Option>
+                      {sortedSections.map((section) => (
+                        <Option key={section.id} value={section.id}>
+                          {section.name}
+                        </Option>
+                      ))}
+                    </Dropdown>
+                    <Button
+                      appearance="subtle"
+                      icon={<AddRegular />}
+                      onClick={() => setShowNewSection(true)}
+                    >
+                      New
+                    </Button>
+                  </div>
+                )}
+              </Field>
+
+              <Field label="Icon">
+                <IconPicker
+                  value={icon || DEFAULT_PAGE_ICONS[pageType]}
+                  onChange={setIcon}
+                />
               </Field>
             </div>
           )}

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   makeStyles,
@@ -6,16 +7,22 @@ import {
   Button,
   Text,
   Title2,
-  Badge,
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbDivider,
+  Dialog,
+  DialogTrigger,
+  DialogSurface,
+  DialogTitle,
+  DialogBody,
+  DialogActions,
+  DialogContent,
 } from '@fluentui/react-components';
 import {
-  FolderRegular,
   OpenRegular,
-  OptionsRegular,
   ArrowLeftRegular,
+  WarningRegular,
+  BuildingSwapRegular,
 } from '@fluentui/react-icons';
 import { useSettings } from '../contexts/SettingsContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -33,7 +40,7 @@ const useStyles = makeStyles({
     color: 'inherit',
   },
   content: {
-    maxWidth: '896px',
+    maxWidth: '600px',
   },
   title: {
     marginBottom: '24px',
@@ -67,50 +74,45 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground2,
   },
   cardBody: {
-    padding: '16px',
+    padding: '20px',
   },
-  settingsGrid: {
+  siteInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  siteName: {
+    fontSize: tokens.fontSizeBase400,
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  siteLink: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    color: tokens.colorBrandForeground1,
+    textDecoration: 'none',
+    fontSize: tokens.fontSizeBase300,
+    ':hover': {
+      textDecoration: 'underline',
+    },
+  },
+  changeSiteSection: {
+    marginTop: '24px',
+    paddingTop: '20px',
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
   },
-  settingRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '12px',
-    backgroundColor: tokens.colorNeutralBackground3,
-    borderRadius: '2px',
+  changeSiteHeader: {
+    fontWeight: tokens.fontWeightSemibold,
   },
-  settingRowDark: {
-    backgroundColor: '#252525',
-  },
-  settingLabel: {
-    fontWeight: tokens.fontWeightMedium,
-  },
-  settingValue: {
-    fontSize: tokens.fontSizeBase200,
+  changeSiteDescription: {
     color: tokens.colorNeutralForeground2,
-    marginTop: '4px',
-  },
-  cardActions: {
-    marginTop: '16px',
-  },
-  emptyPlaceholder: {
-    marginTop: '16px',
-    padding: '32px',
-    border: `2px dashed ${tokens.colorNeutralStroke1}`,
-    borderRadius: '2px',
-    textAlign: 'center',
-    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
   },
   backButton: {
     marginTop: '24px',
-  },
-  placeholderText: {
-    color: tokens.colorNeutralForeground2,
-    display: 'block',
-    marginBottom: '16px',
   },
 });
 
@@ -120,16 +122,13 @@ function SettingsPage() {
   const navigate = useNavigate();
   const {
     site,
-    sitePath,
-    isCustomSite,
-    settingsList,
-    clearSiteOverride,
-    initialize,
+    changePrimarySite,
   } = useSettings();
+  const [showChangeDialog, setShowChangeDialog] = useState(false);
 
-  const handleResetSite = () => {
-    clearSiteOverride();
-    initialize();
+  const handleChangePrimarySite = () => {
+    setShowChangeDialog(false);
+    changePrimarySite();
   };
 
   return (
@@ -150,86 +149,73 @@ function SettingsPage() {
       <div className={styles.content}>
         <Title2 as="h1" className={styles.title}>Settings</Title2>
 
-        {/* Site Configuration Card */}
+        {/* Primary Site Card */}
         <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)}>
           <div className={styles.cardHeader}>
-            <FolderRegular fontSize={16} />
-            <Text className={styles.cardTitle}>SharePoint Site</Text>
+            <Text className={styles.cardTitle}>Primary Site</Text>
           </div>
           <div className={styles.cardBody}>
-            <div className={styles.settingsGrid}>
-              <div className={mergeClasses(styles.settingRow, theme === 'dark' && styles.settingRowDark)}>
-                <div>
-                  <Text className={styles.settingLabel}>Connected Site</Text>
-                  <Text as="p" className={styles.settingValue}>
-                    {site?.displayName}
-                  </Text>
-                </div>
-                <Button
-                  appearance="subtle"
-                  size="small"
-                  icon={<OpenRegular />}
-                  iconPosition="after"
-                  as="a"
-                  href={site?.webUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Open in SharePoint
-                </Button>
-              </div>
-
-              <div className={mergeClasses(styles.settingRow, theme === 'dark' && styles.settingRowDark)}>
-                <div>
-                  <Text className={styles.settingLabel}>Site Path</Text>
-                  <Text as="p" className={styles.settingValue}>
-                    <code>{sitePath}</code>
-                  </Text>
-                </div>
-                {isCustomSite ? (
-                  <Badge appearance="tint" color="warning">Custom</Badge>
-                ) : (
-                  <Badge appearance="tint" color="success">Standard</Badge>
-                )}
-              </div>
-
-              <div className={mergeClasses(styles.settingRow, theme === 'dark' && styles.settingRowDark)}>
-                <div>
-                  <Text className={styles.settingLabel}>Settings List</Text>
-                  <Text as="p" className={styles.settingValue}>
-                    {settingsList?.displayName}
-                  </Text>
-                </div>
-                <Badge appearance="ghost">Active</Badge>
-              </div>
+            <div className={styles.siteInfo}>
+              <Text className={styles.siteName}>{site?.displayName}</Text>
+              <a
+                href={site?.webUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.siteLink}
+              >
+                <OpenRegular fontSize={16} />
+                Open in SharePoint
+              </a>
             </div>
 
-            {isCustomSite && (
-              <div className={styles.cardActions}>
-                <Button
-                  appearance="outline"
-                  size="small"
-                  onClick={handleResetSite}
-                >
-                  Reset to Standard Site
-                </Button>
+            <div className={styles.changeSiteSection}>
+              <Text className={styles.changeSiteHeader}>Change Primary Site</Text>
+              <Text className={styles.changeSiteDescription}>
+                Switch to a different SharePoint site for storing ListView settings.
+              </Text>
+              <div>
+                <Dialog open={showChangeDialog} onOpenChange={(_, data) => setShowChangeDialog(data.open)}>
+                  <DialogTrigger disableButtonEnhancement>
+                    <Button
+                      appearance="outline"
+                      icon={<BuildingSwapRegular />}
+                    >
+                      Change Primary Site
+                    </Button>
+                  </DialogTrigger>
+                  <DialogSurface>
+                    <DialogBody>
+                      <DialogTitle>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <WarningRegular color={tokens.colorPaletteYellowForeground1} />
+                          Change Primary Site?
+                        </div>
+                      </DialogTitle>
+                      <DialogContent>
+                        <Text>
+                          Changing your primary site will:
+                        </Text>
+                        <ul style={{ margin: '12px 0', paddingLeft: '20px' }}>
+                          <li>Disconnect from the current site's settings and pages</li>
+                          <li>Require you to select a new primary site</li>
+                          <li>Not delete any data from the current site</li>
+                        </ul>
+                        <Text weight="semibold">
+                          Settings stored in "{site?.displayName}" will remain there but won't be accessible until you reconnect.
+                        </Text>
+                      </DialogContent>
+                      <DialogActions>
+                        <Button appearance="secondary" onClick={() => setShowChangeDialog(false)}>
+                          Cancel
+                        </Button>
+                        <Button appearance="primary" onClick={handleChangePrimarySite}>
+                          Change Site
+                        </Button>
+                      </DialogActions>
+                    </DialogBody>
+                  </DialogSurface>
+                </Dialog>
               </div>
-            )}
-          </div>
-        </div>
-
-        {/* App Settings Card */}
-        <div className={mergeClasses(styles.card, theme === 'dark' && styles.cardDark)}>
-          <div className={styles.cardHeader}>
-            <OptionsRegular fontSize={16} />
-            <Text className={styles.cardTitle}>Application Settings</Text>
-          </div>
-          <div className={styles.cardBody}>
-            <Text className={styles.placeholderText}>
-              App-specific settings will appear here as features are added.
-            </Text>
-            <div className={styles.emptyPlaceholder}>
-              No settings configured yet
             </div>
           </div>
         </div>

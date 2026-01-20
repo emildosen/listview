@@ -14,6 +14,7 @@ import { InlineEditLookup } from './InlineEditLookup';
 import { InlineEditNumber } from './InlineEditNumber';
 import { InlineEditDate, formatDateForInput, formatDateTimeForInput } from './InlineEditDate';
 import { InlineEditBoolean } from './InlineEditBoolean';
+import { ClickableLookupValue } from './ClickableLookupValue';
 import type { GraphListColumn, FormFieldConfig } from '../../../auth/graphClient';
 import type { LookupOption } from '../../../contexts/FormConfigContext';
 
@@ -116,6 +117,7 @@ interface EditableStatBoxProps {
   fieldName: string;
   label: string;
   value: unknown;
+  lookupIdValue?: number | number[] | null;
   displayValue: string;
   formField: FormFieldConfig | undefined;
   columnMetadata: GraphListColumn | undefined;
@@ -124,6 +126,7 @@ interface EditableStatBoxProps {
   isSaving: boolean;
   error: string | null;
   siteId: string;
+  siteUrl?: string;
   getLookupOptions: (siteId: string, listId: string, columnName: string) => Promise<LookupOption[]>;
   lookupOptions: Record<string, LookupOption[]>;
   setLookupOptions: React.Dispatch<React.SetStateAction<Record<string, LookupOption[]>>>;
@@ -139,6 +142,7 @@ export function EditableStatBox({
   fieldName,
   label,
   value,
+  lookupIdValue,
   displayValue,
   formField,
   columnMetadata,
@@ -147,6 +151,7 @@ export function EditableStatBox({
   isSaving,
   error,
   siteId,
+  siteUrl,
   getLookupOptions,
   lookupOptions,
   setLookupOptions,
@@ -284,10 +289,29 @@ export function EditableStatBox({
   const renderEditComponent = () => {
     // Choice field
     if (formField?.choice?.choices) {
+      const isMultiSelect = formField.choice.allowMultipleValues ?? false;
+      // Normalize value: multi-select uses array, single-select uses string
+      // Handle SharePoint's { results: [...] } format
+      let normalizedValue: string | string[];
+      if (isMultiSelect) {
+        if (Array.isArray(editValue)) {
+          normalizedValue = editValue.map(String);
+        } else if (typeof editValue === 'object' && editValue !== null && 'results' in editValue) {
+          normalizedValue = ((editValue as { results: string[] }).results || []).map(String);
+        } else if (editValue) {
+          normalizedValue = [String(editValue)];
+        } else {
+          normalizedValue = [];
+        }
+      } else {
+        normalizedValue = String(editValue ?? '');
+      }
+
       return (
         <InlineEditChoice
-          value={String(editValue ?? '')}
+          value={normalizedValue}
           choices={formField.choice.choices}
+          isMultiSelect={isMultiSelect}
           onChange={(v) => updateEditValue(v)}
           onCommit={handleCommit}
           onCancel={onCancelEdit}
@@ -424,7 +448,50 @@ export function EditableStatBox({
         </div>
       ) : (
         <div className={styles.valueRow}>
-          <Text className={styles.value}>{displayValue || '-'}</Text>
+          <Text className={styles.value}>
+            {(() => {
+              const lookupInfo = formField?.lookup ?? columnMetadata?.lookup;
+              if (lookupInfo?.listId && value !== null && value !== undefined) {
+                // Normalize the value to include LookupId
+                let normalizedValue = value;
+
+                // Helper to parse ID from various formats
+                const parseId = (v: unknown): number | null => {
+                  if (typeof v === 'number') return v;
+                  if (typeof v === 'string' && v) {
+                    const parsed = parseInt(v, 10);
+                    return isNaN(parsed) ? null : parsed;
+                  }
+                  return null;
+                };
+
+                if (lookupInfo.allowMultipleValues) {
+                  normalizedValue = value;
+                } else {
+                  if (typeof value === 'object' && value !== null && 'LookupId' in value) {
+                    normalizedValue = value;
+                  } else {
+                    const parsedId = parseId(lookupIdValue);
+                    if (parsedId !== null) {
+                      normalizedValue = { LookupId: parsedId, LookupValue: String(value) };
+                    }
+                  }
+                }
+
+                return (
+                  <ClickableLookupValue
+                    value={normalizedValue}
+                    targetListId={lookupInfo.listId}
+                    targetListName={label}
+                    siteId={siteId}
+                    siteUrl={siteUrl}
+                    isMultiSelect={lookupInfo.allowMultipleValues ?? false}
+                  />
+                );
+              }
+              return displayValue || '-';
+            })()}
+          </Text>
           <EditRegular
             className={mergeClasses(styles.editIcon, showEditIcon && styles.editIconVisible)}
           />

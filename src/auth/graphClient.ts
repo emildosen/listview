@@ -50,10 +50,17 @@ export interface GraphListColumn {
   choice?: {
     choices: string[];
     allowMultipleValues?: boolean;
+    displayAs?: 'checkBoxes' | 'dropDownMenu' | 'radioButtons';
   };
   // Hyperlink or picture column - present if this is a URL column
   hyperlinkOrPicture?: {
     isPicture?: boolean;
+  };
+  // Person or group column - present if this is a people picker column
+  personOrGroup?: {
+    allowMultipleSelection?: boolean;
+    chooseFromType?: 'peopleOnly' | 'peopleAndGroups';
+    displayAs?: string;
   };
 }
 
@@ -72,6 +79,7 @@ export interface FormFieldConfig {
   lookup?: { listId: string; columnName: string; allowMultipleValues?: boolean };
   choice?: { choices: string[]; allowMultipleValues?: boolean };
   hyperlinkOrPicture?: { isPicture?: boolean };
+  personOrGroup?: { allowMultipleSelection?: boolean; chooseFromType?: 'peopleOnly' | 'peopleAndGroups' };
   defaultValue?: { value?: string; formula?: string };
 }
 
@@ -226,7 +234,7 @@ export async function getListColumns(
 
   const response = await client
     .api(`/sites/${siteId}/lists/${listId}/columns`)
-    .select('id,name,displayName,columnGroup,hidden,readOnly,defaultValue,text,boolean,number,dateTime,lookup,choice,hyperlinkOrPicture')
+    .select('id,name,displayName,columnGroup,hidden,readOnly,defaultValue,text,boolean,number,dateTime,lookup,choice,hyperlinkOrPicture,personOrGroup')
     .get();
 
   // Filter out system columns but keep hidden columns (marked with hidden: true for UI to filter)
@@ -267,13 +275,22 @@ export async function getListColumns(
       if (col.choice?.choices) {
         result.choice = {
           choices: col.choice.choices,
-          allowMultipleValues: col.choice.allowMultipleValues,
+          // Graph API uses displayAs: 'checkBoxes' for multi-select choice columns
+          allowMultipleValues: col.choice.displayAs === 'checkBoxes',
         };
       }
 
       if (col.hyperlinkOrPicture) {
         result.hyperlinkOrPicture = {
           isPicture: col.hyperlinkOrPicture.isPicture,
+        };
+      }
+
+      if (col.personOrGroup) {
+        result.personOrGroup = {
+          allowMultipleSelection: col.personOrGroup.allowMultipleSelection,
+          chooseFromType: col.personOrGroup.chooseFromType as 'peopleOnly' | 'peopleAndGroups' | undefined,
+          displayAs: col.personOrGroup.displayAs,
         };
       }
 
@@ -320,7 +337,7 @@ export async function getFormFieldConfig(
   // Step 2: Get columns for this content type (they come in form order)
   const columnsResponse = await client
     .api(`/sites/${siteId}/lists/${listId}/contentTypes/${encodedContentTypeId}/columns`)
-    .select('id,name,displayName,hidden,readOnly,required,defaultValue,text,boolean,number,dateTime,lookup,choice,hyperlinkOrPicture')
+    .select('id,name,displayName,hidden,readOnly,required,defaultValue,text,boolean,number,dateTime,lookup,choice,hyperlinkOrPicture,personOrGroup')
     .get();
 
   const columns = columnsResponse.value || [];
@@ -354,13 +371,21 @@ export async function getFormFieldConfig(
       if (col.choice?.choices) {
         field.choice = {
           choices: col.choice.choices,
-          allowMultipleValues: col.choice.allowMultipleValues,
+          // Graph API uses displayAs: 'checkBoxes' for multi-select choice columns
+          allowMultipleValues: col.choice.displayAs === 'checkBoxes',
         };
       }
 
       if (col.hyperlinkOrPicture) {
         field.hyperlinkOrPicture = {
           isPicture: col.hyperlinkOrPicture.isPicture,
+        };
+      }
+
+      if (col.personOrGroup) {
+        field.personOrGroup = {
+          allowMultipleSelection: col.personOrGroup.allowMultipleSelection,
+          chooseFromType: col.personOrGroup.chooseFromType as 'peopleOnly' | 'peopleAndGroups' | undefined,
         };
       }
 
@@ -618,4 +643,71 @@ export async function resolveSharePointUrl(
   // Cache and return the parsed result
   resolvedUrlCache.set(trimmedUrl, parsed);
   return parsed;
+}
+
+// People picker types and utilities
+
+export interface PersonOrGroupOption {
+  id: string;  // User ID
+  email?: string;  // Email address
+  displayName: string;  // Display name
+  type: 'user';  // Always 'user' - SharePoint groups not supported via Graph API
+  userPrincipalName?: string;  // UPN for users
+}
+
+/**
+ * Search for users in the tenant
+ * Uses the /users endpoint with $filter for search
+ * Note: SharePoint groups are not searchable via Graph API - only Entra ID users are supported
+ */
+export async function searchPeople(
+  msalInstance: IPublicClientApplication,
+  account: AccountInfo,
+  searchQuery: string,
+  _chooseFromType: 'peopleOnly' | 'peopleAndGroups' = 'peopleOnly',
+  top: number = 10
+): Promise<PersonOrGroupOption[]> {
+  // Note: chooseFromType is ignored - SharePoint groups require SharePoint REST API
+  // which is not currently implemented. Only user search is supported.
+  const client = createGraphClient(msalInstance, account);
+  const query = searchQuery.trim().toLowerCase();
+
+  try {
+    let response;
+    if (query.length > 0) {
+      // Search users using startsWith filter on displayName, mail, or userPrincipalName
+      response = await client
+        .api('/users')
+        .filter(`startsWith(displayName,'${query}') or startsWith(mail,'${query}') or startsWith(userPrincipalName,'${query}')`)
+        .select('id,displayName,mail,userPrincipalName')
+        .top(top)
+        .get();
+    } else {
+      // No query - return first N users sorted by displayName
+      response = await client
+        .api('/users')
+        .select('id,displayName,mail,userPrincipalName')
+        .orderby('displayName')
+        .top(top)
+        .get();
+    }
+
+    const users: PersonOrGroupOption[] = (response.value || []).map((user: {
+      id: string;
+      displayName: string;
+      mail?: string;
+      userPrincipalName?: string;
+    }) => ({
+      id: user.id,
+      displayName: user.displayName,
+      email: user.mail || user.userPrincipalName,
+      userPrincipalName: user.userPrincipalName,
+      type: 'user' as const,
+    }));
+
+    return users;
+  } catch (err) {
+    console.error('Failed to search users:', err);
+    return [];
+  }
 }

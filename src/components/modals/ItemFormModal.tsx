@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import type { SPFI } from '@pnp/sp';
 import {
   makeStyles,
   Dialog,
@@ -18,8 +19,10 @@ import {
   MessageBarBody,
 } from '@fluentui/react-components';
 import { useListFormConfig } from '../../hooks/useListFormConfig';
-import type { FormFieldConfig } from '../../auth/graphClient';
+import type { FormFieldConfig, PersonOrGroupOption } from '../../auth/graphClient';
 import type { LookupOption } from '../../contexts/FormConfigContext';
+import { PeoplePicker } from '../common/PeoplePicker';
+import { ensureUser, ensureUsers } from '../../services/sharepoint';
 
 // System columns that should never appear in forms
 const SYSTEM_COLUMNS = new Set([
@@ -57,6 +60,8 @@ interface ItemFormModalProps {
   onClose: () => void;
   /** Lookup field that is pre-filled by parent (hidden from form and excluded from save) */
   prefillLookupField?: string;
+  /** SharePoint client for resolving user IDs for Person fields */
+  spClient?: SPFI;
 }
 
 const useStyles = makeStyles({
@@ -98,6 +103,7 @@ function ItemFormModal({
   onSave,
   onClose,
   prefillLookupField,
+  spClient,
 }: ItemFormModalProps) {
   const styles = useStyles();
   const { fields, loading, error: configError, getLookupOptions } = useListFormConfig(siteId, listId);
@@ -109,6 +115,9 @@ function ItemFormModal({
   // Lookup options state - keyed by field name
   const [lookupOptions, setLookupOptions] = useState<Record<string, LookupOption[]>>({});
   const [lookupLoading, setLookupLoading] = useState<Record<string, boolean>>({});
+
+  // Track which lookups we've started loading to prevent re-fetching
+  const loadedLookupsRef = useRef<Set<string>>(new Set());
 
   // Get visible (non-hidden, non-system) fields for the form
   // Also hide the pre-filled lookup field (it's set by the parent)
@@ -126,7 +135,11 @@ function ItemFormModal({
     if (lookupFields.length === 0) return;
 
     lookupFields.forEach(async (field) => {
-      if (!field.lookup || lookupOptions[field.name] || lookupLoading[field.name]) return;
+      if (!field.lookup) return;
+
+      // Use ref to track loaded lookups - prevents re-running on state changes
+      if (loadedLookupsRef.current.has(field.name)) return;
+      loadedLookupsRef.current.add(field.name);
 
       setLookupLoading((prev) => ({ ...prev, [field.name]: true }));
 
@@ -142,7 +155,7 @@ function ItemFormModal({
         setLookupLoading((prev) => ({ ...prev, [field.name]: false }));
       }
     });
-  }, [visibleFields, siteId, getLookupOptions, lookupOptions, lookupLoading]);
+  }, [visibleFields, siteId, getLookupOptions]);
 
   // Compute default values from fields and initialValues (no effect needed)
   const defaultValues = useMemo(() => {
@@ -201,6 +214,50 @@ function ItemFormModal({
             initial[field.name] = null;
           }
         }
+      } else if (field.personOrGroup) {
+        // Person/Group column: extract person data from initial value
+        // SharePoint returns: { Email, LookupId, LookupValue } or array of these
+        const personValue = initialValues[field.name];
+
+        const extractPerson = (v: unknown): PersonOrGroupOption | null => {
+          if (typeof v === 'object' && v !== null) {
+            const obj = v as Record<string, unknown>;
+            // Handle SharePoint's person format
+            if ('LookupId' in obj || 'Email' in obj || 'email' in obj) {
+              return {
+                id: String(obj.LookupId ?? obj.id ?? ''),
+                email: String(obj.Email ?? obj.email ?? ''),
+                displayName: String(obj.LookupValue ?? obj.title ?? obj.displayName ?? ''),
+                type: 'user',
+              };
+            }
+          }
+          return null;
+        };
+
+        if (field.personOrGroup.allowMultipleSelection) {
+          if (Array.isArray(personValue)) {
+            initial[field.name] = personValue
+              .map(extractPerson)
+              .filter((p): p is PersonOrGroupOption => p !== null);
+          } else {
+            initial[field.name] = [];
+          }
+        } else {
+          initial[field.name] = extractPerson(personValue);
+        }
+      } else if (field.choice?.allowMultipleValues) {
+        // Multi-select choice: extract array from { results: [...] } format if present
+        const choiceValue = initialValues[field.name];
+        if (Array.isArray(choiceValue)) {
+          initial[field.name] = choiceValue;
+        } else if (typeof choiceValue === 'object' && choiceValue !== null && 'results' in choiceValue) {
+          initial[field.name] = (choiceValue as { results: string[] }).results || [];
+        } else if (choiceValue) {
+          initial[field.name] = [String(choiceValue)];
+        } else {
+          initial[field.name] = [];
+        }
       } else if (initialValues[field.name] !== undefined) {
         initial[field.name] = initialValues[field.name];
       } else if (mode === 'create' && field.defaultValue?.value) {
@@ -229,8 +286,15 @@ function ItemFormModal({
       // and uses defaults on create
       // Pre-filled lookups are hidden from the form and handled by the parent.
       const submitValues: Record<string, unknown> = {};
-      visibleFields.forEach((field) => {
-        if (field.readOnly) return;
+
+      // Helper to get login name from PersonOrGroupOption
+      const getLoginName = (p: PersonOrGroupOption | null): string | null => {
+        if (!p) return null;
+        return p.email || p.userPrincipalName || null;
+      };
+
+      for (const field of visibleFields) {
+        if (field.readOnly) continue;
 
         const value = values[field.name];
 
@@ -247,13 +311,43 @@ function ItemFormModal({
               submitValues[`${field.name}Id`] = null;
             }
           }
+        } else if (field.personOrGroup) {
+          // Person/Group fields: resolve email/UPN to SharePoint user ID
+          if (field.personOrGroup.allowMultipleSelection) {
+            if (Array.isArray(value) && value.length > 0) {
+              const loginNames = value
+                .map((p: PersonOrGroupOption) => getLoginName(p))
+                .filter((name): name is string => name !== null);
+              if (loginNames.length > 0 && spClient) {
+                // Resolve all emails to SharePoint user IDs
+                const userIds = await ensureUsers(spClient, loginNames);
+                submitValues[`${field.name}Id`] = userIds;
+              } else {
+                submitValues[`${field.name}Id`] = [];
+              }
+            } else {
+              submitValues[`${field.name}Id`] = [];
+            }
+          } else {
+            const loginName = getLoginName(value as PersonOrGroupOption | null);
+            if (loginName && spClient) {
+              // Resolve email to SharePoint user ID
+              const userId = await ensureUser(spClient, loginName);
+              submitValues[`${field.name}Id`] = userId;
+            } else {
+              submitValues[`${field.name}Id`] = null;
+            }
+          }
+        } else if (field.choice?.allowMultipleValues) {
+          // Multi-select choice: PnPjs expects a plain array
+          submitValues[field.name] = Array.isArray(value) ? value : [];
         } else {
           // Regular fields: submit as-is
           if (value !== undefined && value !== '') {
             submitValues[field.name] = value;
           }
         }
-      });
+      }
 
       await onSave(submitValues);
     } catch (err) {
@@ -288,18 +382,38 @@ function ItemFormModal({
     if (field.choice?.choices) {
       // Choice column
       const dropdownWidth = getDropdownWidth(field.choice.choices);
+      const isMultiSelect = field.choice.allowMultipleValues;
+
+      // Normalize value for multi-select
+      const selectedOptions: string[] = isMultiSelect
+        ? (Array.isArray(value) ? value.map(String) : (value ? [String(value)] : []))
+        : (value ? [String(value)] : []);
+
+      const displayValue = isMultiSelect
+        ? selectedOptions.join(', ')
+        : String(value || '');
+
       return (
         <Field key={field.id} label={field.displayName} required={field.required}>
           <Dropdown
-            value={String(value || '')}
-            selectedOptions={value ? [String(value)] : []}
-            onOptionSelect={(_e, data) => handleChange(field.name, data.optionValue)}
+            value={displayValue}
+            selectedOptions={selectedOptions}
+            multiselect={isMultiSelect}
+            onOptionSelect={(_e, data) => {
+              if (isMultiSelect) {
+                // Multi-select: use the full selected options array
+                handleChange(field.name, data.selectedOptions);
+              } else {
+                // Single select
+                handleChange(field.name, data.optionValue);
+              }
+            }}
             disabled={field.readOnly}
             size="small"
             className={styles.dropdown}
             style={{ width: `${dropdownWidth}px` }}
           >
-            <Option value="">Select...</Option>
+            {!isMultiSelect && <Option value="">Select...</Option>}
             {field.choice.choices.map((choice) => (
               <Option key={choice} value={choice}>
                 {choice}
@@ -387,6 +501,39 @@ function ItemFormModal({
       );
     }
 
+    // Person/Group column
+    if (field.personOrGroup) {
+      const isMultiSelect = field.personOrGroup.allowMultipleSelection ?? false;
+
+      // If read-only, show as disabled input with display names
+      if (field.readOnly) {
+        let displayValue = '-';
+        if (isMultiSelect && Array.isArray(value)) {
+          displayValue = value.map((p: PersonOrGroupOption) => p.displayName).join(', ') || '-';
+        } else if (value && typeof value === 'object' && 'displayName' in value) {
+          displayValue = (value as PersonOrGroupOption).displayName || '-';
+        }
+        return (
+          <Field key={field.id} label={field.displayName}>
+            <Input value={displayValue} disabled size="small" />
+          </Field>
+        );
+      }
+
+      return (
+        <Field key={field.id} label={field.displayName} required={field.required}>
+          <PeoplePicker
+            value={value as PersonOrGroupOption | PersonOrGroupOption[] | null}
+            onChange={(newValue) => handleChange(field.name, newValue)}
+            allowMultiple={isMultiSelect}
+            chooseFromType={field.personOrGroup.chooseFromType ?? 'peopleOnly'}
+            disabled={field.readOnly}
+            size="small"
+          />
+        </Field>
+      );
+    }
+
     // Boolean column
     if (field.boolean) {
       return (
@@ -465,7 +612,13 @@ function ItemFormModal({
   };
 
   return (
-    <Dialog open onOpenChange={(_event, data) => { if (!data.open) onClose(); }}>
+    <Dialog
+      open
+      modalType="non-modal"
+      onOpenChange={(_event, data) => {
+        if (!data.open) onClose();
+      }}
+    >
       <DialogSurface className={styles.dialogSurface}>
         <DialogTitle>{configError ? 'Error' : mode === 'create' ? 'Add New Item' : 'Edit Item'}</DialogTitle>
         <DialogBody className={styles.dialogBody}>

@@ -6,6 +6,7 @@ import SettingsPage from './pages/SettingsPage';
 import PagesPage from './pages/PagesPage';
 import PageEditorPage from './pages/PageEditorPage';
 import PageDisplayPage from './pages/PageDisplayPage';
+import SectionsPage from './pages/SectionsPage';
 import { SettingsProvider } from './contexts/SettingsContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { FormConfigProvider } from './contexts/FormConfigContext';
@@ -24,6 +25,7 @@ function App() {
               <Route path="pages/new" element={<PageEditorPage />} />
               <Route path="pages/:pageId" element={<PageDisplayPage />} />
               <Route path="pages/:pageId/edit" element={<PageEditorPage />} />
+              <Route path="sections" element={<SectionsPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
             </Routes>

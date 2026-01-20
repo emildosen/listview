@@ -24,7 +24,7 @@ import {
   OpenRegular,
 } from '@fluentui/react-icons';
 import { getListItems, isSharePointUrl, type GraphListColumn, type GraphListItem } from '../../../auth/graphClient';
-import { updateListItem, deleteListItem, createSPClient } from '../../../services/sharepoint';
+import { updateListItem, deleteListItem, createSPClient, ensureUser, ensureUsers } from '../../../services/sharepoint';
 import type { PageDefinition, PageColumn, DetailLayoutConfig, DetailColumnSetting, ListDetailConfig, RelatedSection } from '../../../types/page';
 import { useSettings } from '../../../contexts/SettingsContext';
 import { useTheme } from '../../../contexts/ThemeContext';
@@ -36,8 +36,10 @@ import { InlineEditLookup } from './InlineEditLookup';
 import { InlineEditNumber } from './InlineEditNumber';
 import { InlineEditDate, formatDateForInput, formatDateTimeForInput, formatDateForDisplay, formatDateTimeForDisplay } from './InlineEditDate';
 import { InlineEditBoolean } from './InlineEditBoolean';
+import { InlineEditPerson } from './InlineEditPerson';
 import { DescriptionField } from './DescriptionField';
 import { RelatedSectionView } from './RelatedSectionView';
+import { ClickableLookupValue } from './ClickableLookupValue';
 import { EditableStatBox } from './EditableStatBox';
 import DetailCustomizeDrawer from '../../PageDisplay/DetailCustomizeDrawer';
 import { SharePointLink } from '../../common/SharePointLink';
@@ -270,10 +272,51 @@ function UnifiedDetailModalContent({
       setCurrentColumns(columns);
       setCurrentItem(item);
 
-      // Load config for new list
-      const config = getListDetailConfig(entry.listId);
-      if (config) {
-        setListDetailConfig(config);
+      // Load config for new list - sync with fresh columns
+      const savedConfig = getListDetailConfig(entry.listId);
+      if (savedConfig) {
+        // Sync saved config with fresh columns to ensure column names match
+        const freshColumnNames = new Set(
+          columns.filter(c => !c.hidden && !c.name.startsWith('_')).map(c => c.name)
+        );
+
+        // Filter displayColumns to only include columns that still exist
+        const validDisplayColumns = savedConfig.displayColumns.filter(c =>
+          freshColumnNames.has(c.internalName)
+        );
+
+        // Add any new columns from the fresh data
+        const existingColumnNames = new Set(savedConfig.displayColumns.map(c => c.internalName));
+        const newColumns = columns
+          .filter(c => !c.hidden && !c.name.startsWith('_') && !existingColumnNames.has(c.name))
+          .map(c => ({
+            internalName: c.name,
+            displayName: c.displayName,
+            editable: !c.readOnly,
+          }));
+
+        // Update column settings similarly
+        const validColumnSettings = (savedConfig.detailLayout?.columnSettings ?? []).filter(s =>
+          freshColumnNames.has(s.internalName)
+        );
+        const existingSettingNames = new Set(validColumnSettings.map(s => s.internalName));
+        const newColumnSettings = newColumns
+          .filter(c => !existingSettingNames.has(c.internalName))
+          .map(c => ({
+            internalName: c.internalName,
+            visible: false,
+            displayStyle: 'list' as const,
+          }));
+
+        const syncedConfig: ListDetailConfig = {
+          ...savedConfig,
+          displayColumns: [...validDisplayColumns, ...newColumns],
+          detailLayout: {
+            ...savedConfig.detailLayout,
+            columnSettings: [...validColumnSettings, ...newColumnSettings],
+          },
+        };
+        setListDetailConfig(syncedConfig);
       } else {
         const defaultConfig = createDefaultListDetailConfig(
           entry.listId,
@@ -369,13 +412,49 @@ function UnifiedDetailModalContent({
       // Handle lookup fields specially
       if (formField?.lookup) {
         payload[`${fieldName}Id`] = value;
+      } else if (formField?.personOrGroup) {
+        // Person/Group fields: resolve email/UPN to SharePoint user ID using ensureUser
+        type PersonOption = import('../../../auth/graphClient').PersonOrGroupOption;
+        const getLoginName = (p: PersonOption | null): string | null => {
+          if (!p) return null;
+          return p.email || p.userPrincipalName || null;
+        };
+
+        if (formField.personOrGroup.allowMultipleSelection) {
+          if (Array.isArray(value) && value.length > 0) {
+            const loginNames = (value as PersonOption[])
+              .map(p => getLoginName(p))
+              .filter((name): name is string => name !== null);
+            if (loginNames.length > 0) {
+              // Resolve all emails to SharePoint user IDs
+              const userIds = await ensureUsers(spClient, loginNames);
+              payload[`${fieldName}Id`] = userIds;
+            } else {
+              payload[`${fieldName}Id`] = [];
+            }
+          } else {
+            payload[`${fieldName}Id`] = [];
+          }
+        } else {
+          const loginName = getLoginName(value as PersonOption | null);
+          if (loginName) {
+            // Resolve email to SharePoint user ID
+            const userId = await ensureUser(spClient, loginName);
+            payload[`${fieldName}Id`] = userId;
+          } else {
+            payload[`${fieldName}Id`] = null;
+          }
+        }
+      } else if (formField?.choice?.allowMultipleValues) {
+        // Multi-select choice: PnPjs expects a plain array
+        payload[fieldName] = Array.isArray(value) ? value : [];
       } else {
         payload[fieldName] = value;
       }
 
       await updateListItem(spClient, currentListId, parseInt(currentItem.id, 10), payload);
 
-      // Update local item state with display-friendly format for lookups
+      // Update local item state with display-friendly format for lookups and people
       let displayValue = value;
       if (formField?.lookup) {
         const options = lookupOptions[fieldName] ?? [];
@@ -389,6 +468,20 @@ function UnifiedDetailModalContent({
           // Single select: convert ID to lookup object
           const option = options.find(o => o.id === value);
           displayValue = { LookupId: value, LookupValue: option?.value ?? String(value) };
+        }
+      } else if (formField?.personOrGroup) {
+        // Person/Group: convert PersonOrGroupOption to SharePoint format
+        type PersonOption = import('../../../auth/graphClient').PersonOrGroupOption;
+        const toSharePointFormat = (p: PersonOption) => ({
+          LookupId: parseInt(p.id, 10) || 0,
+          LookupValue: p.displayName,
+          Email: p.email,
+        });
+
+        if (formField.personOrGroup.allowMultipleSelection && Array.isArray(value)) {
+          displayValue = (value as PersonOption[]).map(toSharePointFormat);
+        } else if (value && typeof value === 'object' && 'displayName' in value) {
+          displayValue = toSharePointFormat(value as PersonOption);
         }
       }
 
@@ -531,6 +624,18 @@ function UnifiedDetailModalContent({
       return isDateOnly ? formatDateForDisplay(value) : formatDateTimeForDisplay(value);
     }
 
+    // Choice (handle multi-select)
+    if (formField?.choice || colMeta?.choice) {
+      if (Array.isArray(value)) {
+        return value.join(', ') || '-';
+      }
+      // Handle SharePoint's { results: [...] } format
+      if (typeof value === 'object' && value !== null && 'results' in value) {
+        const results = (value as { results: string[] }).results;
+        return Array.isArray(results) ? results.join(', ') || '-' : String(value);
+      }
+    }
+
     // Lookup
     if (formField?.lookup || colMeta?.lookup) {
       if (typeof value === 'object' && value !== null && 'LookupValue' in value) {
@@ -541,6 +646,28 @@ function UnifiedDetailModalContent({
           .map(v => (typeof v === 'object' && v !== null && 'LookupValue' in v ? v.LookupValue : String(v)))
           .join(', ');
       }
+    }
+
+    // Person/Group
+    if (formField?.personOrGroup || colMeta?.personOrGroup) {
+      // SharePoint returns: { Email, LookupId, LookupValue } or array of these
+      const extractName = (v: unknown): string => {
+        if (typeof v === 'object' && v !== null) {
+          const obj = v as Record<string, unknown>;
+          return String(obj.LookupValue ?? obj.displayName ?? obj.title ?? obj.Email ?? '');
+        }
+        return String(v);
+      };
+
+      if (Array.isArray(value)) {
+        return value.map(extractName).filter(Boolean).join(', ') || '-';
+      }
+      return extractName(value) || '-';
+    }
+
+    // Default: handle arrays generically
+    if (Array.isArray(value)) {
+      return value.join(', ') || '-';
     }
 
     return String(value);
@@ -568,11 +695,9 @@ function UnifiedDetailModalContent({
     return (
       <Dialog
         open
-        modalType="alert"
+        modalType="modal"
         onOpenChange={(_, data) => {
-          // Only close on explicit ESC key press
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          if (!data.open && (data as any).type === 'escapeKeyDown') {
+          if (!data.open) {
             onClose();
           }
         }}
@@ -589,13 +714,11 @@ function UnifiedDetailModalContent({
   return (
     <>
       <Dialog
+        key={`${currentListId}-${currentItem.id}`}
         open
-        modalType="alert"
+        modalType="modal"
         onOpenChange={(_, data) => {
-          // Only close on explicit ESC key press, not backdrop clicks or focus loss
-          // This prevents the modal from closing when TinyMCE opens dropdowns/dialogs
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          if (!data.open && (data as any).type === 'escapeKeyDown') {
+          if (!data.open) {
             onClose();
           }
         }}
@@ -622,7 +745,7 @@ function UnifiedDetailModalContent({
               />
             </div>
 
-            <Text className={styles.titleText}>{titleDisplay}</Text>
+            {!isNavigating && <Text className={styles.titleText}>{titleDisplay}</Text>}
 
             <div className={styles.headerActions}>
               {currentSiteUrl && (
@@ -685,6 +808,7 @@ function UnifiedDetailModalContent({
                           fieldName={col.internalName}
                           label={getDisplayName(col.internalName)}
                           value={value}
+                          lookupIdValue={currentItem.fields[`${col.internalName}LookupId`] as number | number[] | null | undefined}
                           displayValue={getStatValue(col.internalName, value)}
                           formField={getFormField(col.internalName)}
                           columnMetadata={getColumnMetadata(col.internalName)}
@@ -693,6 +817,7 @@ function UnifiedDetailModalContent({
                           isSaving={savingFields.has(col.internalName)}
                           error={fieldErrors[col.internalName] ?? null}
                           siteId={currentSiteId}
+                          siteUrl={currentSiteUrl}
                           getLookupOptions={getLookupOptions}
                           lookupOptions={lookupOptions}
                           setLookupOptions={setLookupOptions}
@@ -730,6 +855,7 @@ function UnifiedDetailModalContent({
                               fieldName={col.internalName}
                               label={getDisplayName(col.internalName)}
                               value={currentItem.fields[col.internalName]}
+                              lookupIdValue={currentItem.fields[`${col.internalName}LookupId`] as number | number[] | null | undefined}
                               formField={getFormField(col.internalName)}
                               columnMetadata={getColumnMetadata(col.internalName)}
                               isEditing={editingField === col.internalName}
@@ -737,6 +863,7 @@ function UnifiedDetailModalContent({
                               isSaving={savingFields.has(col.internalName)}
                               error={fieldErrors[col.internalName] ?? null}
                               siteId={currentSiteId}
+                              siteUrl={currentSiteUrl}
                               getLookupOptions={getLookupOptions}
                               lookupOptions={lookupOptions}
                               setLookupOptions={setLookupOptions}
@@ -814,6 +941,7 @@ interface DetailFieldEditProps {
   fieldName: string;
   label: string;
   value: unknown;
+  lookupIdValue?: number | number[] | null; // For lookup fields: the ID(s) from {ColumnName}LookupId field
   formField: ReturnType<typeof import('../../../hooks/useListFormConfig').useListFormConfig>['fields'][0] | undefined;
   columnMetadata: GraphListColumn | undefined;
   isEditing: boolean;
@@ -821,6 +949,7 @@ interface DetailFieldEditProps {
   isSaving: boolean;
   error: string | null;
   siteId: string;
+  siteUrl?: string;
   getLookupOptions: (siteId: string, listId: string, columnName: string) => Promise<LookupOption[]>;
   lookupOptions: Record<string, LookupOption[]>;
   setLookupOptions: React.Dispatch<React.SetStateAction<Record<string, LookupOption[]>>>;
@@ -837,6 +966,7 @@ function DetailFieldEdit({
   fieldName,
   label,
   value,
+  lookupIdValue,
   formField,
   columnMetadata,
   isEditing,
@@ -844,6 +974,7 @@ function DetailFieldEdit({
   isSaving,
   error,
   siteId,
+  siteUrl,
   getLookupOptions,
   lookupOptions,
   setLookupOptions,
@@ -902,10 +1033,29 @@ function DetailFieldEdit({
   const renderEditComponent = () => {
     // Choice field
     if (formField?.choice?.choices) {
+      const isMultiSelect = formField.choice.allowMultipleValues ?? false;
+      // Normalize value: multi-select uses array, single-select uses string
+      // Handle SharePoint's { results: [...] } format
+      let normalizedValue: string | string[];
+      if (isMultiSelect) {
+        if (Array.isArray(editValue)) {
+          normalizedValue = editValue.map(String);
+        } else if (typeof editValue === 'object' && editValue !== null && 'results' in editValue) {
+          normalizedValue = ((editValue as { results: string[] }).results || []).map(String);
+        } else if (editValue) {
+          normalizedValue = [String(editValue)];
+        } else {
+          normalizedValue = [];
+        }
+      } else {
+        normalizedValue = String(editValue ?? '');
+      }
+
       return (
         <InlineEditChoice
-          value={String(editValue ?? '')}
+          value={normalizedValue}
           choices={formField.choice.choices}
+          isMultiSelect={isMultiSelect}
           onChange={(v) => setEditValue(v)}
           onCommit={handleCommit}
           onCancel={onCancelEdit}
@@ -933,6 +1083,49 @@ function DetailFieldEdit({
           options={lookupOptions[fieldName] ?? []}
           isLoading={lookupLoading}
           isMultiSelect={formField.lookup.allowMultipleValues ?? false}
+          onChange={(v) => setEditValue(v)}
+          onCommit={handleCommit}
+          onCancel={onCancelEdit}
+        />
+      );
+    }
+
+    // Person/Group field
+    if (formField?.personOrGroup || columnMetadata?.personOrGroup) {
+      const personOrGroup = formField?.personOrGroup ?? columnMetadata?.personOrGroup;
+      const isMultiSelect = personOrGroup?.allowMultipleSelection ?? false;
+
+      // Extract person data from current value
+      const extractPerson = (v: unknown): import('../../../auth/graphClient').PersonOrGroupOption | null => {
+        if (typeof v === 'object' && v !== null) {
+          const obj = v as Record<string, unknown>;
+          if ('LookupId' in obj || 'Email' in obj || 'email' in obj || 'displayName' in obj) {
+            return {
+              id: String(obj.LookupId ?? obj.id ?? ''),
+              email: String(obj.Email ?? obj.email ?? ''),
+              displayName: String(obj.LookupValue ?? obj.displayName ?? obj.title ?? ''),
+              type: 'user',
+            };
+          }
+        }
+        return null;
+      };
+
+      let currentValue: import('../../../auth/graphClient').PersonOrGroupOption | import('../../../auth/graphClient').PersonOrGroupOption[] | null;
+      if (isMultiSelect) {
+        currentValue = Array.isArray(editValue)
+          ? editValue.map(extractPerson).filter((p): p is import('../../../auth/graphClient').PersonOrGroupOption => p !== null)
+          : [];
+        if ((currentValue as import('../../../auth/graphClient').PersonOrGroupOption[]).length === 0) currentValue = null;
+      } else {
+        currentValue = extractPerson(editValue);
+      }
+
+      return (
+        <InlineEditPerson
+          value={currentValue}
+          isMultiSelect={isMultiSelect}
+          chooseFromType={personOrGroup?.chooseFromType ?? 'peopleOnly'}
           onChange={(v) => setEditValue(v)}
           onCommit={handleCommit}
           onCancel={onCancelEdit}
@@ -1006,6 +1199,59 @@ function DetailFieldEdit({
     );
   };
 
+  // Render view value - use clickable lookup for lookup fields
+  const renderViewValue = () => {
+    // Lookup field - render as clickable link (check both formField and columnMetadata)
+    const lookupInfo = formField?.lookup ?? columnMetadata?.lookup;
+    if (lookupInfo?.listId && value !== null && value !== undefined) {
+      // Normalize the value to include LookupId
+      // SharePoint returns single-select lookups as: value = string, lookupIdValue = number (or string)
+      // Multi-select lookups as: value = array of { LookupId, LookupValue }
+      // After local update: value = { LookupId, LookupValue }
+      let normalizedValue = value;
+
+      // Helper to parse ID from various formats (number, string, etc.)
+      const parseId = (v: unknown): number | null => {
+        if (typeof v === 'number') return v;
+        if (typeof v === 'string' && v) {
+          const parsed = parseInt(v, 10);
+          return isNaN(parsed) ? null : parsed;
+        }
+        return null;
+      };
+
+      if (lookupInfo.allowMultipleValues) {
+        // Multi-select: value should already be array of { LookupId, LookupValue }
+        normalizedValue = value;
+      } else {
+        // Single-select: check if value is already an object with LookupId
+        if (typeof value === 'object' && value !== null && 'LookupId' in value) {
+          normalizedValue = value;
+        } else {
+          // Value is a string, need to combine with lookupIdValue
+          const parsedId = parseId(lookupIdValue);
+          if (parsedId !== null) {
+            normalizedValue = { LookupId: parsedId, LookupValue: String(value) };
+          }
+        }
+      }
+
+      return (
+        <ClickableLookupValue
+          value={normalizedValue}
+          targetListId={lookupInfo.listId}
+          targetListName={label} // Use column display name as fallback list name
+          siteId={siteId}
+          siteUrl={siteUrl}
+          isMultiSelect={lookupInfo.allowMultipleValues ?? false}
+        />
+      );
+    }
+
+    // Default rendering
+    return renderValue(fieldName, value);
+  };
+
   return (
     <InlineEditField
       label={label}
@@ -1021,7 +1267,7 @@ function DetailFieldEdit({
       onClearError={onClearError}
       editComponent={renderEditComponent()}
     >
-      {renderValue(fieldName, value)}
+      {renderViewValue()}
     </InlineEditField>
   );
 }
